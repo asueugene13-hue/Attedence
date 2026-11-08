@@ -9,7 +9,7 @@ Every phase ships with automated tests, and a phase is not done until its tests 
 | Level | What it covers | Tools |
 | --- | --- | --- |
 | Unit | Pure logic: decision table, detection engine, transition table, attendance calculation, QR token signing, import row validation | Vitest |
-| Integration | API endpoints against a real PostgreSQL and Redis: transactions, constraints, permissions, idempotency | Vitest, Supertest, real PostgreSQL and Redis (local Docker services; service containers in CI). No database mocks, because the constraints are what is being tested. |
+| Integration | API endpoints against a real PostgreSQL and Redis: transactions, constraints, permissions, idempotency | Vitest, Supertest, real PostgreSQL, Redis and S3-compatible storage (SeaweedFS), as local Docker services and in CI. Tests use their own database, Redis database and storage bucket. No database mocks, because the constraints are what is being tested. |
 | Realtime | Socket authentication, room permissions, `seq` gaps and reconnect | Vitest with `socket.io-client` |
 | Background jobs | Checkpoints, sweeper recovery, retries, outbox relay | Vitest with a controllable clock and real Redis |
 | Web end-to-end | Role dashboards, imports, timetable publishing, live roster | Playwright |

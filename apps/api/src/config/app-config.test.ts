@@ -10,6 +10,10 @@ const VALID = {
   SMTP_HOST: 'localhost',
   SMTP_PORT: '1025',
   SMTP_FROM: 'Test <no-reply@example.test>',
+  S3_ENDPOINT: 'http://localhost:8333',
+  S3_ACCESS_KEY: 'test-access-key',
+  S3_SECRET_KEY: 'test-secret-key',
+  S3_BUCKET: 'attendsure-test',
 };
 
 describe('AppConfig.fromEnv', () => {

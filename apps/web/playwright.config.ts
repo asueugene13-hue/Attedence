@@ -52,6 +52,10 @@ export default defineConfig({
         SMTP_HOST: process.env.SMTP_HOST ?? 'localhost',
         SMTP_PORT: process.env.SMTP_PORT ?? '1025',
         SMTP_FROM: process.env.SMTP_FROM ?? 'AttendSure e2e <no-reply@localhost>',
+        S3_ENDPOINT: process.env.S3_ENDPOINT ?? 'http://localhost:8333',
+        S3_ACCESS_KEY: process.env.S3_ACCESS_KEY ?? 'local-dev-access-key',
+        S3_SECRET_KEY: process.env.S3_SECRET_KEY ?? 'local-dev-secret-key-not-for-production',
+        S3_BUCKET: `${process.env.S3_BUCKET ?? 'attendsure'}-e2e`,
       },
     },
     {

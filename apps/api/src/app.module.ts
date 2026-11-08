@@ -8,6 +8,7 @@ import { LoggingModule } from './infrastructure/logging/logging.module.js';
 import { MailModule } from './infrastructure/mail/mail.module.js';
 import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
 import { RedisModule } from './infrastructure/redis/redis.module.js';
+import { StorageModule } from './infrastructure/storage/storage.module.js';
 import { AcademicModule } from './modules/academic/academic.module.js';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module.js';
 import { AuditModule } from './modules/audit-logs/audit.module.js';
@@ -17,6 +18,7 @@ import { AuthorizationModule } from './modules/authorization/authorization.modul
 import { PermissionGuard } from './modules/authorization/permission.guard.js';
 import { CoursesModule } from './modules/courses/courses.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { ImportsModule } from './modules/imports/imports.module.js';
 import { PlacesModule } from './modules/places/places.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { StudentsModule } from './modules/students/students.module.js';
@@ -36,6 +38,8 @@ export const INFRASTRUCTURE_MODULES = [
 @Module({
   imports: [
     ...INFRASTRUCTURE_MODULES,
+    // File storage is used by the API only; the worker gains it when a job needs files.
+    StorageModule,
     AuthorizationModule,
     HealthModule,
     AuthModule,
@@ -46,6 +50,7 @@ export const INFRASTRUCTURE_MODULES = [
     PlacesModule,
     CoursesModule,
     StudentsModule,
+    ImportsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },

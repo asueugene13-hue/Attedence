@@ -104,6 +104,9 @@ model User {
   studentProfile            StudentProfile?      @relation("StudentUser")
   studentsRegistered        StudentProfile[]     @relation("StudentRegisteredBy")
   studentsVerified          StudentProfile[]     @relation("StudentVerifiedBy")
+  filesUploaded             FileObject[]
+  importsUploaded           ImportBatch[]        @relation("ImportUploadedBy")
+  importsDecided            ImportBatch[]        @relation("ImportDecidedBy")
 
   @@map("users")
 }
@@ -641,6 +644,8 @@ model StudentProfile {
   registeredById        String        @map("registered_by_id") @db.Uuid
   verifiedAt            DateTime?     @map("verified_at") @db.Timestamptz(3)
   verifiedById          String?       @map("verified_by_id") @db.Uuid
+  /// Optional profile photo (JPEG or PNG).
+  photoFileId           String?       @unique @map("photo_file_id") @db.Uuid
   version               Int           @default(0)
   createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -652,8 +657,124 @@ model StudentProfile {
   currentSemester     Semester      @relation(fields: [currentSemesterId], references: [id])
   registeredBy        User          @relation("StudentRegisteredBy", fields: [registeredById], references: [id])
   verifiedBy          User?         @relation("StudentVerifiedBy", fields: [verifiedById], references: [id], onDelete: Restrict)
+  photo               FileObject?   @relation(fields: [photoFileId], references: [id], onDelete: Restrict)
 
   @@index([programmeId, levelId])
   @@index([status])
   @@map("student_profiles")
+}
+
+// ───────────────────────── Files and imports (Phase 2) ─────────────────────────
+
+enum FilePurpose {
+  PROFILE_PHOTO
+  IMPORT_FILE
+}
+
+enum FileStatus {
+  STORED
+  /// Replaced or no longer needed; the stored bytes have been deleted.
+  REMOVED
+}
+
+/// A file in private storage. The type is checked from the file's bytes, never trusted from its name.
+model FileObject {
+  id           String      @id @default(uuid(7)) @db.Uuid
+  bucket       String
+  /// Random, so it reveals nothing about the owner.
+  key          String      @unique
+  purpose      FilePurpose
+  mimeType     String      @map("mime_type")
+  sizeBytes    Int         @map("size_bytes")
+  sha256       String
+  originalName String?     @map("original_name")
+  status       FileStatus  @default(STORED)
+  uploadedById String      @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  removedAt    DateTime?   @map("removed_at") @db.Timestamptz(3)
+
+  uploadedBy   User            @relation(fields: [uploadedById], references: [id])
+  studentPhoto StudentProfile?
+  importBatch  ImportBatch?
+
+  @@map("file_objects")
+}
+
+enum ImportType {
+  STUDENTS
+}
+
+enum ImportFormat {
+  CSV
+  XLSX
+}
+
+/// VALIDATED: checked and waiting for a person to confirm. Nothing is saved before confirmation.
+enum ImportStatus {
+  VALIDATED
+  IMPORTING
+  COMPLETED
+  CANCELLED
+}
+
+enum ImportRowStatus {
+  VALID
+  INVALID
+  DUPLICATE_IN_FILE
+  DUPLICATE_EXISTING
+  IMPORTED
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model ImportBatch {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  type          ImportType
+  format        ImportFormat
+  fileId        String       @unique @map("file_id") @db.Uuid
+  status        ImportStatus @default(VALIDATED)
+  totalRows     Int          @default(0) @map("total_rows")
+  validRows     Int          @default(0) @map("valid_rows")
+  invalidRows   Int          @default(0) @map("invalid_rows")
+  duplicateRows Int          @default(0) @map("duplicate_rows")
+  importedRows  Int          @default(0) @map("imported_rows")
+  uploadedById  String       @map("uploaded_by_id") @db.Uuid
+  /// Who confirmed or cancelled it.
+  decidedById   String?      @map("decided_by_id") @db.Uuid
+  decidedAt     DateTime?    @map("decided_at") @db.Timestamptz(3)
+  completedAt   DateTime?    @map("completed_at") @db.Timestamptz(3)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  file       FileObject  @relation(fields: [fileId], references: [id])
+  uploadedBy User        @relation("ImportUploadedBy", fields: [uploadedById], references: [id])
+  decidedBy  User?       @relation("ImportDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+  rows       ImportRow[]
+
+  @@index([type, createdAt])
+  @@map("import_batches")
+}
+
+model ImportRow {
+  id              String          @id @default(uuid(7)) @db.Uuid
+  batchId         String          @map("batch_id") @db.Uuid
+  /// The spreadsheet row number, counting the header as row 1, so staff can find it in their file.
+  rowNumber       Int             @map("row_number")
+  raw             Json
+  normalized      Json?
+  /// [{ column, code, message }]
+  errors          Json?
+  status          ImportRowStatus
+  createdEntityId String?         @map("created_entity_id") @db.Uuid
+  /// Activation email for an account the import created.
+  emailStatus     EmailStatus?    @map("email_status")
+
+  batch ImportBatch @relation(fields: [batchId], references: [id])
+
+  @@unique([batchId, rowNumber])
+  @@index([batchId, status])
+  @@map("import_rows")
 }

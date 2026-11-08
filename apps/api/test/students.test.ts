@@ -313,3 +313,87 @@ describe('faculty- and department-limited administrators', () => {
     await grant({ role: 'UNIVERSITY_ADMIN', scopeType: 'FACULTY' }).expect(400);
   });
 });
+
+describe('profile photos', () => {
+  // Only the first bytes matter for the type check; the rest stands in for image data.
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from('fake png body'),
+  ]);
+  const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('fake jpeg body')]);
+  const upload = (id: string, bytes: Buffer, name: string, version?: number) => {
+    const req = http.post(`/api/v1/students/${id}/photo`).set(registrar);
+    if (version !== undefined) req.set('If-Match', String(version));
+    return req.attach('photo', bytes, name);
+  };
+
+  it('stores a JPEG or PNG privately, hands out short-lived links, and replaces or removes it', async () => {
+    const created = (await post('/students', registration()).expect(201)).body.student;
+    expect(created.hasPhoto).toBe(false);
+    await upload(created.id, png, 'me.png').expect(400); // no If-Match
+    const withPhoto = (await upload(created.id, png, 'me.png', 0).expect(200)).body;
+    expect(withPhoto).toMatchObject({ hasPhoto: true, version: 1 });
+
+    const link = (await get(`/students/${created.id}/photo`).expect(200)).body;
+    expect(link).toMatchObject({ mimeType: 'image/png', sizeBytes: png.length });
+    const fetched = await fetch(link.url);
+    expect(fetched.status).toBe(200);
+    expect(Buffer.from(await fetched.arrayBuffer()).equals(png)).toBe(true);
+
+    const first = await prisma.studentProfile.findUniqueOrThrow({ where: { id: created.id } });
+    await upload(created.id, jpeg, 'me.jpg', 1).expect(200);
+    expect((await prisma.fileObject.findUniqueOrThrow({ where: { id: first.photoFileId! } })).status).toBe(
+      'REMOVED',
+    );
+    expect((await get(`/students/${created.id}/photo`).expect(200)).body.mimeType).toBe('image/jpeg');
+
+    await http
+      .delete(`/api/v1/students/${created.id}/photo`)
+      .set(registrar)
+      .set('If-Match', '2')
+      .send({})
+      .expect(400);
+    const removed = (
+      await http
+        .delete(`/api/v1/students/${created.id}/photo`)
+        .set(registrar)
+        .set('If-Match', '2')
+        .send({ reason: 'Wrong person (test)' })
+        .expect(200)
+    ).body;
+    expect(removed).toMatchObject({ hasPhoto: false, version: 3 });
+    expect((await get(`/students/${created.id}/photo`).expect(404)).body.code).toBe('NO_PHOTO');
+    expect(await prisma.auditLog.count({ where: { action: { startsWith: 'students.photo_' } } })).toBe(3);
+  });
+
+  it('checks the real file type, not the name, and the size limit', async () => {
+    const created = (await post('/students', registration()).expect(201)).body.student;
+    const res = await upload(created.id, Buffer.from('just text, not an image'), 'photo.png', 0).expect(400);
+    expect(res.body.code).toBe('UNSUPPORTED_FILE_TYPE');
+    await upload(created.id, Buffer.concat([png, Buffer.alloc(2 * 1024 * 1024)]), 'big.png', 0).expect(413);
+    await http.post(`/api/v1/students/${created.id}/photo`).set(registrar).set('If-Match', '0').expect(400);
+    expect(await prisma.fileObject.count()).toBe(0);
+  });
+
+  it('lets a student fetch their own photo link', async () => {
+    const created = (await post('/students', registration()).expect(201)).body.student;
+    await upload(created.id, png, 'me.png', 0).expect(200);
+    await prisma.user.update({
+      where: { email: 'test.student1@example.test' },
+      data: {
+        status: 'ACTIVE',
+        passwordHash: (await prisma.user.findFirstOrThrow({ where: { email: 'registrar@example.test' } }))
+          .passwordHash,
+      },
+    });
+    const login = await http
+      .post('/api/v1/auth/login')
+      .send({ identifier: '99000001', password: TEST_PASSWORD, client: 'MOBILE' })
+      .expect(200);
+    const mine = await http
+      .get('/api/v1/me/student/photo')
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(200);
+    expect(mine.body.url).toContain('profile-photo/');
+  });
+});

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -9,16 +10,20 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
 } from '@nestjs/common';
 import {
   CreateStudentSchema,
   IdSchema,
+  PHOTO_LIMITS,
+  ReasonOnlySchema,
   StudentQuerySchema,
   StudentStatusChangeSchema,
   UpdateStudentSchema,
 } from '@attendsure/shared';
 import type { Request } from 'express';
 import { requestContextOf } from '../../common/request-context.js';
+import { requireFile, SingleFileUpload, type UploadedBytes } from '../../common/upload.js';
 import { parseInput } from '../../common/validation/parse-input.js';
 import { CurrentAuth } from '../auth/access-token.guard.js';
 import type { AccessClaims } from '../auth/token.service.js';
@@ -107,6 +112,53 @@ export class StudentsController {
   @HttpCode(200)
   verify(@CurrentAuth() auth: AccessClaims, @Param('id') param: string, @Req() req: Request) {
     return this.students.verify(auth, id(param), expectedVersion(req), requestContextOf(req));
+  }
+
+  /** Multipart upload, field `photo`: a JPEG or PNG up to 2 MB. Needs If-Match like any other change. */
+  @Post('students/:id/photo')
+  @RequirePermissions('students.update')
+  @HttpCode(200)
+  @SingleFileUpload('photo', PHOTO_LIMITS.maxFileBytes)
+  setPhoto(
+    @CurrentAuth() auth: AccessClaims,
+    @Param('id') param: string,
+    @UploadedFile() file: UploadedBytes | undefined,
+    @Req() req: Request,
+  ) {
+    const studentId = id(param);
+    const version = expectedVersion(req);
+    return this.students.setPhoto(
+      auth,
+      studentId,
+      version,
+      requireFile(file, 'photo'),
+      requestContextOf(req),
+    );
+  }
+
+  @Delete('students/:id/photo')
+  @RequirePermissions('students.update')
+  removePhoto(
+    @CurrentAuth() auth: AccessClaims,
+    @Param('id') param: string,
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    const { reason } = parseInput(ReasonOnlySchema, body);
+    return this.students.removePhoto(auth, id(param), expectedVersion(req), reason, requestContextOf(req));
+  }
+
+  /** A download link that works for 5 minutes. */
+  @Get('students/:id/photo')
+  @RequirePermissions('students.read_full')
+  photo(@Param('id') param: string) {
+    return this.students.photoLink({ id: id(param) });
+  }
+
+  @Get('me/student/photo')
+  @Authenticated()
+  myPhoto(@CurrentAuth() auth: AccessClaims) {
+    return this.students.photoLink({ userId: auth.userId });
   }
 
   /** The signed-in student's own record (null for anyone who is not a student). */

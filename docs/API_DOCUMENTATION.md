@@ -72,13 +72,15 @@ AttendSure exposes one versioned REST API at `/api/v1` and one Socket.IO namespa
 | GET · PATCH | `/students/:id` | SA, RG (`students.update` to edit) | Full record. Edits `{ fullName?, phone?, programmeId?, levelId?, academicYearId?, semesterId?, noDeviceExemption? }` need an `If-Match: <version>` header (`400 VERSION_REQUIRED` without it, `409 VERSION_CONFLICT` with `currentVersion` when someone else changed it first). **Built.** |
 | POST | `/students/:id/status` · `/students/:id/verify` | SA, RG | `{ status, reason }` (ACTIVE, DEFERRED, SUSPENDED, WITHDRAWN, GRADUATED…), and Registrar verification of the record. Both need `If-Match` and are audited. **Built.** |
 | GET | `/me/student` | Signed in | The caller's own student record, or `{ student: null }`. **Built.** |
-| POST | `/students/:id/photo` | SA, RG | Upload a profile photo (via presigned upload). Phase 2 step 5, with file storage. |
-| GET | `/imports/templates/:type?format=csv\|xlsx` | SA, RG | Download a template with the required columns |
-| POST | `/imports` | SA, RG | Upload a file, which starts validation |
-| GET | `/imports` · `/imports/:id` | SA, RG | History; progress and counts |
-| GET | `/imports/:id/rows?status=INVALID` | SA, RG | Preview rows with their errors |
-| POST | `/imports/:id/confirm` · `/imports/:id/cancel` | SA, RG | Save valid rows, or discard |
-| GET | `/imports/:id/error-report?format=csv\|xlsx` | SA, RG | Failed rows with reasons |
+| POST · DELETE · GET | `/students/:id/photo` | SA, RG | Upload: multipart field `photo`, JPEG or PNG up to 2 MB, type checked from the bytes (`400 UNSUPPORTED_FILE_TYPE`; `413` when too large); `If-Match` required. Remove: `{ reason }` with `If-Match`. GET returns `{ url, expiresAt, mimeType, sizeBytes }`, a private download link valid for 5 minutes. The student view shows `hasPhoto`. **Built.** |
+| GET | `/me/student/photo` | Signed-in student | A 5-minute link to the caller's own photo. **Built.** |
+| GET | `/imports/templates/students?format=csv\|xlsx` | SA, RG (`students.import`) | The template: a header row with `student_number, full_name, email, phone, programme_code, level_code, academic_year, semester_number, status` (status optional). Codes and labels are the ones staff entered in the academic structure. **Built.** |
+| POST | `/imports` | SA, RG | Multipart field `file`: CSV or .xlsx, up to 5 MB and 5,000 rows. Every row is checked straight away with the single-registration rules, plus duplicates within the file (all copies held back) and against existing students. Returns the batch with counts and status `VALIDATED`. Nothing is saved to student records yet. Whole-file problems: `UNSUPPORTED_FILE_TYPE`, `UNREADABLE_FILE`, `COLUMNS_DO_NOT_MATCH` (`errors.missing`, `errors.unknown`), `EMPTY_FILE`, `TOO_MANY_ROWS`. **Built.** |
+| GET | `/imports` · `/imports/:id` | SA, RG | History (`?type=&status=&limit=&cursor=`); one batch with counts and `activationEmails { pending, sent, failed }`. **Built.** |
+| GET | `/imports/:id/rows?status=&limit=&after=` | SA, RG | Preview rows in order, each with its original values and `errors [{ column, code, message }]`. Page with `after` = the last row number shown. **Built.** |
+| POST | `/imports/:id/confirm` · `/imports/:id/cancel` | SA, RG | Confirm re-checks every row against current records, then saves all valid rows in one transaction (all or none). Rows that became duplicates meanwhile are skipped and marked. Cancel deletes the stored file. Either works once (`409 NOT_PENDING`). **Built.** |
+| POST | `/imports/:id/activation-emails` | SA, RG | Activation emails go out in the background after confirmation, each row recording SENT or FAILED; this re-sends the failed ones. **Built.** |
+| GET | `/imports/:id/error-report?format=csv\|xlsx` | SA, RG | Rows not imported, with `row_number` and `problems` columns. Cells starting with `= + - @` are prefixed with `'` so spreadsheets do not run them as formulas. The fixed report can be uploaded again as it is. **Built.** |
 | POST · DELETE | `/enrollments` · `/enrollments/:id` | SA, RG | Enrol, or drop (with reason) |
 | POST | `/enrollments/bulk` | SA, RG | Through the import pipeline |
 

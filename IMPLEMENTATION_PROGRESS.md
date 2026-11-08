@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 2, academic management. Steps 1–4 are done; step 5 (bulk import and file storage) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 2, academic management. Steps 1–5 are done; step 6 (enrolments and course reps) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -84,6 +84,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-08 | D-06 | Activation link to university email. Open question: does every student have one? If not, SMS codes are the fallback. | Product owner |
 | 2026-11-08 | D-07 | Ask Knutsford IT about Microsoft 365 / Google accounts; design leaves room for SSO | Product owner |
 | 2026-11-08 | D-14 (part) | Student IDs are 8 digits; staff-number format still open | Product owner |
+| 2026-11-08 | D-16 (part) | Development and CI file storage: SeaweedFS (S3-compatible, already in Docker). Production storage host still open; switching needs settings only. | Product owner |
 
 ## Session log
 
@@ -559,7 +560,7 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 | 2 | Places: campuses, buildings, classrooms (geofences for later) | Done (2026-11-08) |
 | 3 | Courses, offerings, sections; lecturer profiles and assignments | Done (2026-11-08) |
 | 4 | Student registration (Registrar); faculty- and department-scoped administrator grants | Done (2026-11-08) |
-| 5 | Bulk student import (CSV/XLSX): templates, validation, preview, confirm, error report, history | Not started |
+| 5 | Bulk student import (CSV/XLSX): templates, validation, preview, confirm, error report, history | Done (2026-11-08), with file storage and profile photos |
 | 6 | Enrolments and course-rep assignments | Not started |
 | 7 | Dashboard screens, end-to-end tests, Phase 2 exit check | Not started |
 
@@ -709,3 +710,42 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (API 155, e2e 1, audit clean).
   - GitHub run 42526616492 on `f6b4dda`: **success**.
+
+### 2026-11-08 — Phase 2, step 5: bulk student import, file storage and profile photos
+
+- **Decision D-16 (partly):** the product owner chose local S3-compatible storage (SeaweedFS) for now. Production storage stays open; moving means changing the `S3_*` settings, not code.
+- **Built:**
+  - **File storage.** A storage service talks to any S3-compatible store. Files are private, under random keys, and browsers only get download links that expire after 5 minutes. A `file_objects` table records each file's real type, size, SHA-256 checksum and uploader. Outside production the API creates its bucket on start-up; in production the bucket must already exist.
+  - **File type checks from the bytes.** JPEG, PNG, CSV and Excel are recognised from the file's first bytes, never from its name. A text file renamed `.png` is refused.
+  - **Profile photos:** upload (JPEG or PNG, up to 2 MB), replace, remove with a reason, and a 5-minute link for staff or for the student themself. Each change is version-checked and audited. A replaced photo's bytes are deleted.
+  - **Bulk import, in four stages:**
+    1. Download the template (CSV or Excel).
+    2. Upload the filled file (up to 5 MB and 5,000 rows). Every row is checked straight away with the same rules as single registration: Student ID, Ghana phone, and the programme, level, year and semester codes staff entered. Repeated Student IDs or emails within the file are all held back, since it is unclear which copy is right. Students who already exist are flagged. Nothing is saved yet.
+    3. Preview the rows with their problems, or download an error report to fix and upload again as it is.
+    4. Confirm, or cancel. Confirming re-checks every row against the records as they are at that moment, then saves all valid rows in one transaction: all or none.
+  - **Activation emails** for imported students go out after confirmation, one by one. Each row records SENT or FAILED, and failed ones can be re-sent. A mail problem never undoes an import.
+  - **Excel quirks handled:** Excel turns a typed phone number into a number, dropping the leading 0 or the +. For the phone column only, those two exact shapes are restored.
+  - **Formula protection:** cells that start with `= + - @` are prefixed with an apostrophe in files we produce, so spreadsheet programs do not run them ("CSV injection"). The prefix is removed again when the file is re-uploaded.
+  - Single registration and import now share one registration routine (`registerInTx`), so they cannot drift apart.
+- **Problems found and fixed while testing:**
+  - Activation emails from one test were still sending when the next test started. This showed a real gap: shutting the API down mid-send could cut an email off half-recorded. The API now waits for in-progress sends before it closes the database connection.
+  - A lint rule caught two wrapped errors that dropped the original error; they now keep it as `cause`.
+- **Files:**
+  - New: `apps/api/src/infrastructure/storage/*`, `apps/api/src/modules/files/*`, `apps/api/src/modules/imports/*`, `apps/api/src/modules/students/student-import.service.ts`, `apps/api/src/common/upload.ts`, `packages/shared/src/imports.ts`, `apps/api/test/imports.test.ts`, migration `20261108220000_files_and_imports`.
+  - Changed: `schema.prisma`, `config/app-config.ts` (+ test), `students.{service,controller,module}.ts`, `app.module.ts`, `test/{fixtures,setup-env,students.test}.ts`, `apps/web/playwright.config.ts`, `.github/workflows/ci.yml`, `.env.example`, `packages/shared/src/index.ts`, `apps/api/package.json`, `package-lock.json`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA, DEPLOYMENT, SECURITY, TESTING, KNOWN_LIMITATIONS (29–33).
+- **New libraries** (exact versions, each at least two weeks old): `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` 3.1156.0, `csv-parse` 7.0.3, `csv-stringify` 6.9.0, `read-excel-file` 9.3.12, `write-excel-file` 4.1.1, `@types/multer` 2.3.0. `npm audit --audit-level=high` is clean.
+- **Database changes:**
+  - Tables `file_objects`, `import_batches`, `import_rows`; column `student_profiles.photo_file_id`; 7 enums.
+  - Checks: non-empty files, complete removals and decisions, valid counts, row numbers from 2.
+  - Drift check: no difference.
+- **CI:** now starts SeaweedFS (same version as local) before the tests, so uploads are tested against real storage.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **168** (13 new: 10 import, 3 photo), mobile 9, web 8, so **198 passed**. Scenario 24 picked up the 13 new routes automatically.
+- **Known limitations:** KNOWN_LIMITATIONS 29–33. In short:
+  - emails are sent by the API process until Phase 3's job queue;
+  - 5,000 rows per import;
+  - no virus scan yet;
+  - the 90-day clean-up of import data is not yet automated;
+  - the production storage host is not chosen.
+  - The dashboard screens for imports and photos come in step 7.
+- **Next step:** Phase 2, step 6: enrolments (students into course sections, single and bulk through the same import pipeline) and course-rep appointments (D-12: an Administrator appoints; the lecturer may nominate).

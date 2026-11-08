@@ -1109,6 +1109,16 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | Student ID is exactly 8 digits (D-14) | The API (`StudentNumberSchema` in `packages/shared`), not the database, so a future format change needs no migration |
 | Edits never overwrite each other | `version` column, compared with the `If-Match` header in the service |
 
+**Added in Phase 2, step 5** (migration `20261108220000_files_and_imports`): tables `file_objects`, `import_batches`, `import_rows`, and `student_profiles.photo_file_id`.
+
+| Rule | Enforced by |
+| --- | --- |
+| Storage keys are unique; one photo per student; one batch per uploaded file | `file_objects_key_key`, `student_profiles_photo_file_id_key`, `import_batches_file_id_key` unique indexes |
+| Files are never empty; a removed file records when | `file_objects_size_positive`, `file_objects_removal_complete` checks |
+| A confirmed or cancelled batch records who decided and when | `import_batches_decision_complete` check |
+| Row counts are never negative and never exceed the total | `import_batches_counts_valid` check |
+| Row numbers match the spreadsheet (header is row 1) and are unique per batch | `import_rows_row_number_valid` check, `@@unique([batchId, rowNumber])` |
+
 `npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.
 
 Rules that need data from several tables are checked in services inside the transaction:

@@ -12,9 +12,12 @@ import { rethrowAsConflict } from '../../common/db-errors.js';
 import type { RequestContext } from '../../common/request-context.js';
 import type { Prisma, StudentStatus } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { type UploadedBytes, unsupportedFile } from '../../common/upload.js';
 import { AuditService } from '../audit-logs/audit.service.js';
 import { AuthService } from '../auth/auth.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
+import { detectFileType } from '../files/file-type.js';
+import { FilesService } from '../files/files.service.js';
 
 const notFound = () => new NotFoundException({ code: 'NOT_FOUND', message: 'No such student.' });
 const invalid = (code: string, message: string) => new BadRequestException({ code, message });
@@ -67,6 +70,7 @@ export function toStudentView(s: StudentRow) {
     academicYear: s.currentAcademicYear,
     semester: s.currentSemester,
     noDeviceExemption: s.noDeviceExemption,
+    hasPhoto: s.photoFileId !== null,
     verifiedAt: s.verifiedAt,
     version: s.version,
     createdAt: s.createdAt,
@@ -85,6 +89,7 @@ export class StudentsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly auth: AuthService,
+    private readonly files: FilesService,
   ) {}
 
   async list(query: z.output<typeof StudentQuerySchema>) {
@@ -140,58 +145,7 @@ export class StudentsService {
     await this.assertPlacement(input);
 
     const { profileId, userId, newAccount } = await this.prisma
-      .$transaction(async (tx) => {
-        let user = await tx.user.findUnique({
-          where: { email: input.email },
-          include: { studentProfile: true },
-        });
-        if (user?.studentProfile) {
-          throw new ConflictException({
-            code: 'ALREADY_STUDENT',
-            message: 'This email already belongs to a student.',
-          });
-        }
-        if (user?.status === 'DEACTIVATED') {
-          throw new ConflictException({
-            code: 'ACCOUNT_DEACTIVATED',
-            message: 'That account is deactivated.',
-          });
-        }
-        const newAccount = !user;
-        user ??= await tx.user.create({
-          data: { email: input.email, fullName: input.fullName, phone: input.phone },
-          include: { studentProfile: true },
-        });
-        const role = await tx.role.findUniqueOrThrow({ where: { key: 'STUDENT' } });
-        const holds = await tx.userRole.count({
-          where: { userId: user.id, roleId: role.id, revokedAt: null },
-        });
-        if (holds === 0)
-          await tx.userRole.create({ data: { userId: user.id, roleId: role.id, grantedById: actor.userId } });
-        const profile = await tx.studentProfile.create({
-          data: {
-            userId: user.id,
-            studentNumber: input.studentNumber,
-            programmeId: input.programmeId,
-            levelId: input.levelId,
-            currentAcademicYearId: input.academicYearId,
-            currentSemesterId: input.semesterId,
-            status: input.status,
-            registeredById: actor.userId,
-          },
-        });
-        await this.audit.record(
-          auditEntry(
-            actor,
-            'students.registered',
-            { type: 'student', id: profile.id },
-            { after: { ...profile, email: input.email, newAccount } },
-            context,
-          ),
-          tx,
-        );
-        return { profileId: profile.id, userId: user.id, newAccount };
-      })
+      .$transaction((tx) => this.registerInTx(tx, actor, input, context))
       .catch((e: unknown) => rethrowAsConflict(e, NUMBER_IN_USE));
 
     let activationEmailSent: boolean | null = null;
@@ -205,6 +159,84 @@ export class StudentsService {
       }
     }
     return { student: await this.get(profileId), newAccount, activationEmailSent };
+  }
+
+  /**
+   * Creates (or extends) the account, grants the Student role and creates the profile, inside the
+   * caller's transaction. Used by single registration and by bulk import, so both follow the same rules.
+   * The caller has already checked the placement. `audit.after` may add context, such as the import batch.
+   */
+  async registerInTx(
+    tx: Prisma.TransactionClient,
+    actor: AccessClaims,
+    input: Omit<CreateStudent, 'departmentId' | 'facultyId'>,
+    context: RequestContext,
+    auditExtra: Record<string, unknown> = {},
+  ) {
+    let user = await tx.user.findUnique({
+      where: { email: input.email },
+      include: { studentProfile: true },
+    });
+    if (user?.studentProfile) {
+      throw new ConflictException({
+        code: 'ALREADY_STUDENT',
+        message: 'This email already belongs to a student.',
+      });
+    }
+    if (user?.status === 'DEACTIVATED') {
+      throw new ConflictException({
+        code: 'ACCOUNT_DEACTIVATED',
+        message: 'That account is deactivated.',
+      });
+    }
+    const newAccount = !user;
+    user ??= await tx.user.create({
+      data: { email: input.email, fullName: input.fullName, phone: input.phone },
+      include: { studentProfile: true },
+    });
+    const role = await tx.role.findUniqueOrThrow({ where: { key: 'STUDENT' } });
+    const holds = await tx.userRole.count({
+      where: { userId: user.id, roleId: role.id, revokedAt: null },
+    });
+    if (holds === 0)
+      await tx.userRole.create({ data: { userId: user.id, roleId: role.id, grantedById: actor.userId } });
+    const profile = await tx.studentProfile.create({
+      data: {
+        userId: user.id,
+        studentNumber: input.studentNumber,
+        programmeId: input.programmeId,
+        levelId: input.levelId,
+        currentAcademicYearId: input.academicYearId,
+        currentSemesterId: input.semesterId,
+        status: input.status,
+        registeredById: actor.userId,
+      },
+    });
+    await this.audit.record(
+      auditEntry(
+        actor,
+        'students.registered',
+        { type: 'student', id: profile.id },
+        { after: { ...profile, email: input.email, newAccount, ...auditExtra } },
+        context,
+      ),
+      tx,
+    );
+    return { profileId: profile.id, userId: user.id, newAccount };
+  }
+
+  /**
+   * Sends the activation email for a student's account. Returns false when the account is already
+   * activated (nothing to send); any other failure is thrown to the caller, which records it.
+   */
+  async sendActivationFor(profileId: string): Promise<boolean> {
+    const profile = await this.prisma.studentProfile.findUniqueOrThrow({
+      where: { id: profileId },
+      include: { user: { select: { status: true } } },
+    });
+    if (profile.user.status !== 'PENDING_ACTIVATION') return false;
+    await this.auth.sendActivationEmail(profile.userId);
+    return true;
   }
 
   async update(
@@ -316,6 +348,97 @@ export class StudentsService {
       );
     });
     return this.get(id);
+  }
+
+  /** Replaces the profile photo. Only JPEG and PNG are accepted, checked from the bytes. */
+  async setPhoto(
+    actor: AccessClaims,
+    id: string,
+    expectedVersion: number,
+    upload: UploadedBytes,
+    context: RequestContext,
+  ) {
+    const before = await this.prisma.studentProfile.findUnique({ where: { id } });
+    if (!before) throw notFound();
+    const type = detectFileType(upload.buffer);
+    if (type !== 'image/jpeg' && type !== 'image/png') throw unsupportedFile('a JPEG or PNG image');
+    const stored = await this.files.store({
+      purpose: 'PROFILE_PHOTO',
+      bytes: upload.buffer,
+      mimeType: type,
+      originalName: upload.originalname,
+      uploadedById: actor.userId,
+    });
+    let replacedKey: string | null = null;
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.studentProfile.updateMany({
+          where: { id, version: expectedVersion },
+          data: { photoFileId: stored.id, version: { increment: 1 } },
+        });
+        if (claimed.count !== 1) throw this.versionConflict(before.version);
+        if (before.photoFileId) replacedKey = await this.files.markRemoved(before.photoFileId, tx);
+        await this.audit.record(
+          auditEntry(
+            actor,
+            'students.photo_changed',
+            { type: 'student', id },
+            { before: { photoFileId: before.photoFileId }, after: { photoFileId: stored.id } },
+            context,
+          ),
+          tx,
+        );
+      });
+    } catch (error) {
+      await this.files.discard(stored);
+      throw error;
+    }
+    if (replacedKey) await this.files.deleteBytes(replacedKey);
+    return this.get(id);
+  }
+
+  async removePhoto(
+    actor: AccessClaims,
+    id: string,
+    expectedVersion: number,
+    reason: string,
+    context: RequestContext,
+  ) {
+    const before = await this.prisma.studentProfile.findUnique({ where: { id } });
+    if (!before) throw notFound();
+    const photoFileId = before.photoFileId;
+    if (!photoFileId)
+      throw new ConflictException({ code: 'NO_PHOTO', message: 'This student has no photo.' });
+    const key = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.studentProfile.updateMany({
+        where: { id, version: expectedVersion },
+        data: { photoFileId: null, version: { increment: 1 } },
+      });
+      if (claimed.count !== 1) throw this.versionConflict(before.version);
+      const removedKey = await this.files.markRemoved(photoFileId, tx);
+      await this.audit.record(
+        auditEntry(
+          actor,
+          'students.photo_removed',
+          { type: 'student', id },
+          { before: { photoFileId }, after: { photoFileId: null }, reason },
+          context,
+        ),
+        tx,
+      );
+      return removedKey;
+    });
+    await this.files.deleteBytes(key);
+    return this.get(id);
+  }
+
+  /** A short-lived link to the photo of a student (staff) or of the signed-in student (`userId`). */
+  async photoLink(where: { id: string } | { userId: string }) {
+    const row = await this.prisma.studentProfile.findUnique({ where });
+    if (!row) throw notFound();
+    if (!row.photoFileId)
+      throw new NotFoundException({ code: 'NO_PHOTO', message: 'This student has no photo.' });
+    return this.files.downloadLink(row.photoFileId);
   }
 
   /** Programme (with its department and faculty), level, year and semester must exist, be active and fit together. */

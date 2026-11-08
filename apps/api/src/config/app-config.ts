@@ -45,6 +45,15 @@ const EnvSchema = z
     SMTP_USER: z.string().optional(),
     SMTP_PASSWORD: z.string().optional(),
     SMTP_FROM: z.string().min(3),
+
+    /** S3-compatible storage for photos and import files (SeaweedFS locally; the host chosen under D-16 later). */
+    S3_ENDPOINT: z.url({ protocol: /^https?$/ }),
+    /** Address browsers use for short-lived download links, if different from S3_ENDPOINT. */
+    S3_PUBLIC_ENDPOINT: z.url({ protocol: /^https?$/ }).optional(),
+    S3_REGION: z.string().min(1).default('us-east-1'),
+    S3_ACCESS_KEY: z.string().min(1),
+    S3_SECRET_KEY: z.string().min(1),
+    S3_BUCKET: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/, 'must be a valid bucket name'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;
@@ -52,6 +61,7 @@ const EnvSchema = z
     for (const [name, value] of [
       ['JWT_ACCESS_SECRET', env.JWT_ACCESS_SECRET],
       ['ENCRYPTION_KEY', keyText],
+      ['S3_SECRET_KEY', env.S3_SECRET_KEY],
     ] as const) {
       if (value.includes(LOCAL_ONLY_MARKER)) {
         ctx.addIssue({
@@ -82,6 +92,15 @@ export interface SmtpConfig {
   from: string;
 }
 
+export interface StorageConfig {
+  endpoint: string;
+  publicEndpoint: string;
+  region: string;
+  accessKey: string;
+  secretKey: string;
+  bucket: string;
+}
+
 /**
  * Validated, typed configuration. Built once at start-up from environment variables; the app refuses to
  * start if anything is missing or malformed, rather than failing later in the middle of a request.
@@ -99,6 +118,7 @@ export class AppConfig {
   readonly webAppUrl: string;
   readonly webAppOrigin: string;
   readonly smtp: SmtpConfig;
+  readonly storage: StorageConfig;
 
   private constructor(env: z.infer<typeof EnvSchema>) {
     this.nodeEnv = env.NODE_ENV;
@@ -119,6 +139,14 @@ export class AppConfig {
       user: env.SMTP_USER || undefined,
       password: env.SMTP_PASSWORD || undefined,
       from: env.SMTP_FROM,
+    };
+    this.storage = {
+      endpoint: env.S3_ENDPOINT,
+      publicEndpoint: env.S3_PUBLIC_ENDPOINT ?? env.S3_ENDPOINT,
+      region: env.S3_REGION,
+      accessKey: env.S3_ACCESS_KEY,
+      secretKey: env.S3_SECRET_KEY,
+      bucket: env.S3_BUCKET,
     };
   }
 

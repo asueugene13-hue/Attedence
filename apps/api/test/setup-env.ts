@@ -8,3 +8,5 @@ process.env.LOG_LEVEL = 'silent';
 loadLocalEnvFile();
 process.env.DATABASE_URL = testDatabaseUrl(process.env.DATABASE_URL);
 process.env.REDIS_URL = testRedisUrl(process.env.REDIS_URL);
+// A separate storage bucket too, created on first use.
+process.env.S3_BUCKET = `${process.env.S3_BUCKET ?? 'attendsure'}-test`;

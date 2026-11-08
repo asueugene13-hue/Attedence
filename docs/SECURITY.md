@@ -59,7 +59,7 @@ Fraud detection raises flags for people to review. It never changes attendance o
 | Reading other people's data by changing an ID in the URL | Scope policies and scoped queries; automated tests per role |
 | XSS in announcements and notes | Stored and shown as plain text; never rendered as HTML; strict Content-Security-Policy on the web dashboard |
 | Formula injection in exports | Cells starting with `=`, `+`, `-`, `@`, tab or carriage return are prefixed with `'` in CSV and XLSX output |
-| Malicious uploads | Size limits; type checked from the file's bytes; allow-list (CSV, XLSX, JPEG, PNG, PDF); files stored privately with random keys; short-lived download links; optional ClamAV scan |
+| Malicious uploads | Size limits (photos 2 MB, imports 5 MB and 5,000 rows); type checked from the file's bytes; allow-list (CSV, XLSX, JPEG, PNG so far); uploads pass through the API, after sign-in and permission checks, so the type is checked before anything is stored; files stored privately with random keys; 5-minute download links; spreadsheet exports neutralise formulas (CSV injection). Virus scanning (ClamAV) is not yet in place. |
 | Bulk import abuse | Size and row limits; validation before saving; nothing is written until a person confirms the preview |
 | Denial of service and cost abuse | Rate limits per route, counted in Redis (built: sign-in 10 per 15 min per IP+email and 300 per min per IP; reset email 3 per hour per address; MFA 60 per min per IP; default 3,000 per min per IP); SMS only for critical categories; course-rep message limits |
 | Security headers | Helmet: HSTS, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` (the API serves only JSON), no-sniff, referrer policy. **Built** (Phase 1 step 5). |

@@ -7,7 +7,10 @@ import type { PrismaClient, UserStatus } from '../src/generated/prisma/client.js
 export const TEST_PASSWORD = 'river-mango-lantern-42';
 
 const TABLES = [
+  'import_rows',
+  'import_batches',
   'student_profiles',
+  'file_objects',
   'lecturer_assignments',
   'lecturer_profiles',
   'course_sections',
