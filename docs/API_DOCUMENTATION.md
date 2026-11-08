@@ -59,10 +59,10 @@ AttendSure exposes one versioned REST API at `/api/v1` and one Socket.IO namespa
 | GET · POST · PATCH | `/academic-years`, `/semesters` | Read: as above. Change: university-wide scope with `academic_periods.manage` | Dates are `YYYY-MM-DD`. Years and semesters cannot overlap; semesters stay inside their year; dates change only while a semester is planned. `POST /academic-years/:id/make-current`. **Built.** |
 | GET · POST | `/calendar-exceptions` (`?semesterId=&from=&to=`) · `POST /calendar-exceptions/:id/remove { reason }` | As above | Holidays, closures and exam periods; no classes are generated on them (Phase 3). Only entries that have not started can be removed. **Built.** |
 | POST | `/semesters/:id/activate` · `/semesters/:id/close` | University-wide scope | One active semester at a time; activating also makes its academic year current. **Built.** |
-| GET · POST · PATCH | `/courses`, `/course-offerings`, `/course-sections` | SA, UA | Courses and class groups |
-| POST · DELETE | `/course-sections/:id/lecturers` · `…/lecturers/:assignmentId` | SA, UA | Lecturer assignments |
+| GET · POST · PATCH | `/courses`, `/course-offerings` (GET, POST), `/course-sections` (POST, PATCH) | Read: `academic_structure.read`. Change: `courses.manage` within the department or faculty scope of the course | Offerings move DRAFT → OPEN → CLOSED (`POST /course-offerings/:id/open`, `/close`); one per course per semester; not in a closed semester. A course with an open offering cannot be deactivated; a closed offering cannot gain or change sections. Sections may carry a programme and level hint. **Built.** |
+| POST | `/course-sections/:id/lecturers` `{ lecturerId, isPrimary? }` · `/course-sections/:id/lecturers/:assignmentId/end { reason }` | `lecturer_assignments.manage` within scope | At most one primary lecturer per section; assistants allowed; ended assignments are kept for history. `GET /me/teaching` (any signed-in user) lists the caller's own current sections. **Built.** |
 | POST · DELETE | `/course-sections/:id/course-reps` · `…/course-reps/:assignmentId` | SA, UA (LE may nominate) | Rep assignments |
-| GET · POST · PATCH | `/lecturers`, `/lecturers/:id` | SA (UA where configured) | Lecturer accounts and profiles |
+| GET · POST · PATCH | `/lecturers`, `/lecturers/:id` | Read: `academic_structure.read`. Change: `lecturers.manage` within scope | Creating a lecturer for a new email makes a pending account with the Lecturer role and sends an activation email; for an existing account it adds the profile and role instead. Staff numbers are stored in capitals and unique (format pending D-14). **Built.** |
 
 ### Students, imports, enrolments
 

@@ -15,6 +15,7 @@ import { AccessTokenGuard } from './modules/auth/access-token.guard.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 import { PermissionGuard } from './modules/authorization/permission.guard.js';
+import { CoursesModule } from './modules/courses/courses.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { PlacesModule } from './modules/places/places.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
@@ -42,6 +43,7 @@ export const INFRASTRUCTURE_MODULES = [
     AuditLogsModule,
     AcademicModule,
     PlacesModule,
+    CoursesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },

@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 2, academic management. Steps 1–2 are done; step 3 (courses, offerings, sections, lecturers) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 2, academic management. Steps 1–3 are done; step 4 (student registration and scoped administrator grants) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -25,7 +25,7 @@ Read this first in every session, and update it after every implementation step.
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
 | 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Done; CI green 2026-11-08 (native mobile build still open) |
-| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | In progress (steps 1–2 of 7 done) |
+| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | In progress (steps 1–3 of 7 done) |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Not started |
@@ -556,7 +556,7 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 | --- | --- | --- |
 | 1 | Academic structure: faculties, departments, programmes, levels, academic years, semesters, calendar exceptions | Done (2026-11-08) |
 | 2 | Places: campuses, buildings, classrooms (geofences for later) | Done (2026-11-08) |
-| 3 | Courses, offerings, sections; lecturer profiles and assignments | Not started |
+| 3 | Courses, offerings, sections; lecturer profiles and assignments | Done (2026-11-08) |
 | 4 | Student registration (Registrar); faculty- and department-scoped administrator grants | Not started |
 | 5 | Bulk student import (CSV/XLSX): templates, validation, preview, confirm, error report, history | Not started |
 | 6 | Enrolments and course-rep assignments | Not started |
@@ -626,3 +626,45 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed.
   - GitHub run 42520162780 on `bfbf030`: **success**.
+
+### 2026-11-08 — Phase 2, step 3: courses and lecturers
+
+- **Built:**
+  - Five tables: `courses`, `course_offerings`, `course_sections`, `lecturer_profiles`, `lecturer_assignments`.
+  - 17 endpoints, plus `GET /me/teaching` (see API_DOCUMENTATION).
+  - **Courses** belong to a department.
+  - **Offerings** are a course in one semester, one per course per semester, moving DRAFT → OPEN → CLOSED.
+    - Not allowed in a closed semester.
+    - A course cannot be deactivated while it has an open offering.
+    - A closed offering is frozen.
+  - **Sections** are class groups, with optional programme and level hints for Phase 3 clash checks.
+  - **Lecturers:**
+    - A new email gets a pending account with the Lecturer role and an activation email.
+    - An existing account (for example an administrator who also teaches) gets the profile and role added instead of a second account.
+    - Staff numbers are stored in capitals and unique, in any reasonable format until D-14.
+  - **Assignments:**
+    - at most one primary lecturer per section, plus assistants;
+    - ending one needs a reason and keeps the record;
+    - suspended or inactive lecturers cannot be assigned.
+  - Every change is audited through a new shared helper (`common/audit-entry.ts`). Scope comes from the course's or lecturer's department.
+- **Bug found and fixed:** a duplicate assignment returned 500 instead of 409.
+  - Cause: with the pg driver adapter, Prisma puts the name of a partial unique index in `meta.driverAdapterError.cause.constraint.index`, which `db-errors.ts` did not read. A probe test showed the exact shape; the helper now reads it for every kind of violation.
+  - The step 1–3 suites (33 tests) were re-run and pass.
+- **Scenario 24:** its exhaustive tests (every endpoint × every role) outgrew Vitest's 5-second default and now have an explicit 60-second limit. They grow with the API by design.
+- **Files:**
+  - `apps/api/prisma/schema.prisma`, `prisma/migrations/20261108203337_courses_and_lecturers/`.
+  - `apps/api/src/modules/courses/*`, `apps/api/src/common/{audit-entry.ts, db-errors.ts}`, `apps/api/src/app.module.ts`.
+  - `packages/shared/src/courses.ts`.
+  - `apps/api/test/{courses.test.ts, fixtures.ts, scenario-24-unauthorised-access.test.ts}`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA.
+- **Database changes:**
+  - 5 tables.
+  - Checks: capitalised codes and staff numbers, credit hours and capacity ranges, complete assignment endings.
+  - Partial unique indexes: one active assignment per lecturer and section; one active primary per section.
+  - Drift check: no difference.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **144** (11 new), web 8, mobile 9, so **174 passed**.
+- **Known limitations:**
+  - Staff-number format not yet enforced (D-14).
+  - A lecturer's name and email are edited through their account, not the profile.
+  - No dashboard screens yet (step 7).
+- **Next step:** Phase 2, step 4: Registrar student registration (manual), and faculty- and department-scoped administrator grants checked against real faculties and departments.

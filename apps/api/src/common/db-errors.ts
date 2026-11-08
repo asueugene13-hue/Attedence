@@ -14,24 +14,29 @@ interface DbErrorInfo {
   constraint: string | undefined;
 }
 
+interface AdapterCause {
+  code?: string;
+  originalCode?: string;
+  originalMessage?: string;
+  constraint?: { index?: string; fields?: string[] };
+}
+
 /**
- * Reads the PostgreSQL error code and constraint name from a Prisma error. Prisma reports unique
- * violations as P2002; other database rule violations arrive through the driver adapter's cause.
+ * Reads the PostgreSQL error code and constraint name from a Prisma error. With the pg driver adapter,
+ * Prisma puts the database's own details in `meta.driverAdapterError.cause`:
+ *  - unique violations (P2002): `originalCode` 23505 and `constraint.index` (the index name);
+ *  - other rule violations (P2039 …): `code` such as 23P01 and the name inside `originalMessage`.
  */
 export function dbErrorInfo(error: unknown): DbErrorInfo | null {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return null;
-  if (error.code === 'P2002') {
-    const target = (error.meta as { target?: unknown } | undefined)?.target;
-    return {
-      pgCode: PG.uniqueViolation,
-      constraint: Array.isArray(target) ? target.join(',') : String(target ?? ''),
-    };
-  }
-  const cause = (
-    error.meta as { driverAdapterError?: { cause?: { code?: string; originalMessage?: string } } }
-  )?.driverAdapterError?.cause;
-  const constraint = cause?.originalMessage?.match(/constraint "([^"]+)"/)?.[1];
-  return { pgCode: cause?.code, constraint };
+  const meta = error.meta as { target?: unknown; driverAdapterError?: { cause?: AdapterCause } } | undefined;
+  const cause = meta?.driverAdapterError?.cause;
+  const constraint =
+    cause?.constraint?.index ??
+    cause?.originalMessage?.match(/constraint "([^"]+)"/)?.[1] ??
+    (Array.isArray(meta?.target) ? meta.target.join(',') : undefined);
+  const pgCode = error.code === 'P2002' ? PG.uniqueViolation : (cause?.code ?? cause?.originalCode);
+  return { pgCode, constraint };
 }
 
 /**

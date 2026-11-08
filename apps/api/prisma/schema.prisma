@@ -87,17 +87,20 @@ model User {
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  roles                     UserRole[]          @relation("UserRoleHolder")
-  rolesGranted              UserRole[]          @relation("UserRoleGrantedBy")
-  rolesRevoked              UserRole[]          @relation("UserRoleRevokedBy")
+  roles                     UserRole[]           @relation("UserRoleHolder")
+  rolesGranted              UserRole[]           @relation("UserRoleGrantedBy")
+  rolesRevoked              UserRole[]           @relation("UserRoleRevokedBy")
   authSessions              AuthSession[]
   tokens                    UserToken[]
-  devices                   UserDevice[]        @relation("DeviceOwner")
-  devicesApproved           UserDevice[]        @relation("DeviceApprovedBy")
-  devicesRevoked            UserDevice[]        @relation("DeviceRevokedBy")
+  devices                   UserDevice[]         @relation("DeviceOwner")
+  devicesApproved           UserDevice[]         @relation("DeviceApprovedBy")
+  devicesRevoked            UserDevice[]         @relation("DeviceRevokedBy")
   auditLogs                 AuditLog[]
   recoveryCodes             MfaRecoveryCode[]
-  calendarExceptionsCreated CalendarException[] @relation("CalendarExceptionCreatedBy")
+  calendarExceptionsCreated CalendarException[]  @relation("CalendarExceptionCreatedBy")
+  lecturerProfile           LecturerProfile?
+  assignmentsMade           LecturerAssignment[] @relation("AssignmentAssignedBy")
+  assignmentsEnded          LecturerAssignment[] @relation("AssignmentEndedBy")
 
   @@map("users")
 }
@@ -339,8 +342,10 @@ model Department {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  faculty    Faculty     @relation(fields: [facultyId], references: [id])
+  faculty    Faculty           @relation(fields: [facultyId], references: [id])
   programmes Programme[]
+  courses    Course[]
+  lecturers  LecturerProfile[]
 
   @@index([facultyId])
   @@map("departments")
@@ -358,7 +363,8 @@ model Programme {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  department Department @relation(fields: [departmentId], references: [id])
+  department Department      @relation(fields: [departmentId], references: [id])
+  sections   CourseSection[]
 
   @@index([departmentId])
   @@map("programmes")
@@ -373,6 +379,8 @@ model AcademicLevel {
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sections CourseSection[]
 
   @@map("academic_levels")
 }
@@ -406,6 +414,7 @@ model Semester {
 
   academicYear       AcademicYear        @relation(fields: [academicYearId], references: [id])
   calendarExceptions CalendarException[]
+  offerings          CourseOffering[]
 
   @@unique([academicYearId, number])
   @@map("semesters")
@@ -486,4 +495,115 @@ model Classroom {
 
   @@unique([buildingId, code])
   @@map("classrooms")
+}
+
+// ───────────────────────── Courses and lecturers (Phase 2) ─────────────────────────
+
+enum OfferingStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum StaffStatus {
+  ACTIVE
+  ON_LEAVE
+  INACTIVE
+}
+
+model Course {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  code         String   @unique
+  title        String
+  creditHours  Int?     @map("credit_hours")
+  departmentId String   @map("department_id") @db.Uuid
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  department Department       @relation(fields: [departmentId], references: [id])
+  offerings  CourseOffering[]
+
+  @@index([departmentId])
+  @@map("courses")
+}
+
+/// A course running in one semester.
+model CourseOffering {
+  id         String         @id @default(uuid(7)) @db.Uuid
+  courseId   String         @map("course_id") @db.Uuid
+  semesterId String         @map("semester_id") @db.Uuid
+  status     OfferingStatus @default(DRAFT)
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  course   Course          @relation(fields: [courseId], references: [id])
+  semester Semester        @relation(fields: [semesterId], references: [id])
+  sections CourseSection[]
+
+  @@unique([courseId, semesterId])
+  @@index([semesterId])
+  @@map("course_offerings")
+}
+
+/// A class group inside an offering. Programme and level are optional hints for timetable clash checks.
+model CourseSection {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  offeringId  String   @map("offering_id") @db.Uuid
+  code        String
+  name        String?
+  capacity    Int?
+  programmeId String?  @map("programme_id") @db.Uuid
+  levelId     String?  @map("level_id") @db.Uuid
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  offering    CourseOffering       @relation(fields: [offeringId], references: [id])
+  programme   Programme?           @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  level       AcademicLevel?       @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  assignments LecturerAssignment[]
+
+  @@unique([offeringId, code])
+  @@map("course_sections")
+}
+
+model LecturerProfile {
+  id           String      @id @default(uuid(7)) @db.Uuid
+  userId       String      @unique @map("user_id") @db.Uuid
+  /// Format to be confirmed by the university (decision D-14); stored in capitals.
+  staffNumber  String      @unique @map("staff_number")
+  departmentId String      @map("department_id") @db.Uuid
+  title        String?
+  status       StaffStatus @default(ACTIVE)
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user        User                 @relation(fields: [userId], references: [id])
+  department  Department           @relation(fields: [departmentId], references: [id])
+  assignments LecturerAssignment[]
+
+  @@index([departmentId])
+  @@map("lecturer_profiles")
+}
+
+/// Partial unique indexes (SQL): one active assignment per lecturer and section; one active primary per section.
+model LecturerAssignment {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  lecturerId   String    @map("lecturer_id") @db.Uuid
+  sectionId    String    @map("section_id") @db.Uuid
+  isPrimary    Boolean   @default(true) @map("is_primary")
+  assignedById String    @map("assigned_by_id") @db.Uuid
+  assignedAt   DateTime  @default(now()) @map("assigned_at") @db.Timestamptz(3)
+  endedAt      DateTime? @map("ended_at") @db.Timestamptz(3)
+  endedById    String?   @map("ended_by_id") @db.Uuid
+
+  lecturer   LecturerProfile @relation(fields: [lecturerId], references: [id])
+  section    CourseSection   @relation(fields: [sectionId], references: [id])
+  assignedBy User            @relation("AssignmentAssignedBy", fields: [assignedById], references: [id])
+  endedBy    User?           @relation("AssignmentEndedBy", fields: [endedById], references: [id], onDelete: Restrict)
+
+  @@index([sectionId])
+  @@index([lecturerId])
+  @@map("lecturer_assignments")
 }

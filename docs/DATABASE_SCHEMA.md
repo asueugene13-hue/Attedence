@@ -1091,6 +1091,15 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | A geofence is complete or absent, with real coordinates and a 20–5,000 m radius | `campuses_geofence_valid`, `buildings_geofence_valid` checks |
 | Classroom capacity 1–5,000 when given | `classrooms_capacity_positive` check |
 
+**Added in Phase 2, step 3** (migration `20261108203337_courses_and_lecturers`):
+
+| Rule | Enforced by |
+| --- | --- |
+| Course and section codes and staff numbers stored in capitals | `courses_code_upper`, `course_sections_code_upper`, `lecturer_profiles_staff_number_upper` checks |
+| One offering per course per semester; section codes unique within an offering | `@@unique([courseId, semesterId])`, `@@unique([offeringId, code])` |
+| One active assignment per lecturer and section; at most one active primary lecturer per section | `lecturer_assignments_active_unique`, `lecturer_assignments_one_primary` partial unique indexes |
+| An ended assignment records who ended it | `lecturer_assignments_end_complete` check |
+
 `npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.
 
 Rules that need data from several tables are checked in services inside the transaction:

@@ -101,6 +101,9 @@ beforeEach(async () => {
   await resetRedis(app.get(RedisService));
 });
 
+// These tests send a request per endpoint (and per role), so they grow with the API: allow more than the 5 s default.
+const EXHAUSTIVE = 60_000;
+
 describe('scenario 24: unauthorised access is refused on every endpoint', () => {
   it('found the Phase 1 endpoints', () => {
     // 2 health + 11 auth + 9 users + 2 roles + 1 audit-log routes.
@@ -108,51 +111,63 @@ describe('scenario 24: unauthorised access is refused on every endpoint', () => 
     expect(routes.filter((r) => r.rule?.kind === 'permissions').length).toBeGreaterThanOrEqual(12);
   });
 
-  it('refuses every non-public endpoint without sign-in', async () => {
-    const failures: string[] = [];
-    for (const route of routes.filter((r) => r.rule?.kind !== 'public')) {
-      const res = await request(app.getHttpServer())[route.method](route.path).send({});
-      if (res.status !== 401)
-        failures.push(`${route.name} ${route.method.toUpperCase()} ${route.path} → ${res.status}`);
-    }
-    expect(failures).toEqual([]);
-  });
+  it(
+    'refuses every non-public endpoint without sign-in',
+    async () => {
+      const failures: string[] = [];
+      for (const route of routes.filter((r) => r.rule?.kind !== 'public')) {
+        const res = await request(app.getHttpServer())[route.method](route.path).send({});
+        if (res.status !== 401)
+          failures.push(`${route.name} ${route.method.toUpperCase()} ${route.path} → ${res.status}`);
+      }
+      expect(failures).toEqual([]);
+    },
+    EXHAUSTIVE,
+  );
 
-  it('refuses every role that lacks a required permission, before any validation or data access', async () => {
-    const protectedRoutes = routes.filter((r) => r.rule?.kind === 'permissions');
-    const failures: string[] = [];
-    const checked = new Set<string>();
+  it(
+    'refuses every role that lacks a required permission, before any validation or data access',
+    async () => {
+      const protectedRoutes = routes.filter((r) => r.rule?.kind === 'permissions');
+      const failures: string[] = [];
+      const checked = new Set<string>();
 
-    for (const role of ROLE_KEYS.filter((r): r is RoleKey => r !== 'COURSE_REP')) {
-      const { auth } = await signInAs(app, prisma, `${role.toLowerCase()}@example.test`, [role]);
-      const held = new Set<string>(DEFAULT_ROLE_PERMISSIONS[role]);
-      for (const route of protectedRoutes) {
-        const keys = route.rule?.kind === 'permissions' ? route.rule.keys : [];
-        if (keys.every((k) => held.has(k))) continue; // this role may use it
-        checked.add(route.name);
-        const res = await request(app.getHttpServer())[route.method](route.path).set(auth).send({});
-        if (res.status !== 403 || res.body.code !== 'PERMISSION_DENIED') {
-          failures.push(
-            `${role} → ${route.name} ${route.method.toUpperCase()} ${route.path}: ${res.status} ${res.body.code}`,
-          );
+      for (const role of ROLE_KEYS.filter((r): r is RoleKey => r !== 'COURSE_REP')) {
+        const { auth } = await signInAs(app, prisma, `${role.toLowerCase()}@example.test`, [role]);
+        const held = new Set<string>(DEFAULT_ROLE_PERMISSIONS[role]);
+        for (const route of protectedRoutes) {
+          const keys = route.rule?.kind === 'permissions' ? route.rule.keys : [];
+          if (keys.every((k) => held.has(k))) continue; // this role may use it
+          checked.add(route.name);
+          const res = await request(app.getHttpServer())[route.method](route.path).set(auth).send({});
+          if (res.status !== 403 || res.body.code !== 'PERMISSION_DENIED') {
+            failures.push(
+              `${role} → ${route.name} ${route.method.toUpperCase()} ${route.path}: ${res.status} ${res.body.code}`,
+            );
+          }
         }
       }
-    }
-    expect(failures).toEqual([]);
-    // Every protected route that some role may not use was tried by such a role. (A route whose
-    // permission every role holds, such as viewing rooms, still needs sign-in: see the 401 test.)
-    const restrictable = protectedRoutes.filter((r) => SIGN_IN_ROLES.some((role) => !roleMayUse(role, r)));
-    expect([...checked].sort()).toEqual(restrictable.map((r) => r.name).sort());
-  });
+      expect(failures).toEqual([]);
+      // Every protected route that some role may not use was tried by such a role. (A route whose
+      // permission every role holds, such as viewing rooms, still needs sign-in: see the 401 test.)
+      const restrictable = protectedRoutes.filter((r) => SIGN_IN_ROLES.some((role) => !roleMayUse(role, r)));
+      expect([...checked].sort()).toEqual(restrictable.map((r) => r.name).sort());
+    },
+    EXHAUSTIVE,
+  );
 
-  it('records every refusal in the audit log', async () => {
-    const { auth, user } = await signInAs(app, prisma, 'student@example.test', ['STUDENT']);
-    const adminOnly = routes.filter((r) => r.rule?.kind === 'permissions' && !roleMayUse('STUDENT', r));
-    for (const route of adminOnly) {
-      await request(app.getHttpServer())[route.method](route.path).set(auth).send({}).expect(403);
-    }
-    expect(await prisma.auditLog.count({ where: { action: 'authz.denied', actorUserId: user.id } })).toBe(
-      adminOnly.length,
-    );
-  });
+  it(
+    'records every refusal in the audit log',
+    async () => {
+      const { auth, user } = await signInAs(app, prisma, 'student@example.test', ['STUDENT']);
+      const adminOnly = routes.filter((r) => r.rule?.kind === 'permissions' && !roleMayUse('STUDENT', r));
+      for (const route of adminOnly) {
+        await request(app.getHttpServer())[route.method](route.path).set(auth).send({}).expect(403);
+      }
+      expect(await prisma.auditLog.count({ where: { action: 'authz.denied', actorUserId: user.id } })).toBe(
+        adminOnly.length,
+      );
+    },
+    EXHAUSTIVE,
+  );
 });
