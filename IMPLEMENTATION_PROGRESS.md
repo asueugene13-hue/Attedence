@@ -793,3 +793,6 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
   - the sign-in label "Email or Student ID";
   - moving the step-4/5 lookups behind the owning services;
   - Playwright end-to-end tests and the Phase 2 exit check.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (API 179, e2e 1, audit clean).
+  - GitHub run 42534431117 on `49e6b83`: **success**.
