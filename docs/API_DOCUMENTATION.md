@@ -26,14 +26,15 @@ AttendSure exposes one versioned REST API at `/api/v1` and one Socket.IO namespa
 
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| POST | `/auth/login` | Anyone | Email or ID number plus password. Returns tokens, or `mfaRequired`. |
-| POST | `/auth/mfa/verify` | Staff | TOTP code or recovery code |
-| POST | `/auth/refresh` | Signed in | Rotates the refresh token. Reusing an old one revokes the session. |
-| POST | `/auth/logout` | Signed in | Revokes the current session |
-| POST | `/auth/activate` | New user | Sets the first password from an activation link |
-| POST | `/auth/password/forgot` · `/auth/password/reset` | Anyone | Same response whether or not the account exists |
-| POST | `/auth/password/change` | Signed in | Revokes other sessions |
-| GET | `/auth/me` | Signed in | User, roles, active role, permission keys |
+| POST | `/auth/login` | Anyone | `{ email, password, client: WEB|MOBILE, role? }`. Returns tokens, or `{ mfaRequired, enrollmentRequired, mfaToken }` for staff roles. Signing in with a Student or Staff ID number arrives with those records in Phase 2. **Built.** |
+| POST | `/auth/mfa/enroll` | Staff, first sign-in | `{ mfaToken }` → `{ secret, otpauthUri }` for the authenticator app. **Built.** |
+| POST | `/auth/mfa/verify` | Staff | `{ mfaToken, code }` or `{ mfaToken, recoveryCode }`. On first enrolment the response also carries 10 recovery codes, shown once. 5 wrong codes end the attempt. **Built.** |
+| POST | `/auth/refresh` | Signed in | Mobile: `{ refreshToken }`. Web: the `as_refresh` cookie, accepted only with the dashboard's `Origin`. Rotates the token; reusing an old one revokes the session. **Built.** |
+| POST | `/auth/logout` | Signed in | Revokes the current session. **Built.** |
+| POST | `/auth/activate` | New user | Sets the first password from an activation link. **Built.** |
+| POST | `/auth/password/forgot` · `/auth/password/reset` | Anyone | Same response whether or not the account exists. **Built.** |
+| POST | `/auth/password/change` | Signed in | Revokes other sessions. **Built.** |
+| GET | `/auth/me` | Signed in | User, roles, active role, permission keys. **Built.** |
 | POST | `/auth/switch-role` | Multi-role users | Issues a new access token for another held role |
 | GET · DELETE | `/me/sessions` · `/me/sessions/:id` | Signed in | See and revoke own sessions |
 

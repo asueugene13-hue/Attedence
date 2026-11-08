@@ -79,21 +79,24 @@ model User {
   /// Encrypted TOTP secret for staff roles.
   mfaSecretEnc     String?    @map("mfa_secret_enc")
   mfaEnabledAt     DateTime?  @map("mfa_enabled_at") @db.Timestamptz(3)
+  /// TOTP time step of the last accepted code, so a code cannot be used twice.
+  mfaLastTimeStep  Int?       @map("mfa_last_time_step")
   failedLoginCount Int        @default(0) @map("failed_login_count")
   lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz(3)
   lastLoginAt      DateTime?  @map("last_login_at") @db.Timestamptz(3)
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  roles           UserRole[]    @relation("UserRoleHolder")
-  rolesGranted    UserRole[]    @relation("UserRoleGrantedBy")
-  rolesRevoked    UserRole[]    @relation("UserRoleRevokedBy")
+  roles           UserRole[]        @relation("UserRoleHolder")
+  rolesGranted    UserRole[]        @relation("UserRoleGrantedBy")
+  rolesRevoked    UserRole[]        @relation("UserRoleRevokedBy")
   authSessions    AuthSession[]
   tokens          UserToken[]
-  devices         UserDevice[]  @relation("DeviceOwner")
-  devicesApproved UserDevice[]  @relation("DeviceApprovedBy")
-  devicesRevoked  UserDevice[]  @relation("DeviceRevokedBy")
+  devices         UserDevice[]      @relation("DeviceOwner")
+  devicesApproved UserDevice[]      @relation("DeviceApprovedBy")
+  devicesRevoked  UserDevice[]      @relation("DeviceRevokedBy")
   auditLogs       AuditLog[]
+  recoveryCodes   MfaRecoveryCode[]
 
   @@map("users")
 }
@@ -278,4 +281,18 @@ model AuditLog {
   @@index([actorUserId, occurredAt])
   @@index([action, occurredAt])
   @@map("audit_logs")
+}
+
+/// Single-use backup codes for two-factor sign-in. Only a SHA-256 hash is stored.
+model MfaRecoveryCode {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @unique @map("code_hash")
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("mfa_recovery_codes")
 }

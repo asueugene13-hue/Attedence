@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 1, foundation. Steps 1–3 are done; step 4 (authentication) is next.
+**Current phase:** Phase 1, foundation. Steps 1–4 are done; step 5 (authorisation) is next.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -12,7 +12,7 @@ Read this first in every session, and update it after every implementation step.
 | 1 | Repository foundation: npm workspaces, TypeScript, lint, format, tests, CI, local Docker services, shared role and permission catalogue | Done (2026-11-08) |
 | 2 | API skeleton: NestJS app and worker entry points, validated config, structured logging, health checks, Prisma connection | Done (2026-11-08) |
 | 3 | Identity schema and migrations: users, roles, permissions, grants, sessions, tokens, devices, audit log (+ append-only trigger) | Done (2026-11-08) |
-| 4 | Authentication: activation, login, refresh rotation with reuse detection, logout, password reset, lockout, TOTP for staff | Not started |
+| 4 | Authentication: activation, login, refresh rotation with reuse detection, logout, password reset, lockout, TOTP for staff | Done (2026-11-08) |
 | 5 | Authorisation: permission guard, scope policies, role switch, audit interceptor; Super Admin bootstrap command | Not started |
 | 6 | Super Admin API: users, role grants, role permissions, settings, audit-log search | Not started |
 | 7 | Web shell: Next.js, design tokens, login, MFA, role-aware sidebar, Super Admin screens | Not started |
@@ -24,7 +24,7 @@ Read this first in every session, and update it after every implementation step.
 | Phase | Scope | Exit criteria | Status |
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
-| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–3 of 9 done) |
+| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–4 of 9 done) |
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Not started |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
@@ -209,3 +209,59 @@ Read this first in every session, and update it after every implementation step.
   - `user_roles.scope_id` has no foreign key yet. Faculties and departments arrive in Phase 2, which will add a check that the scope exists.
   - The seed runs from built code (`npm run build` first).
 - **Next step:** Phase 1, step 4: authentication. It covers account activation, login with Argon2id, short-lived access tokens, refresh-token rotation with reuse detection, logout, password reset, lockout after repeated failures, and TOTP two-factor sign-in for staff roles.
+
+### 2026-11-08 — Phase 1, step 4: authentication
+
+- **Built:**
+  - **`POST /auth/login`** checks email and password with Argon2id (OWASP settings). Unknown emails take the same time, through a dummy hash, and get the same answer as wrong passwords.
+  - **Lock-out:** after 5 wrong passwords in a row, 15 min, then 30, 60 … up to 24 h.
+  - **Starting role:** the least-privileged role held, or a requested role the user holds.
+  - **Two-step sign-in (TOTP) for Super Admin, Administrator and Registrar** (`/auth/mfa/enroll`, `/auth/mfa/verify`):
+    - the secret is encrypted with AES-256-GCM;
+    - a code can't be replayed (last time step stored, claimed atomically);
+    - 10 single-use recovery codes, stored as hashes;
+    - 5 wrong codes end the attempt (counted in Redis);
+    - a successful challenge cannot open a second session.
+  - **Sessions:**
+    - Access tokens are JWTs (HS256, 15 min, separate audiences for access and MFA tokens) and are checked against the live session on every request.
+    - Refresh tokens are 256-bit random values, stored hashed and rotated on every use; reusing an old one ends the session and is audited.
+    - Web sessions last 12 h and use an httpOnly, Secure, SameSite=Strict cookie on `/api/v1/auth`, accepted only with the dashboard's `Origin`. Mobile sessions last 30 days and get the token in the response body.
+  - **`/auth/logout`, `/auth/me`** (user, roles, active role, permissions).
+  - **Activation link:** 72 h, single use. **Password reset:** 30 min, single use, same answer for unknown emails, ends all sessions. **Password change:** ends other sessions.
+  - **Password rules:** 10–128 characters, not on the common list, not one repeated character, not containing the email name.
+  - **Audit entries** for every sign-in event, without passwords.
+  - **Supporting pieces:** encryption service, opaque-token helpers, SMTP mail service, audit service, shared request validation (`parseInput`), and request schemas in `packages/shared/src/auth.ts`.
+- **Files:**
+  - `apps/api/src/modules/auth/*` (controller, service, password, lockout, token, session, MFA, link tokens, guard, errors, common passwords, unit tests).
+  - `apps/api/src/modules/audit-logs/*`, `apps/api/src/infrastructure/{crypto,mail}/*`, `apps/api/src/common/{request-context.ts, validation/parse-input.ts}`.
+  - `apps/api/src/config/app-config.ts` (new required settings; production refuses the example secrets and plain http), `apps/api/src/app.module.ts`, `apps/api/src/configure-app.ts` (cookie parsing).
+  - `apps/api/test/{auth.test.ts, fixtures.ts}`, `packages/shared/src/auth.ts`, `.env.example`, `.github/workflows/ci.yml`.
+  - Docs: API_DOCUMENTATION, SECURITY, KNOWN_LIMITATIONS.
+- **Database changes:** migration `*_mfa_recovery` adds `users.mfa_last_time_step` and the `mfa_recovery_codes` table. The drift check reports no difference.
+- **Dependencies added (pinned):** argon2 0.45.2, jose 6.2.15, otplib 13.6.0, nodemailer 10.4.0, cookie-parser 1.4.7, zod 4.6.7 in shared; dev: @types/nodemailer 8.0.2, @types/cookie-parser 1.4.10. `npm audit`: 0 vulnerabilities reported at install.
+- **Commands run:**
+  - Install, migrate, generate and type-check.
+  - `npx vitest run`. The first run had 4 failures: one shared length limit (200 characters) also applied to the MFA token, which is a longer JWT; it got its own limit.
+  - A real activation email sent through SMTP to Mailpit, using the test database. Mailpit received "Activate your AttendSure account" from no-reply@localhost.
+  - `npm run check`.
+- **Tests run:** `npm run check` exit 0. Shared: **10 passed**. API: 5 files, **66 passed**. The 40 new tests are:
+  - 28 HTTP integration tests covering activation, login, lock-out, roles, unknown fields, `/auth/me`, tampered and revoked tokens, suspension, refresh rotation and reuse, cookie origin, client mismatch, role revoked, reset, change, MFA enrolment, replay, recovery codes, attempt cap, MFA token not usable as an access token, and the audit trail;
+  - 10 unit tests (lock-out, password rules, tokens, encryption);
+  - 2 config tests.
+- **Decisions made while building:**
+  - HS256 signing with one server secret. This is enough while one service signs and checks tokens.
+  - Lock-out uses the same generic message as a wrong password, so it does not reveal which emails exist.
+  - The TOTP replay test replays the exact enrolment code, so it cannot fail at random when the 30-second window rolls over.
+  - The argon2 install script is not approved: its prebuilt binary loads without it.
+- **Known limitations:** see KNOWN_LIMITATIONS.md items 17–20:
+  - a starter common-password list;
+  - no per-IP rate limits yet;
+  - strict reuse detection can end a session when two tabs refresh at once;
+  - reset email is not retried.
+  - Also: sign-in is by email only until Student and Staff ID numbers exist (Phase 2), and there is no endpoint yet to create accounts (step 6).
+- **Next step:** Phase 1, step 5: authorisation.
+  - Every route requires sign-in by default.
+  - Permission guard with route-declared keys, and scope policies.
+  - Role switching (`/auth/switch-role`).
+  - Audit interceptor, Helmet security headers, per-IP rate limiting (sign-in, reset, MFA).
+  - A one-time command that creates the first Super Admin.

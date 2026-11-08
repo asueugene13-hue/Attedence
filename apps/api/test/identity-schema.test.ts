@@ -9,6 +9,7 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: proc
 
 const IDENTITY_TABLES = [
   'audit_logs',
+  'mfa_recovery_codes',
   'refresh_tokens',
   'auth_sessions',
   'user_tokens',

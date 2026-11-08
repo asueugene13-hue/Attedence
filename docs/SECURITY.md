@@ -14,10 +14,10 @@ The design relies on short-lived tokens, server-side checks on every request, da
 
 | Area | Design |
 | --- | --- |
-| Passwords | Hashed with Argon2id (the current OWASP recommendation). At least 10 characters, checked against a list of common and breached passwords; long passphrases allowed. |
+| Passwords | Hashed with Argon2id using OWASP's settings (19 MiB memory, 2 iterations, 1 thread). At least 10 characters, checked against a list of common and breached passwords; long passphrases allowed. |
 | Brute force | Per-account and per-IP rate limits. After 5 failures the account is locked for 15 min, with the lock doubling each time. Staff are alerted to repeated lockouts. |
 | First sign-in | No default passwords. The account is created as `PENDING_ACTIVATION`, and a single-use link valid for 72 h goes to the university email (D-06). |
-| Tokens | Access token: a signed JWT valid for 15 min, carrying user, session, active role and permission version. Refresh token: 256 random bits, stored only as a SHA-256 hash and rotated on every use. Presenting an already-used refresh token revokes the whole session, because it means the token was stolen. |
+| Tokens | Access token: a JWT signed with HMAC-SHA-256, valid for 15 min, checked against its session on every request so logout and suspension take effect at once, carrying user, session, active role and permission version. Refresh token: 256 random bits, stored only as a SHA-256 hash and rotated on every use. Presenting an already-used refresh token revokes the whole session, because it means the token was stolen. |
 | Web | The refresh token sits in an `httpOnly`, `Secure`, `SameSite=Strict` cookie scoped to `/api/v1/auth`. The access token is kept in memory only. Origin checks on state-changing requests. |
 | Mobile | Tokens and the device secret are kept in the operating system's secure storage, never in plain storage. |
 | Two-factor (D-03) | TOTP is required for Super Admin, Administrator and Registrar, with 10 single-use recovery codes. |

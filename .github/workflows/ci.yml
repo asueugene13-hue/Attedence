@@ -35,6 +35,13 @@ jobs:
       DATABASE_URL: postgresql://attendsure:ci-only-password@localhost:5432/attendsure
       REDIS_URL: redis://localhost:6379
       PRISMA_HIDE_UPDATE_MESSAGE: 'true'
+      # Test-only values for CI. They are not secrets and are used nowhere else.
+      JWT_ACCESS_SECRET: ci-only-signing-secret-not-used-anywhere-else-0001
+      ENCRYPTION_KEY: Y2ktb25seS1lbmNyeXB0aW9uLWtleS0zMmJ5dGVzISE=
+      WEB_APP_URL: http://localhost:3001
+      SMTP_HOST: localhost
+      SMTP_PORT: '1025'
+      SMTP_FROM: AttendSure CI <no-reply@localhost>
 
     steps:
       - uses: actions/checkout@v7

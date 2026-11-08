@@ -28,3 +28,10 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 14. **No biometrics,** by design.
 15. **One university only.** The design is for Knutsford University. Supporting other institutions would need real multi-tenant isolation, which it does not have.
 16. **Not legal advice.** The privacy design supports Act 843 principles, but compliance is decided by the university with its own legal and data-protection staff.
+
+## Sign-in (Phase 1, step 4)
+
+17. **The common-password list is a starter list** of about 60 entries. Checking new passwords against a full breached-password corpus (for example a downloaded Have I Been Pwned range file) is a later improvement.
+18. **No per-IP rate limiting yet.** Accounts lock after repeated wrong passwords, and two-step attempts are capped, but request-rate limits per IP address arrive in Phase 1 step 5.
+19. **Strict refresh-token reuse detection.** If the same web session refreshes from two browser tabs at exactly the same moment, the second request looks like a stolen token and ends the session, so the user signs in again. This trades occasional inconvenience for safety. The web dashboard (step 7) will refresh from one place to avoid it.
+20. **Reset emails are sent directly, not through the job queue.** A failed send is logged but not retried. Phase 3 moves email onto the worker with retries and delivery records.

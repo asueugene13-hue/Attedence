@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 
+/** Values in .env.example contain this marker; production refuses to start with them. */
+const LOCAL_ONLY_MARKER = 'local-dev';
+
 function isValidTimeZone(zone: string): boolean {
   try {
     new Intl.DateTimeFormat('en', { timeZone: zone });
@@ -11,23 +14,70 @@ function isValidTimeZone(zone: string): boolean {
   }
 }
 
-const EnvSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
-  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
-  REDIS_URL: z.url({ protocol: /^rediss?$/ }),
-  INSTITUTION_TIMEZONE: z
-    .string()
-    .default('Africa/Accra')
-    .refine(isValidTimeZone, 'must be an IANA time zone'),
+const base64Key32 = z.string().refine((value) => Buffer.from(value, 'base64').length === 32, {
+  message: 'must be 32 bytes encoded as base64 (see .env.example for how to generate one)',
 });
+
+const EnvSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+    LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
+    DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    REDIS_URL: z.url({ protocol: /^rediss?$/ }),
+    INSTITUTION_TIMEZONE: z
+      .string()
+      .default('Africa/Accra')
+      .refine(isValidTimeZone, 'must be an IANA time zone'),
+
+    /** Signs access tokens (HMAC-SHA-256). */
+    JWT_ACCESS_SECRET: z.string().min(32, 'must be at least 32 characters'),
+    /** Encrypts secrets stored in the database, such as TOTP keys (AES-256-GCM). */
+    ENCRYPTION_KEY: base64Key32,
+    /** The web dashboard's address: used in email links and as the only origin allowed to use the refresh cookie. */
+    WEB_APP_URL: z.url({ protocol: /^https?$/ }),
+
+    SMTP_HOST: z.string().min(1),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65535),
+    SMTP_SECURE: z.enum(['true', 'false']).default('false'),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    SMTP_FROM: z.string().min(3),
+  })
+  .superRefine((env, ctx) => {
+    if (env.NODE_ENV !== 'production') return;
+    const keyText = Buffer.from(env.ENCRYPTION_KEY, 'base64').toString('latin1');
+    for (const [name, value] of [
+      ['JWT_ACCESS_SECRET', env.JWT_ACCESS_SECRET],
+      ['ENCRYPTION_KEY', keyText],
+    ] as const) {
+      if (value.includes(LOCAL_ONLY_MARKER)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [name],
+          message: 'is the local example value; set a real secret',
+        });
+      }
+    }
+    if (!env.WEB_APP_URL.startsWith('https://')) {
+      ctx.addIssue({ code: 'custom', path: ['WEB_APP_URL'], message: 'must use https in production' });
+    }
+  });
 
 export class ConfigError extends Error {
   constructor(readonly problems: string[]) {
     super(`Invalid configuration:\n${problems.map((p) => `  - ${p}`).join('\n')}`);
     this.name = 'ConfigError';
   }
+}
+
+export interface SmtpConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string | undefined;
+  password: string | undefined;
+  from: string;
 }
 
 /**
@@ -41,6 +91,11 @@ export class AppConfig {
   readonly databaseUrl: string;
   readonly redisUrl: string;
   readonly institutionTimezone: string;
+  readonly jwtAccessSecret: Uint8Array;
+  readonly encryptionKey: Buffer;
+  readonly webAppUrl: string;
+  readonly webAppOrigin: string;
+  readonly smtp: SmtpConfig;
 
   private constructor(env: z.infer<typeof EnvSchema>) {
     this.nodeEnv = env.NODE_ENV;
@@ -49,6 +104,18 @@ export class AppConfig {
     this.databaseUrl = env.DATABASE_URL;
     this.redisUrl = env.REDIS_URL;
     this.institutionTimezone = env.INSTITUTION_TIMEZONE;
+    this.jwtAccessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
+    this.encryptionKey = Buffer.from(env.ENCRYPTION_KEY, 'base64');
+    this.webAppUrl = env.WEB_APP_URL.replace(/\/$/, '');
+    this.webAppOrigin = new URL(env.WEB_APP_URL).origin;
+    this.smtp = {
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT,
+      secure: env.SMTP_SECURE === 'true',
+      user: env.SMTP_USER || undefined,
+      password: env.SMTP_PASSWORD || undefined,
+      from: env.SMTP_FROM,
+    };
   }
 
   get isProduction(): boolean {
