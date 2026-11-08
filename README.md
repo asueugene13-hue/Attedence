@@ -45,10 +45,10 @@ Attendance management and classroom-presence verification for Knutsford Universi
 
 ```
 apps/api                 NestJS API and background worker (built: skeleton with health checks)
-apps/web                 Next.js dashboard (Phase 1, step 7)
+apps/web                 Next.js dashboard (built: sign-in, two-step, Super Admin screens)
 apps/mobile              React Native app (Phase 1, step 8)
 packages/shared          Role keys, permission catalogue and rules shared by all apps
-packages/design-tokens   Colours, type and spacing from the design system (Phase 1, step 7)
+packages/design-tokens   Colours, type and spacing from the design system (web CSS + values for mobile)
 infra/                   Local Docker services (PostgreSQL, Redis, SeaweedFS, Mailpit)
 docs/                    Design documents
 ```
@@ -66,7 +66,8 @@ docs/                    Design documents
 1. Open Docker Desktop and wait for "Engine running".
 2. `npm run infra:up` starts PostgreSQL, Redis, SeaweedFS (file storage) and Mailpit (catches emails; open http://localhost:8025).
 3. `npm run dev -w @attendsure/api` starts the API at http://localhost:3000 and restarts it when code changes. Check http://localhost:3000/health/ready: it should say `"status":"ok"`.
-4. `npm run infra:down` stops the services when you are done. Your data stays in Docker volumes.
+4. In a second terminal, `npm run dev -w @attendsure/web` starts the dashboard at http://localhost:3001. It forwards `/api/v1` requests to the API. To get a first account, run the first-Super-Admin command below and open the link it prints.
+5. `npm run infra:down` stops the services when you are done. Your data stays in Docker volumes.
 
 | Command | What it does |
 | --- | --- |
@@ -75,6 +76,8 @@ docs/                    Design documents
 | `npm run lint` · `npm run format` | Find code problems · fix formatting |
 | `npm run infra:up` · `infra:down` · `infra:logs` | Start, stop, watch local services |
 | `npm run dev -w @attendsure/api` | API in development mode |
+| `npm run dev -w @attendsure/web` | Dashboard in development mode (http://localhost:3001) |
+| `npm run e2e -w @attendsure/web` (after `npm run build -w @attendsure/api`) | Browser test of the whole Super Admin journey, on its own database. Screenshots land in `apps/web/test-results/screens/`. |
 | `npm run db:migrate -w @attendsure/api` | Apply new database migrations (development) |
 | `npm run build -w @attendsure/api`, then `npm run db:seed -w @attendsure/api` | Load the system roles and permissions (safe to repeat) |
 | `npm run admin:create-super-admin -w @attendsure/api -- --email you@example.test --name "Your Name"` (after a build) | Create the first Super Admin; prints an activation link. Works only while no Super Admin exists. |

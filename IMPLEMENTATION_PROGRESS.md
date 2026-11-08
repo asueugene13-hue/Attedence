@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 1, foundation. Steps 1–6 are done; step 7 (web shell) is next.
+**Current phase:** Phase 1, foundation. Steps 1–7 are done; step 8 (mobile shell) is next.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -15,7 +15,7 @@ Read this first in every session, and update it after every implementation step.
 | 4 | Authentication: activation, login, refresh rotation with reuse detection, logout, password reset, lockout, TOTP for staff | Done (2026-11-08) |
 | 5 | Authorisation: permission guard, scope policies, role switch, audit interceptor; Super Admin bootstrap command | Done (2026-11-08) |
 | 6 | Super Admin API: users, role grants, role permissions, audit-log search (settings moved to Phase 3, when first used) | Done (2026-11-08) |
-| 7 | Web shell: Next.js, design tokens, login, MFA, role-aware sidebar, Super Admin screens | Not started |
+| 7 | Web shell: Next.js, design tokens, login, MFA, role-aware sidebar, Super Admin screens | Done (2026-11-08) |
 | 8 | Mobile shell: Expo development build, login, secure token storage, role-based navigation | Not started; needs JDK 17 and Android Studio |
 | 9 | Phase 1 exit: auth and RBAC test suite green in CI; scenario 24 covered for every Phase 1 endpoint | Not started |
 
@@ -24,7 +24,7 @@ Read this first in every session, and update it after every implementation step.
 | Phase | Scope | Exit criteria | Status |
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
-| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–6 of 9 done) |
+| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–7 of 9 done) |
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Not started |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
@@ -382,3 +382,74 @@ Read this first in every session, and update it after every implementation step.
   - Sign-in with the two-step screens, activation and password-reset pages.
   - Role-aware sidebar driven by `/auth/me` permissions.
   - Super Admin screens for accounts, roles and the audit log, wired to the API built so far.
+
+### 2026-11-08 — Phase 1, step 7: web shell
+
+- **Built:**
+  - **`packages/design-tokens`:** colours (light and dark), type, spacing and radius from the design canvas. TypeScript is the single source; the build writes `tokens.css` for the web, and the mobile app will import the same values.
+  - **`apps/web`:** a Next.js 16 / React 19 dashboard.
+    - Sign-in pages: sign in; two-step sign-in with first-time setup (QR code, setup key, recovery codes shown once with a "saved them" checkbox) and a recovery-code fallback; activation; forgot password; reset password; change password.
+    - Signed-in shell: a sidebar that shows only screens the active role's permissions allow; a role switcher for people with several roles; sign out.
+    - Super Admin screens:
+      - **Accounts:** search, status and role filters, "Load more" paging.
+      - **New staff account:** with field errors and a notice when the activation email could not be sent.
+      - **Account detail:** status, two-step state, devices, roles with grant and remove, role history, suspend, restore, reset two-step sign-in, resend activation. Every sensitive action asks for a reason in a confirmation dialog.
+      - **Roles and permissions:** per-role checkboxes limited to the matrix; Super Admin shown as fixed; save with a reason.
+      - **Audit log:** action prefix and record filters; reasons and before/after shown.
+    - Sign-in handling:
+      - The access token stays in memory only; the refresh token stays in the API's httpOnly cookie.
+      - The browser talks only to the dashboard's own origin: Next.js forwards `/api/v1` to the API, so there is no CORS opening.
+      - Renewal is single-flight across tabs (Web Locks). This fixes known limitation 19 for the dashboard.
+    - Security headers on dashboard pages: frame-ancestors none, X-Frame-Options, nosniff, no-referrer, Permissions-Policy. A script CSP is still to come.
+    - All dates shown in Africa/Accra time.
+  - **Tests:**
+    - Vitest unit tests for the API client, the sidebar filter and the reason dialog.
+    - A Playwright end-to-end test of the whole first-Super-Admin journey in Chromium, against the real built API on its own database (`attendsure_e2e`, Redis database 2):
+      1. the real create-super-admin command, its activation link, and a weak password rejected;
+      2. sign-in, two-step setup with a generated TOTP code, and recovery codes;
+      3. the sidebar contents, then a reload that keeps the session;
+      4. create a Registrar account;
+      5. suspend it, first without a reason (refused), then with one;
+      6. find the suspension in the audit log with its reason;
+      7. sign out; protected pages then redirect to sign-in.
+    - Screenshots are saved to `apps/web/test-results/screens/`.
+  - CI installs Chromium and runs the end-to-end test.
+- **Files:**
+  - `packages/design-tokens/*`.
+  - `apps/web/{package.json, tsconfig.json, next.config.ts, vitest.config.ts, playwright.config.ts}`.
+  - `apps/web/src/app/**` (13 pages), `apps/web/src/components/*`, `apps/web/src/lib/*`.
+  - `apps/web/e2e/*`.
+  - `eslint.config.mjs` (React-hooks rules and browser globals for the web), `.gitignore`, `.github/workflows/ci.yml`.
+  - Docs: README, KNOWN_LIMITATIONS (items 21–24).
+- **Database changes:** none to the schema. A new local database, `attendsure_e2e`, is used only by the browser test.
+- **Dependencies added (pinned):**
+  - Web: next 16.4.5, react 19.3.1, react-dom 19.3.1, @tanstack/react-query 5.107.1, qrcode 1.5.4.
+  - Web dev: @playwright/test 1.65.0, @testing-library/react 16.3.3, @testing-library/user-event 14.6.8, jsdom 31.0.0, @vitejs/plugin-react 6.2.1, @types/react and @types/react-dom 19.3.0, @types/qrcode 1.5.6, otplib 13.6.0, pg and @types/pg 8.23.1.
+  - Root dev: eslint-plugin-react-hooks 7.1.1.
+  - Chromium downloaded by Playwright.
+- **Commands run:** installs; `next typegen`; `tsc --noEmit`; `eslint`; `next build` (13 routes); `vitest run`; `playwright test` (4 runs); `npm run check`.
+- **Problems hit and fixed:**
+  - The first web install did not complete, likely because it ran while the local design-tokens package was still being linked; the second run worked.
+  - A lint-disable comment named a rule from a plugin that isn't installed; it was removed.
+  - Playwright starts the servers before its setup script, so the API came up before its database existed. The API's start script now prepares the database.
+  - The test looked for the field "New password" by its visible label, which includes the required-field asterisk; it now uses the accessible name.
+  - Shell escaping damaged one setup-script edit and one documentation line; both were fixed by direct edits.
+- **Tests run:**
+  - `npm run check` exit 0: design-tokens **3 passed** (including WCAG AA contrast in light and dark), shared **10 passed**, API **107 passed**, web **8 passed**.
+  - `playwright test`: **1 passed**, on each of the last 3 runs, including after formatting.
+- **Decisions made while building:**
+  - Plain controlled forms validated with the shared Zod rules, instead of adding React Hook Form; the forms are small.
+  - The browser's native `<dialog>` element instead of a dialog library.
+  - The `/api/v1` proxy instead of CORS.
+  - Inter is not bundled (system-font fallback).
+  - The dark-mode colours the canvas did not specify (hover, tint and status backgrounds) were chosen and checked for contrast.
+- **Known limitations:**
+  - KNOWN_LIMITATIONS items 21–24: no script CSP yet; page guards in the browser are a convenience only; Inter is not bundled; the proxy target is fixed at build time.
+  - The "Account created" notice stays on the account page until you leave it.
+  - Without Mailpit or SMTP (as in CI), new accounts show the "email could not be sent" notice, which the test accepts.
+- **Next step:** Phase 1, step 8: mobile shell.
+  - Expo development build.
+  - Sign-in with secure token storage.
+  - Role-based navigation (student tabs; lecturer tabs).
+  - Design tokens shared from `packages/design-tokens`.
+  - This needs JDK 17 and Android Studio on this PC (D-05).

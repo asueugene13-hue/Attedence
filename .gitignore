@@ -41,3 +41,8 @@ Thumbs.db
 
 # Generated Prisma client
 apps/api/src/generated/
+
+# Next.js and Playwright
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/next-env.d.ts

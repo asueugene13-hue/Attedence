@@ -35,3 +35,10 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 18. **Rate limits are per IP address, and campuses share addresses.** A whole class on campus Wi-Fi can appear as one IP (NAT), so the default limit is deliberately high (3,000 requests a minute per IP). Sign-in uses a tighter limit per IP *and* email, so one student's mistakes do not block classmates. Per-user limits for signed-in routes arrive with the busy endpoints (check-in, Phase 5). If Redis is down, limits are skipped (logged), while account lock-out still applies.
 19. **Strict refresh-token reuse detection.** If the same web session refreshes from two browser tabs at exactly the same moment, the second request looks like a stolen token and ends the session, so the user signs in again. This trades occasional inconvenience for safety. The web dashboard (step 7) will refresh from one place to avoid it.
 20. **Reset emails are sent directly, not through the job queue.** A failed send is logged but not retried. Phase 3 moves email onto the worker with retries and delivery records.
+
+## Web dashboard (Phase 1, step 7)
+
+21. **Scripts are not yet restricted by Content-Security-Policy on the dashboard.** Framing, plugins, base URLs and form targets are locked down, but Next.js injects inline scripts, so a nonce-based script policy needs middleware. Planned before production (Phase 8).
+22. **Page protection in the browser is a convenience.** Signed-in pages check the session in the browser; the API checks every request, so a person who reaches a page they may not use sees no data.
+23. **The Inter font is not bundled.** The font stack starts with Inter, but falls back to the system font (Segoe UI on Windows) unless Inter is installed. Bundling it is a small later task.
+24. **The dashboard proxies `/api/v1` to the API**, and the proxy target is fixed at build time (`API_INTERNAL_URL`). In production the load balancer should route `/api` straight to the API on the same domain.

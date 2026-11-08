@@ -60,5 +60,10 @@ jobs:
           npm run db:deploy -w @attendsure/api
           npm run db:seed -w @attendsure/api
           npm run db:drift -w @attendsure/api
+      - name: Install the Playwright browser
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end browser test (dashboard against the real API)
+        run: npm run e2e -w @attendsure/web
       - name: Dependency audit (high and critical)
         run: npm audit --audit-level=high

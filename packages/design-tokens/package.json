@@ -1,0 +1,22 @@
+{
+  "name": "@attendsure/design-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AttendSure design tokens (colour, type, spacing, radius) from the design canvas, for web and mobile",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tokens.css": "./dist/tokens.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node dist/build-css.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}
