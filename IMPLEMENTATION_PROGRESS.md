@@ -606,3 +606,6 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
   - `user_roles.scope_id` is still not validated against real faculties or departments; that is step 4.
   - There are no dashboard screens for these records yet; that is step 7.
 - **Next step:** Phase 2, step 2: campuses, buildings and classrooms.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed.
+  - GitHub run 42517252531 on `89aaf7e`: **success**.
