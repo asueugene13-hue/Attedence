@@ -2,7 +2,7 @@
 
 Attendance management and classroom-presence verification for Knutsford University, Accra, Ghana.
 
-**Status (2026-11-08): Phase 0, architecture and planning. No application code exists yet.** Phase 1 starts only after the product owner approves the plan and settles the decisions marked "before Phase 1" in [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md).
+**Status (2026-11-08): Phase 1, foundation, in progress.** The repository foundation and the API skeleton are built. Progress, open decisions and the next step are in [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md).
 
 ## What it does
 
@@ -14,10 +14,10 @@ Attendance management and classroom-presence verification for Knutsford Universi
 
 | Part | Technology |
 | --- | --- |
-| Mobile app (students, lecturers, course reps) | React Native, TypeScript, Expo development builds (pending decision D-01) |
+| Mobile app (students, lecturers, course reps) | React Native, TypeScript, Expo development builds |
 | Web dashboard (staff roles, lecturer live roster) | Next.js, TypeScript |
-| API and background worker | NestJS, TypeScript, REST, Socket.IO, BullMQ |
-| Database | PostgreSQL with Prisma |
+| API and background worker | NestJS 12, TypeScript, REST, Socket.IO, BullMQ |
+| Database | PostgreSQL 18 with Prisma 7 |
 | Supporting services | Redis, S3-compatible file storage, Firebase Cloud Messaging, email, optional SMS, Docker |
 
 ## Documents
@@ -41,35 +41,38 @@ Attendance management and classroom-presence verification for Knutsford Universi
 
 **UI designs:** the [AttendSure UI — Knutsford University](https://claude.ai/artifact/QA6eYPCN51FNpWASQbgLUV) design canvas holds the design system, the information architecture, Student Home, the check-in flow and the lecturer live roster. Every name, course and number on it is sample layout data, not a Knutsford record.
 
-## Repository layout (planned)
+## Repository layout
 
 ```
-apps/api                 NestJS API and background worker
-apps/web                 Next.js dashboard
-apps/mobile              React Native app
-packages/shared          Zod schemas, enums, permission keys, status rules shared by all apps
-packages/design-tokens   colours, type and spacing from the design system
-infra/                   local Docker services (PostgreSQL, Redis, SeaweedFS, Mailpit)
-docs/                    design documents
+apps/api                 NestJS API and background worker (built: skeleton with health checks)
+apps/web                 Next.js dashboard (Phase 1, step 7)
+apps/mobile              React Native app (Phase 1, step 8)
+packages/shared          Role keys, permission catalogue and rules shared by all apps
+packages/design-tokens   Colours, type and spacing from the design system (Phase 1, step 7)
+infra/                   Local Docker services (PostgreSQL, Redis, SeaweedFS, Mailpit)
+docs/                    Design documents
 ```
 
 ## Getting started (Windows)
 
-What works today: the shared package, its tests and the checks. The API, web and mobile apps arrive in later Phase 1 steps.
+**One-time setup**
 
-1. Install Node.js 24 (already on this PC) and run `npm install` in this folder.
-2. Run `npm run check`. It formats-checks, lints, type-checks, builds and tests everything.
+1. Install Node.js 24 and [Docker Desktop](https://www.docker.com/products/docker-desktop/) (WSL 2 backend). Both are already on this PC.
+2. In this folder, run `npm install`.
+3. Copy the example settings: `Copy-Item .env.example .env` in PowerShell, or `copy .env.example .env` in Command Prompt. The values in it are for your own computer only.
 
-To run the local database and services (needed from the API step onwards):
+**Every day**
 
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and choose the WSL 2 backend when asked. Restart if prompted.
-2. Copy the example settings: `copy .env.example .env` (PowerShell: `Copy-Item .env.example .env`).
-3. Run `npm run infra:up`. This starts PostgreSQL, Redis, SeaweedFS (S3 file storage) and Mailpit. Open http://localhost:8025 to see emails the system sends.
-4. Run `npm run infra:down` to stop them. Your data stays in Docker volumes.
+1. Open Docker Desktop and wait for "Engine running".
+2. `npm run infra:up` starts PostgreSQL, Redis, SeaweedFS (file storage) and Mailpit (catches emails; open http://localhost:8025).
+3. `npm run dev -w @attendsure/api` starts the API at http://localhost:3000 and restarts it when code changes. Check http://localhost:3000/health/ready: it should say `"status":"ok"`.
+4. `npm run infra:down` stops the services when you are done. Your data stays in Docker volumes.
 
 | Command | What it does |
 | --- | --- |
-| `npm run check` | Everything CI runs, except the dependency audit |
-| `npm test` | Tests only |
+| `npm run check` | Everything CI runs except the dependency audit: format check, lint, type-check, build, tests. Needs the Docker services running. |
+| `npm test` | Tests only (also needs the Docker services) |
 | `npm run lint` · `npm run format` | Find code problems · fix formatting |
 | `npm run infra:up` · `infra:down` · `infra:logs` | Start, stop, watch local services |
+| `npm run dev -w @attendsure/api` | API in development mode |
+| `npm run build -w @attendsure/api`, then `npm run start -w @attendsure/api` or `npm run start:worker -w @attendsure/api` | Built API or worker, as production runs them |

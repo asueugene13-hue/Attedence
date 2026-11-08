@@ -1,4 +1,4 @@
-import type { RoleKey } from './roles';
+import type { RoleKey } from './roles.js';
 
 /**
  * Permission catalogue and default role grants, taken from docs/ROLE_PERMISSION_MATRIX.md.

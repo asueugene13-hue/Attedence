@@ -8,15 +8,15 @@ Every phase ships with automated tests, and a phase is not done until its tests 
 
 | Level | What it covers | Tools |
 | --- | --- | --- |
-| Unit | Pure logic: decision table, detection engine, transition table, attendance calculation, QR token signing, import row validation | Jest |
-| Integration | API endpoints against a real PostgreSQL and Redis: transactions, constraints, permissions, idempotency | Jest, Supertest, Testcontainers. Real database, no mocks, because the constraints are what is being tested. |
-| Realtime | Socket authentication, room permissions, `seq` gaps and reconnect | Jest with `socket.io-client` |
-| Background jobs | Checkpoints, sweeper recovery, retries, outbox relay | Jest with a controllable clock and real Redis |
+| Unit | Pure logic: decision table, detection engine, transition table, attendance calculation, QR token signing, import row validation | Vitest |
+| Integration | API endpoints against a real PostgreSQL and Redis: transactions, constraints, permissions, idempotency | Vitest, Supertest, real PostgreSQL and Redis (local Docker services; service containers in CI). No database mocks, because the constraints are what is being tested. |
+| Realtime | Socket authentication, room permissions, `seq` gaps and reconnect | Vitest with `socket.io-client` |
+| Background jobs | Checkpoints, sweeper recovery, retries, outbox relay | Vitest with a controllable clock and real Redis |
 | Web end-to-end | Role dashboards, imports, timetable publishing, live roster | Playwright |
 | Mobile | Components and screens; end-to-end flows on emulators and real devices | React Native Testing Library; Maestro |
 | Field | BLE signal and GPS behaviour in real Knutsford classrooms | Site-survey checklist (PRESENCE_VERIFICATION.md §3), with results recorded |
 | Load | Check-in bursts and roster fan-out | k6 |
-| Security | Permission matrix per endpoint, token rotation and reuse, upload validation, rate limits, dependency audit | Jest; OWASP ZAP baseline scan; `npm audit` |
+| Security | Permission matrix per endpoint, token rotation and reuse, upload validation, rate limits, dependency audit | Vitest; OWASP ZAP baseline scan; `npm audit` |
 
 Rules:
 

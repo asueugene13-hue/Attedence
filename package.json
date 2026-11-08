@@ -24,14 +24,17 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@types/jest": "30.0.0",
     "@types/node": "24.19.2",
     "eslint": "10.14.0",
     "globals": "17.14.0",
-    "jest": "30.5.2",
     "prettier": "3.9.10",
-    "ts-jest": "29.4.15",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.72.1"
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.1.0"
+  },
+  "allowScripts": {
+    "@swc/core@1.16.22": true,
+    "prisma@7.10.1": true,
+    "@prisma/engines@7.10.1": true
   }
 }

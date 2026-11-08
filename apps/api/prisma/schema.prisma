@@ -1,0 +1,13 @@
+// AttendSure database schema. Models are added domain by domain (Phase 1 step 3 onwards),
+// following docs/DATABASE_SCHEMA.md. The connection URL lives in prisma.config.ts.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

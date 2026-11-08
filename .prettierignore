@@ -6,3 +6,4 @@ coverage
 package-lock.json
 # Design documents are hand-formatted.
 *.md
+apps/api/src/generated

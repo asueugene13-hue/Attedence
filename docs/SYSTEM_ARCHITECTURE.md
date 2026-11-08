@@ -180,7 +180,7 @@ Exact versions are pinned when each package is installed in its phase, using the
 
 | Area | Packages and services | Phase |
 | --- | --- | --- |
-| API core | `@nestjs/core`, `@nestjs/common`, `@nestjs/platform-express`, `@nestjs/config`, `nestjs-zod`, `zod` | 1 |
+| API core | `@nestjs/core`, `@nestjs/common`, `@nestjs/platform-express`, `zod` (environment and request validation through our own small modules) | 1 |
 | Database | PostgreSQL 16 or newer, `prisma`, `@prisma/client` | 1 |
 | Auth and security | `argon2` (password hashing), `jose` (JWT), `otplib` (TOTP), `helmet`, `@nestjs/throttler` with Redis storage | 1 |
 | Logging and health | `nestjs-pino`, `pino`, `@nestjs/terminus`, `prom-client` | 1 |
@@ -190,7 +190,7 @@ Exact versions are pinned when each package is installed in its phase, using the
 | Notifications | Firebase project with `firebase-admin` (FCM), `nodemailer` or a provider SDK (D-17), SMS gateway SDK (D-17) | 3 |
 | Web | `next`, `react`, `@tanstack/react-query`, `@tanstack/react-table`, `react-hook-form`, `@hookform/resolvers`, `socket.io-client`, Radix UI primitives (accessible dialogs, menus, selects), `qrcode` | 1+ |
 | Mobile | `expo`, `react-native`, `@react-navigation/native` (+ bottom-tabs, native-stack), `@tanstack/react-query`, `zustand`, `react-hook-form`, `expo-camera` (QR scanning), `react-native-ble-plx`, `expo-location`, `expo-secure-store`, `@react-native-firebase/messaging`, `react-native-qrcode-svg`, an integrity module for Play Integrity and App Attest (chosen in Phase 4) | 1+ |
-| Testing | `jest`, `supertest`, `@testcontainers/postgresql`, `@testing-library/react`, `@testing-library/react-native`, Playwright (web end-to-end), Maestro (mobile end-to-end), k6 (load) | 1+ |
+| Testing | `vitest` with `unplugin-swc` (NestJS 12 is an ES-module package; SWC keeps the decorator metadata Nest needs), `supertest`, `@testing-library/react`, `@testing-library/react-native`, Playwright (web end-to-end), Maestro (mobile end-to-end), k6 (load) | 1+ |
 | Local services | Docker Desktop: PostgreSQL, Redis, SeaweedFS, Mailpit | 1 |
 
 ## 8. This computer today (checked 2026-11-08)

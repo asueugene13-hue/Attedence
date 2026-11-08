@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import {
   ATTENDANCE_AND_CLASS_CONTROL_PERMISSIONS,
   CONFIGURABLE_ROLE_PERMISSIONS,
@@ -6,8 +7,8 @@ import {
   PROTECTED_PERMISSIONS,
   defaultPermissionsFor,
   isPermissionKey,
-} from './permissions';
-import { ROLE_KEYS, isRoleKey, type RoleKey } from './roles';
+} from './permissions.js';
+import { ROLE_KEYS, isRoleKey, type RoleKey } from './roles.js';
 
 describe('permission catalogue', () => {
   it('uses domain.action keys', () => {

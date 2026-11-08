@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 1, foundation. Step 1 (repository foundation) is done; step 2 (API skeleton) is next.
+**Current phase:** Phase 1, foundation. Steps 1–2 are done; step 3 (identity schema and migrations) is next.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -10,7 +10,7 @@ Read this first in every session, and update it after every implementation step.
 | Step | Scope | Status |
 | --- | --- | --- |
 | 1 | Repository foundation: npm workspaces, TypeScript, lint, format, tests, CI, local Docker services, shared role and permission catalogue | Done (2026-11-08) |
-| 2 | API skeleton: NestJS app and worker entry points, validated config, structured logging, health checks, Prisma connection | Not started; needs Docker Desktop installed |
+| 2 | API skeleton: NestJS app and worker entry points, validated config, structured logging, health checks, Prisma connection | Done (2026-11-08) |
 | 3 | Identity schema and migrations: users, roles, permissions, grants, sessions, tokens, devices, audit log (+ append-only trigger) | Not started |
 | 4 | Authentication: activation, login, refresh rotation with reuse detection, logout, password reset, lockout, TOTP for staff | Not started |
 | 5 | Authorisation: permission guard, scope policies, role switch, audit interceptor; Super Admin bootstrap command | Not started |
@@ -24,7 +24,7 @@ Read this first in every session, and update it after every implementation step.
 | Phase | Scope | Exit criteria | Status |
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
-| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (step 1 of 9 done) |
+| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–2 of 9 done) |
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Not started |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
@@ -118,3 +118,50 @@ Read this first in every session, and update it after every implementation step.
 - **Installed (elevated):** WSL (`wsl --install --no-distribution`, exit 0) and Docker Desktop (winget `Docker.DockerDesktop`, exit 0; `docker --version` = 29.9.2).
 - **Not yet working:** WSL 2 reports that virtualization or Virtual Machine Platform is not available. The hypervisor is already present, so a Windows restart is expected to finish enabling the component. Docker Desktop cannot run until WSL 2 starts.
 - **GitHub:** the product owner created the private repository https://github.com/asueugene13-hue/Attedence (2026-11-08). `main` is pushed and tracks `origin/main`. The CI result is visible only when signed in, under the Actions tab.
+
+### 2026-11-08 — Local services verified
+
+- `npm run infra:up` started all four containers. Checks:
+  - PostgreSQL 18.6 answered, and the `btree_gist` extension (needed for the no-double-booking constraints) installed.
+  - Redis replied `PONG` with `appendonly yes`.
+  - SeaweedFS refused anonymous and wrong-key requests and accepted the dev credentials; bucket `attendsure-local` was created.
+  - Mailpit web UI answered 200.
+
+### 2026-11-08 — Phase 1, step 2: API skeleton
+
+- **Built:** `apps/api`, a NestJS 12 application with two entry points sharing one codebase:
+  - `main.ts`: the HTTP API, with the `/api/v1` prefix and `x-powered-by` off.
+  - `worker.ts`: the background worker, which has no queues yet.
+  - Validated configuration (`AppConfig`, Zod). The app refuses to start on bad settings and names the variable without showing its value.
+  - Structured logging (pino): request IDs, and authorization and cookie headers redacted.
+  - Prisma 7 connection through the `pg` driver adapter.
+  - Shared Redis connection.
+  - `/health/live` and `/health/ready` (checks the database and Redis).
+  - A global error filter returning RFC 9457 problem details, which hides internal error messages.
+- **Files:** `apps/api/{package.json, tsconfig.json, tsconfig.build.json, nest-cli.json, vitest.config.ts, prisma.config.ts, prisma/schema.prisma}`, `apps/api/src/**` (config, logging, prisma, redis, health, filter, app/worker modules, entry points), `apps/api/test/{setup-env.ts, health.test.ts}`.
+- **Also changed:**
+  - `packages/shared` now uses ES modules and Vitest, and Jest was removed.
+  - CI gained PostgreSQL 18.6 and Redis 8.8.4 service containers.
+  - `.gitignore`, `.prettierignore` and `eslint.config.mjs` now ignore the generated Prisma client.
+  - `allowScripts` approves only `@swc/core`, `prisma` and `@prisma/engines` at their pinned versions.
+  - README, TESTING and SYSTEM_ARCHITECTURE updated.
+- **Database changes:** none. The schema has no models yet, and Prisma generates an empty client.
+- **Commands run:** `npm install` (pinned versions); `npm approve-scripts @swc/core prisma @prisma/engines`; `npx prisma generate`; `npm run typecheck` (failed once: Nest 12's `getInstance()` takes no type argument; fixed); `npx vitest run`; `npm run build`; manual runs of `dist/main.js`, `dist/worker.js` and an invalid-config start; `npm run check`.
+- **Tests run:** `npm run check` exit 0. Shared: 1 file, **10 passed**. API: 2 files, **13 passed**. Those 13 are:
+  - 6 config unit tests;
+  - 7 integration tests against real PostgreSQL and Redis: live and ready probes, 404 problem details with a request ID, unsafe request ID replaced, unexpected error hidden, no `x-powered-by`, and ready returning 503 when Redis is unreachable.
+- **Manual checks:**
+  - The built API answered `/health/live` 200 and `/health/ready` 200 (database 21 ms, Redis up). An unknown route returned a 404 problem-details response.
+  - The worker started, logged and stayed running.
+  - A bad `PORT` and `DATABASE_URL` stopped start-up with exit code 1, listing both problems.
+- **Decisions made while building:**
+  - **NestJS 12 ships as ES modules**, so the API and the shared package are ES modules too.
+  - **Tests use Vitest with SWC** instead of Jest, whose ES-module support is still experimental. SWC keeps the decorator metadata Nest needs; this is the setup NestJS's own docs describe.
+  - **Prisma pinned to 7.10.1.** npm's `latest` tag currently points at an 8.0 release candidate.
+  - **`@nestjs/config` not used.** A 40-line typed config class does the job with one less dependency.
+- **Known limitations:**
+  - `npm run dev` (Nest CLI watch mode) was checked after the log was first written: `/health/ready` answered 200.
+  - Shutdown hooks were not tested with a real stop signal on Windows.
+  - `npm audit`: 10 moderate issues in `minimatch` inside ESLint (development only). The CI gate (`--audit-level=high`) passes.
+  - Security headers (Helmet), rate limiting and request validation arrive with steps 4–5.
+- **Next step:** Phase 1, step 3. Identity schema and first migration: users, roles, permissions, role grants, sessions, refresh tokens, user tokens, devices and the audit log, with its append-only trigger, and a seed of the system roles and permissions from `packages/shared`.
