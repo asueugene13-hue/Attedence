@@ -58,9 +58,15 @@ jobs:
       # Started by hand because it needs a command and a mounted config, which service containers cannot take.
       - name: Start S3-compatible storage (SeaweedFS, same version as local)
         run: |
-          docker run -d --name s3 -p 8333:8333 \n            -v "$PWD/infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro" \n            chrislusf/seaweedfs:4.52 server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
-          for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:8333 && exit 0; sleep 1; done
-          docker logs s3; exit 1
+          docker run -d --name s3 -p 8333:8333 \
+            -v "$PWD/infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro" \
+            chrislusf/seaweedfs:4.52 server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+          # Any HTTP answer (403 without credentials) means the S3 API is up.
+          for i in $(seq 1 90); do
+            curl -s -o /dev/null --max-time 2 http://localhost:8333 && echo "Storage up after ${i}s" && exit 0
+            sleep 1
+          done
+          docker ps -a; docker logs s3; exit 1
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
