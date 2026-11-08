@@ -668,3 +668,6 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
   - A lecturer's name and email are edited through their account, not the profile.
   - No dashboard screens yet (step 7).
 - **Next step:** Phase 2, step 4: Registrar student registration (manual), and faculty- and department-scoped administrator grants checked against real faculties and departments.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed.
+  - GitHub run 42522952063 on `a26c9ec`: **success**.
