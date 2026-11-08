@@ -46,3 +46,7 @@ apps/api/src/generated/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/next-env.d.ts
+
+# Expo
+apps/mobile/dist-check/
+apps/mobile/.expo/

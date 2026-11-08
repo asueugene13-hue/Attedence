@@ -28,12 +28,17 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/web/**/*.{ts,tsx}'],
+    files: ['apps/web/**/*.{ts,tsx}', 'apps/mobile/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     languageOptions: { globals: { ...globals.browser } },
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
     },
+  },
+  {
+    // Expo and Jest configuration files are CommonJS, and Jest module mocks must use require().
+    files: ['apps/mobile/*.js', 'apps/mobile/jest.setup.ts'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
 );

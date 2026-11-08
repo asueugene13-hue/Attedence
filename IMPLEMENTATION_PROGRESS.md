@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 1, foundation. Steps 1–7 are done; step 8 (mobile shell) is next.
+**Current phase:** Phase 1, foundation. Steps 1–8 are done, except the native Android build of step 8, which waits for JDK 17 and the Android SDK. Step 9 (Phase 1 exit check) is next.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -16,7 +16,7 @@ Read this first in every session, and update it after every implementation step.
 | 5 | Authorisation: permission guard, scope policies, role switch, audit interceptor; Super Admin bootstrap command | Done (2026-11-08) |
 | 6 | Super Admin API: users, role grants, role permissions, audit-log search (settings moved to Phase 3, when first used) | Done (2026-11-08) |
 | 7 | Web shell: Next.js, design tokens, login, MFA, role-aware sidebar, Super Admin screens | Done (2026-11-08) |
-| 8 | Mobile shell: Expo development build, login, secure token storage, role-based navigation | Not started; needs JDK 17 and Android Studio |
+| 8 | Mobile shell: Expo development build, login, secure token storage, role-based navigation | Done except the native build (needs JDK 17 and the Android SDK) |
 | 9 | Phase 1 exit: auth and RBAC test suite green in CI; scenario 24 covered for every Phase 1 endpoint | Not started |
 
 ## Phase status
@@ -24,7 +24,7 @@ Read this first in every session, and update it after every implementation step.
 | Phase | Scope | Exit criteria | Status |
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
-| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–7 of 9 done) |
+| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–8 of 9 done; native mobile build pending) |
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Not started |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
@@ -453,3 +453,58 @@ Read this first in every session, and update it after every implementation step.
   - Role-based navigation (student tabs; lecturer tabs).
   - Design tokens shared from `packages/design-tokens`.
   - This needs JDK 17 and Android Studio on this PC (D-05).
+
+### 2026-11-08 — Phase 1, step 8: mobile shell (native build pending)
+
+- **Built:** `apps/mobile`, an Expo SDK 58 app (React Native 0.88.1, React 19.3.0) using React Navigation.
+  - Sign-in as a MOBILE client.
+    - The 30-day refresh token is kept in the phone's secure storage (Keychain / Keystore, readable only while the phone is unlocked, never backed up). The access token stays in memory.
+    - Single-flight renewal and one retry on 401.
+    - A stored session resumes at start-up; a session the server has ended is forgotten.
+  - Two-step code entry for staff, or a pointer to the web dashboard when two-step sign-in is not yet set up.
+  - Role-based bottom tabs (Home, Profile), listing only screens that exist.
+    - Home tells each role what will appear there; staff roles are pointed to the web dashboard.
+    - Profile shows the account, a role switcher and sign-out (which works offline too).
+  - Light and dark themes from `@attendsure/design-tokens`.
+  - The API address comes from `EXPO_PUBLIC_API_URL` (default `http://10.0.2.2:3000`, the Android emulator's address for this PC).
+  - Android permissions reduced to internet access only. Expo's default storage, overlay, vibration and microphone permissions are blocked in release builds; overlay windows stay in debug builds for the developer error screen.
+- **Monorepo fix:** the repo now uses a single React 19.3.0, set by the root `overrides` and root devDependencies. React Native's renderer requires an exact React version, and two copies (19.3.0 for mobile, 19.3.1 for web) would have crashed the app at start. The web app moved to 19.3.0, and its browser journey was re-run and passes.
+- **Files:**
+  - `apps/mobile/{package.json, app.config.ts, tsconfig.json, metro.config.js, jest.config.js, jest.setup.ts, index.ts}`, `apps/mobile/src/**` (App, auth, API client, token store, theme, components, 4 screens, navigation, tests).
+  - Root `package.json` (React overrides and pins), `apps/web/package.json` (React 19.3.0).
+  - `eslint.config.mjs` (mobile included; generated folders ignored), `.gitignore`, `.github/workflows/ci.yml` (Android bundle check).
+  - Docs: README, KNOWN_LIMITATIONS (items 25–27).
+- **Database changes:** none.
+- **Dependencies added (pinned):**
+  - expo 58.0.23, expo-dev-client 58.0.18, expo-secure-store 58.0.2, expo-status-bar 58.0.4, expo-system-ui 58.0.7;
+  - react-native 0.88.1, react 19.3.0;
+  - @react-navigation/native 7.5.1, bottom-tabs 7.21.0, native-stack 7.21.0, react-native-screens 4.30.1, react-native-safe-area-context 5.11.1, @tanstack/react-query 5.107.1;
+  - dev: jest-expo 58.0.14, jest 30.5.2, @types/jest 30.0.0, @testing-library/react-native 14.1.0.
+  - React Native versions were chosen by `expo install` for SDK 58.
+- **Commands run:**
+  - Java 17 install with elevation: cancelled at the Windows prompt; not retried.
+  - Installs and `npx expo install`; `npm dedupe`; React overrides.
+  - `tsc --noEmit`; `npx jest`.
+  - `expo export --platform android`: bundled, 1,031 modules, 2.9 MB Hermes bytecode.
+  - `npx expo-doctor`: 20/20 checks pass, after merging a leftover `app.json` into `app.config.ts`.
+  - `expo prebuild --platform android`: native project generated, `applicationId app.attendsure.mobile`, permissions checked.
+  - `npm run check`; `npm audit`; Playwright (web).
+- **Problems hit and fixed:**
+  - Again, the first install into a new workspace did not complete until the workspace was linked.
+  - The two React versions, as above.
+  - Jest's rule that module mocks may only use variables named `mock…`.
+  - Testing Library 14's `render` and events are now async.
+  - The safe-area provider renders nothing in tests without the library's own mock.
+  - Shell quoting broke one combined command, so nothing ran; it was redone with a script file.
+- **Tests run:** `npm run check` exit 0.
+  - design-tokens **3**, shared **10**, API **107**, web **8**, mobile **9** passed (**137** in total).
+  - The 9 mobile tests cover: sign-in screen with no session; resuming and rotating a stored session; forgetting a revoked session; student sign-in storing the token securely; the wrong-password message; the staff "set up on web first" path; a staff two-step code; sign-out clearing storage and calling logout; tabs listing only built screens.
+  - Playwright (web): **1 passed** after the React change.
+  - `npm audit --audit-level=high`: passes (33 moderate and 1 low remain, in Jest's and ESLint's development dependencies).
+- **Known limitations:** KNOWN_LIMITATIONS items 25–27:
+  - no native build or device run yet;
+  - placeholder app identifiers;
+  - two-step setup is web-only.
+- **Next step:**
+  - For the product owner: install JDK 17 and Android Studio (D-05), then this step's native build and an emulator run can be completed.
+  - Phase 1 step 9, the Phase 1 exit check: CI green on GitHub; auth and RBAC suites complete; scenario 24 (unauthorised access) covered for every Phase 1 endpoint; documentation review.

@@ -42,3 +42,9 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 22. **Page protection in the browser is a convenience.** Signed-in pages check the session in the browser; the API checks every request, so a person who reaches a page they may not use sees no data.
 23. **The Inter font is not bundled.** The font stack starts with Inter, but falls back to the system font (Segoe UI on Windows) unless Inter is installed. Bundling it is a small later task.
 24. **The dashboard proxies `/api/v1` to the API**, and the proxy target is fixed at build time (`API_INTERNAL_URL`). In production the load balancer should route `/api` straight to the API on the same domain.
+
+## Mobile app (Phase 1, step 8)
+
+25. **The native Android app has not been built or run yet.** This PC lacks JDK 17 and the Android SDK; the Java 17 install was cancelled at the Windows permission prompt. The app's JavaScript is type-checked, unit-tested, bundled for Android (`expo export`) and its native project generated (`expo prebuild`), but nothing has run on an emulator or phone. iPhone builds need a Mac or Expo's cloud build service.
+26. **The app identifiers are placeholders** (`app.attendsure.mobile`). Before publishing, they change to identifiers under the university's own Google Play and Apple developer accounts.
+27. **Two-step setup is web-only.** Staff who must set up an authenticator do it on the web dashboard, where recovery codes can be saved safely; the app then accepts codes.

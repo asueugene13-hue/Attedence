@@ -46,7 +46,7 @@ Attendance management and classroom-presence verification for Knutsford Universi
 ```
 apps/api                 NestJS API and background worker (built: skeleton with health checks)
 apps/web                 Next.js dashboard (built: sign-in, two-step, Super Admin screens)
-apps/mobile              React Native app (Phase 1, step 8)
+apps/mobile              React Native app (Expo SDK 58): sign-in and role-based shell
 packages/shared          Role keys, permission catalogue and rules shared by all apps
 packages/design-tokens   Colours, type and spacing from the design system (web CSS + values for mobile)
 infra/                   Local Docker services (PostgreSQL, Redis, SeaweedFS, Mailpit)
@@ -77,6 +77,8 @@ docs/                    Design documents
 | `npm run infra:up` · `infra:down` · `infra:logs` | Start, stop, watch local services |
 | `npm run dev -w @attendsure/api` | API in development mode |
 | `npm run dev -w @attendsure/web` | Dashboard in development mode (http://localhost:3001) |
+| `npm run bundle:check -w @attendsure/mobile` | Builds the mobile app's Android JavaScript bundle (no Android tools needed) |
+| `npm run android -w @attendsure/mobile` | Builds and runs the app on an Android emulator or phone. Needs JDK 17 and the Android SDK (decision D-05). |
 | `npm run e2e -w @attendsure/web` (after `npm run build -w @attendsure/api`) | Browser test of the whole Super Admin journey, on its own database. Screenshots land in `apps/web/test-results/screens/`. |
 | `npm run db:migrate -w @attendsure/api` | Apply new database migrations (development) |
 | `npm run build -w @attendsure/api`, then `npm run db:seed -w @attendsure/api` | Load the system roles and permissions (safe to repeat) |

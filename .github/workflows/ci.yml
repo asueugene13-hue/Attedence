@@ -55,6 +55,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm run test
+      - name: Mobile app bundles for Android (no native toolchain needed)
+        run: npm run bundle:check -w @attendsure/mobile
       - name: Apply migrations, seed system roles, check for schema drift
         run: |
           npm run db:deploy -w @attendsure/api
