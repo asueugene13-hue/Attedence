@@ -117,4 +117,4 @@ Read this first in every session, and update it after every implementation step.
 - **Git:** first commit `d2c2a0e` on `main` (38 files; `.env` excluded).
 - **Installed (elevated):** WSL (`wsl --install --no-distribution`, exit 0) and Docker Desktop (winget `Docker.DockerDesktop`, exit 0; `docker --version` = 29.9.2).
 - **Not yet working:** WSL 2 reports that virtualization or Virtual Machine Platform is not available. The hypervisor is already present, so a Windows restart is expected to finish enabling the component. Docker Desktop cannot run until WSL 2 starts.
-- **GitHub:** the elevated GitHub CLI install was cancelled at the Windows prompt. There is no remote yet; the repository will be created through github.com instead.
+- **GitHub:** the product owner created the private repository https://github.com/asueugene13-hue/Attedence (2026-11-08). `main` is pushed and tracks `origin/main`. The CI result is visible only when signed in, under the Actions tab.
