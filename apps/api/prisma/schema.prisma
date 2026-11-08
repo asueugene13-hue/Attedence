@@ -1,5 +1,8 @@
-// AttendSure database schema. Models are added domain by domain (Phase 1 step 3 onwards),
-// following docs/DATABASE_SCHEMA.md. The connection URL lives in prisma.config.ts.
+// AttendSure database schema, following docs/DATABASE_SCHEMA.md. Models are added domain by domain.
+// Conventions: UUID v7 keys, timestamptz in UTC, snake_case table and column names.
+// Constraints Prisma cannot express (partial unique indexes, triggers, checks) live in the migration SQL
+// and are listed in docs/DATABASE_SCHEMA.md §4.
+// The connection URL lives in prisma.config.ts.
 
 generator client {
   provider            = "prisma-client"
@@ -10,4 +13,269 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ───────────────────────── Identity and security ─────────────────────────
+
+enum RoleKey {
+  SUPER_ADMIN
+  UNIVERSITY_ADMIN
+  REGISTRAR
+  LECTURER
+  STUDENT
+  COURSE_REP
+}
+
+enum UserStatus {
+  PENDING_ACTIVATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum ScopeType {
+  INSTITUTION
+  FACULTY
+  DEPARTMENT
+}
+
+enum ClientType {
+  WEB
+  MOBILE
+}
+
+enum TokenPurpose {
+  ACTIVATION
+  PASSWORD_RESET
+  EMAIL_CHANGE
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+}
+
+enum DeviceStatus {
+  PENDING_APPROVAL
+  TRUSTED
+  REVOKED
+  REPLACED
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+}
+
+model User {
+  id               String     @id @default(uuid(7)) @db.Uuid
+  /// Always stored lower-case (checked by the database).
+  email            String     @unique
+  phone            String?
+  fullName         String     @map("full_name")
+  /// Argon2id hash; null until the account is activated.
+  passwordHash     String?    @map("password_hash")
+  status           UserStatus @default(PENDING_ACTIVATION)
+  /// Encrypted TOTP secret for staff roles.
+  mfaSecretEnc     String?    @map("mfa_secret_enc")
+  mfaEnabledAt     DateTime?  @map("mfa_enabled_at") @db.Timestamptz(3)
+  failedLoginCount Int        @default(0) @map("failed_login_count")
+  lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt      DateTime?  @map("last_login_at") @db.Timestamptz(3)
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  roles           UserRole[]    @relation("UserRoleHolder")
+  rolesGranted    UserRole[]    @relation("UserRoleGrantedBy")
+  rolesRevoked    UserRole[]    @relation("UserRoleRevokedBy")
+  authSessions    AuthSession[]
+  tokens          UserToken[]
+  devices         UserDevice[]  @relation("DeviceOwner")
+  devicesApproved UserDevice[]  @relation("DeviceApprovedBy")
+  devicesRevoked  UserDevice[]  @relation("DeviceRevokedBy")
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String  @id @default(uuid(7)) @db.Uuid
+  key         RoleKey @unique
+  name        String
+  description String?
+
+  permissions RolePermission[]
+  grants      UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(uuid(7)) @db.Uuid
+  /// e.g. "attendance.correct"; the catalogue lives in packages/shared.
+  key         String  @unique
+  description String
+  /// Protected permissions may only ever be held by SUPER_ADMIN.
+  isProtected Boolean @default(false) @map("is_protected")
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+/// A grant of a role, optionally limited to a faculty or department.
+/// Partial unique index (SQL): one active grant per user, role and scope.
+model UserRole {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  roleId      String    @map("role_id") @db.Uuid
+  scopeType   ScopeType @default(INSTITUTION) @map("scope_type")
+  /// Faculty.id or Department.id when scoped (foreign keys added with the academic tables).
+  scopeId     String?   @map("scope_id") @db.Uuid
+  grantedById String    @map("granted_by_id") @db.Uuid
+  grantedAt   DateTime  @default(now()) @map("granted_at") @db.Timestamptz(3)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedById String?   @map("revoked_by_id") @db.Uuid
+
+  user      User  @relation("UserRoleHolder", fields: [userId], references: [id])
+  role      Role  @relation(fields: [roleId], references: [id])
+  grantedBy User  @relation("UserRoleGrantedBy", fields: [grantedById], references: [id])
+  revokedBy User? @relation("UserRoleRevokedBy", fields: [revokedById], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@map("user_roles")
+}
+
+/// One signed-in client (a browser or a phone).
+model AuthSession {
+  id            String     @id @default(uuid(7)) @db.Uuid
+  userId        String     @map("user_id") @db.Uuid
+  client        ClientType
+  deviceId      String?    @map("device_id") @db.Uuid
+  activeRoleKey RoleKey?   @map("active_role_key")
+  ip            String?
+  userAgent     String?    @map("user_agent")
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt     DateTime   @map("expires_at") @db.Timestamptz(3)
+  lastUsedAt    DateTime?  @map("last_used_at") @db.Timestamptz(3)
+  revokedAt     DateTime?  @map("revoked_at") @db.Timestamptz(3)
+  revokeReason  String?    @map("revoke_reason")
+
+  user   User           @relation(fields: [userId], references: [id])
+  device UserDevice?    @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  tokens RefreshToken[]
+
+  @@index([userId])
+  @@map("auth_sessions")
+}
+
+/// Rotated on every use. Presenting a token that was already used revokes the whole session.
+model RefreshToken {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  sessionId    String    @map("session_id") @db.Uuid
+  /// SHA-256 of the random token. The token itself is never stored.
+  tokenHash    String    @unique @map("token_hash")
+  issuedAt     DateTime  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt       DateTime? @map("used_at") @db.Timestamptz(3)
+  replacedById String?   @unique @map("replaced_by_id") @db.Uuid
+
+  session    AuthSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  replacedBy RefreshToken? @relation("RefreshTokenRotation", fields: [replacedById], references: [id], onDelete: Restrict)
+  replaces   RefreshToken? @relation("RefreshTokenRotation")
+
+  @@index([sessionId])
+  @@map("refresh_tokens")
+}
+
+/// Activation, password-reset and email-change links. Only a hash is stored.
+model UserToken {
+  id        String       @id @default(uuid(7)) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  purpose   TokenPurpose
+  tokenHash String       @unique @map("token_hash")
+  expiresAt DateTime     @map("expires_at") @db.Timestamptz(3)
+  usedAt    DateTime?    @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, purpose])
+  @@map("user_tokens")
+}
+
+/// Partial unique index (SQL): one TRUSTED attendance device per user.
+model UserDevice {
+  id                   String         @id @default(uuid(7)) @db.Uuid
+  userId               String         @map("user_id") @db.Uuid
+  /// Random ID created on first launch and kept in the phone's secure storage.
+  installationId       String         @map("installation_id")
+  platform             DevicePlatform
+  model                String?
+  osVersion            String?        @map("os_version")
+  appVersion           String?        @map("app_version")
+  /// Hash of the device secret used to sign check-ins.
+  credentialHash       String?        @map("credential_hash")
+  isAttendanceDevice   Boolean        @default(false) @map("is_attendance_device")
+  status               DeviceStatus   @default(PENDING_APPROVAL)
+  trustedAt            DateTime?      @map("trusted_at") @db.Timestamptz(3)
+  approvedById         String?        @map("approved_by_id") @db.Uuid
+  revokedAt            DateTime?      @map("revoked_at") @db.Timestamptz(3)
+  revokedById          String?        @map("revoked_by_id") @db.Uuid
+  revokeReason         String?        @map("revoke_reason")
+  lastIntegrityVerdict Json?          @map("last_integrity_verdict")
+  lastIntegrityAt      DateTime?      @map("last_integrity_at") @db.Timestamptz(3)
+  pushToken            String?        @map("push_token")
+  pushTokenUpdatedAt   DateTime?      @map("push_token_updated_at") @db.Timestamptz(3)
+  lastSeenAt           DateTime?      @map("last_seen_at") @db.Timestamptz(3)
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user       User          @relation("DeviceOwner", fields: [userId], references: [id])
+  approvedBy User?         @relation("DeviceApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  revokedBy  User?         @relation("DeviceRevokedBy", fields: [revokedById], references: [id], onDelete: Restrict)
+  sessions   AuthSession[]
+
+  @@unique([userId, installationId])
+  /// Spots one phone used by several accounts.
+  @@index([installationId])
+  @@map("user_devices")
+}
+
+/// Append-only: a database trigger rejects UPDATE and DELETE.
+model AuditLog {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  occurredAt   DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  actorType    ActorType @map("actor_type")
+  actorUserId  String?   @map("actor_user_id") @db.Uuid
+  actorRoleKey RoleKey?  @map("actor_role_key")
+  /// e.g. "attendance.record.corrected"
+  action       String
+  entityType   String    @map("entity_type")
+  entityId     String?   @map("entity_id")
+  before       Json?
+  after        Json?
+  reason       String?
+  requestId    String?   @map("request_id")
+  ip           String?
+  userAgent    String?   @map("user_agent")
+
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId])
+  @@index([actorUserId, occurredAt])
+  @@index([action, occurredAt])
+  @@map("audit_logs")
 }

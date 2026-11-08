@@ -75,4 +75,6 @@ docs/                    Design documents
 | `npm run lint` · `npm run format` | Find code problems · fix formatting |
 | `npm run infra:up` · `infra:down` · `infra:logs` | Start, stop, watch local services |
 | `npm run dev -w @attendsure/api` | API in development mode |
+| `npm run db:migrate -w @attendsure/api` | Apply new database migrations (development) |
+| `npm run build -w @attendsure/api`, then `npm run db:seed -w @attendsure/api` | Load the system roles and permissions (safe to repeat) |
 | `npm run build -w @attendsure/api`, then `npm run start -w @attendsure/api` or `npm run start:worker -w @attendsure/api` | Built API or worker, as production runs them |

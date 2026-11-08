@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 1, foundation. Steps 1–2 are done; step 3 (identity schema and migrations) is next.
+**Current phase:** Phase 1, foundation. Steps 1–3 are done; step 4 (authentication) is next.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -11,7 +11,7 @@ Read this first in every session, and update it after every implementation step.
 | --- | --- | --- |
 | 1 | Repository foundation: npm workspaces, TypeScript, lint, format, tests, CI, local Docker services, shared role and permission catalogue | Done (2026-11-08) |
 | 2 | API skeleton: NestJS app and worker entry points, validated config, structured logging, health checks, Prisma connection | Done (2026-11-08) |
-| 3 | Identity schema and migrations: users, roles, permissions, grants, sessions, tokens, devices, audit log (+ append-only trigger) | Not started |
+| 3 | Identity schema and migrations: users, roles, permissions, grants, sessions, tokens, devices, audit log (+ append-only trigger) | Done (2026-11-08) |
 | 4 | Authentication: activation, login, refresh rotation with reuse detection, logout, password reset, lockout, TOTP for staff | Not started |
 | 5 | Authorisation: permission guard, scope policies, role switch, audit interceptor; Super Admin bootstrap command | Not started |
 | 6 | Super Admin API: users, role grants, role permissions, settings, audit-log search | Not started |
@@ -24,7 +24,7 @@ Read this first in every session, and update it after every implementation step.
 | Phase | Scope | Exit criteria | Status |
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
-| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–2 of 9 done) |
+| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–3 of 9 done) |
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Not started |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
@@ -165,3 +165,47 @@ Read this first in every session, and update it after every implementation step.
   - `npm audit`: 10 moderate issues in `minimatch` inside ESLint (development only). The CI gate (`--audit-level=high`) passes.
   - Security headers (Helmet), rate limiting and request validation arrive with steps 4–5.
 - **Next step:** Phase 1, step 3. Identity schema and first migration: users, roles, permissions, role grants, sessions, refresh tokens, user tokens, devices and the audit log, with its append-only trigger, and a seed of the system roles and permissions from `packages/shared`.
+
+### 2026-11-08 — Phase 1, step 3: identity schema, migrations and system-role seed
+
+- **Built:**
+  - Ten identity tables in `schema.prisma`, with snake_case names: `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `auth_sessions`, `refresh_tokens`, `user_tokens`, `user_devices`, `audit_logs`.
+  - Two migrations with the hand-written rules Prisma cannot express. These are listed in DATABASE_SCHEMA.md §4 "Implemented so far":
+    - lower-case emails;
+    - scope consistency, and complete revocations, on role grants;
+    - one active grant per user, role and scope;
+    - one trusted attendance phone per user;
+    - an append-only audit log;
+    - protected permissions held only by SUPER_ADMIN.
+  - Every foreign key is `RESTRICT`, except refresh tokens, which cascade with their session.
+  - `seedSystemRoles` (`src/database/`) loads 6 roles, 64 permissions and 122 default grants from `packages/shared`. It is idempotent, never deletes a grant, and reports unknown permissions without deleting them.
+  - A separate `attendsure_test` database for integration tests, created and migrated automatically before each test run.
+  - CI now also runs migrate deploy, the seed and a drift check.
+- **Files:** `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/{20261108161435_identity, 20261108161550_protect_permissions}/migration.sql`, `apps/api/prisma.config.ts` (seed command), `apps/api/package.json` (`db:migrate`, `db:deploy`, `db:seed`, `db:drift`), `apps/api/src/database/{seed-system-roles.ts, seed.ts}`, `apps/api/test/{test-database.ts, global-setup.ts, setup-env.ts, identity-schema.test.ts}`, `apps/api/vitest.config.ts`, `.github/workflows/ci.yml`, `docs/DATABASE_SCHEMA.md`.
+- **Database changes:**
+  - In the development database `attendsure`: 10 tables, 2 partial unique indexes, 3 check constraints and 3 triggers, plus seeded roles, permissions and grants.
+  - In the test database `attendsure_test`: the same schema, emptied by the tests.
+- **Commands run:**
+  - `prisma format`, `prisma validate`, `prisma migrate dev --create-only` (twice; the first draft was regenerated after switching optional links from `SET NULL` to `RESTRICT`), and `prisma migrate dev`.
+  - `prisma migrate diff --from-config-datasource --to-schema … --exit-code`, which reported "No difference detected".
+  - `npm run db:seed` twice (6 roles, 64 permissions and 122 grants created; then 0, 0 and 0).
+  - `npm run check` and the CI database steps locally.
+- **Tests run:** `npm run check` exit 0. Shared: **10 passed**. API: 3 files, **26 passed**. The 13 new tests cover:
+  - the seed: complete, idempotent, keeps extra grants, reports unknown permissions;
+  - the protected-permission triggers (both);
+  - lower-case emails;
+  - one active grant, and re-grant after revoke;
+  - scope and revocation checks;
+  - one trusted phone;
+  - audit log UPDATE and DELETE refused;
+  - unique refresh-token hash;
+  - a user who appears in the audit log cannot be deleted.
+- **Decisions made while building:**
+  - Optional foreign keys are explicitly `RESTRICT`. Prisma's default, `SET NULL`, would silently blank history.
+  - Tests use a separate `_test` database so they never wipe development data.
+  - The test setup runs Prisma's CLI through Node directly rather than a shell, which avoids Node's DEP0190 warning.
+- **Known limitations:**
+  - TRUNCATE on `audit_logs` is not blocked. The row trigger covers UPDATE and DELETE, and the tests rely on TRUNCATE for clean-up. Production will use a database role without TRUNCATE privilege; that is set up with deployment (Phase 8).
+  - `user_roles.scope_id` has no foreign key yet. Faculties and departments arrive in Phase 2, which will add a check that the scope exists.
+  - The seed runs from built code (`npm run build` first).
+- **Next step:** Phase 1, step 4: authentication. It covers account activation, login with Argon2id, short-lived access tokens, refresh-token rotation with reuse detection, logout, password reset, lockout after repeated failures, and TOTP two-factor sign-in for staff roles.

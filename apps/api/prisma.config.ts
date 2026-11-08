@@ -9,7 +9,8 @@ if (existsSync(rootEnvFile)) process.loadEnvFile(rootEnvFile);
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
-  migrations: { path: 'prisma/migrations' },
+  // The seed runs from the built code, so run `npm run build` first.
+  migrations: { path: 'prisma/migrations', seed: 'node dist/database/seed.js' },
   datasource: {
     // A placeholder keeps `prisma generate` working without a database; commands that connect need the real URL.
     url: process.env.DATABASE_URL ?? 'postgresql://unset:unset@localhost:5432/unset',

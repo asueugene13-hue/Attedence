@@ -11,7 +11,11 @@
     "start": "node dist/main.js",
     "start:worker": "node dist/worker.js",
     "dev": "nest start --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "node dist/database/seed.js",
+    "db:drift": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code"
   },
   "devDependencies": {
     "@nestjs/cli": "12.0.12",

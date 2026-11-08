@@ -1060,6 +1060,21 @@ CREATE TRIGGER audit_logs_append_only BEFORE UPDATE OR DELETE ON audit_logs
 
 Retention purges of history tables run as a separate, privileged maintenance role. They drop whole monthly partitions, so routine application code can never alter history.
 
+**Implemented so far** (migrations `20261108161435_identity` and `20261108161550_protect_permissions`):
+
+| Rule | Enforced by |
+| --- | --- |
+| Emails stored lower-case | `users_email_lowercase` check |
+| Scope ID present exactly when a grant is faculty- or department-scoped | `user_roles_scope_consistent` check |
+| A revoked grant records who revoked it | `user_roles_revocation_complete` check |
+| One active grant per user, role and scope | `user_roles_active_unique` partial unique index |
+| One trusted attendance phone per user | `user_devices_one_trusted` partial unique index |
+| Audit log is append-only | `audit_logs_append_only` trigger |
+| Protected permissions only on SUPER_ADMIN, and cannot be marked protected while another role holds them | `role_permissions_protected` and `permissions_protected_flag` triggers |
+| Optional links (revoker, approver, audit actor, device, rotated token) cannot vanish | `ON DELETE RESTRICT`, set explicitly because Prisma defaults optional links to `SET NULL` |
+
+`npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.
+
 Rules that need data from several tables are checked in services inside the transaction:
 
 - A course rep must be enrolled in the section they represent.
