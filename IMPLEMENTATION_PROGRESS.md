@@ -623,3 +623,6 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 - **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **133** (8 new), web 8, mobile 9, so **163 passed**.
 - **Known limitations:** no beacons yet (Phase 4); no map or site-survey tool, so coordinates are typed in; no dashboard screens yet (step 7).
 - **Next step:** Phase 2, step 3: courses, course offerings and sections; lecturer profiles; lecturer assignments.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed.
+  - GitHub run 42520162780 on `bfbf030`: **success**.
