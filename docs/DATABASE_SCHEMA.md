@@ -316,7 +316,7 @@ model CourseSection {                // a class group inside an offering
 model StudentProfile {
   id
   userId                String        @unique @db.Uuid
-  studentNumber         String        @unique   // format configured per D-14
+  studentNumber         String        @unique   // 8 digits (D-14, confirmed 2026-11-08)
   programmeId           String        @db.Uuid  // faculty and department come from the programme
   levelId               String        @db.Uuid
   currentAcademicYearId String        @db.Uuid
@@ -1099,6 +1099,15 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | One offering per course per semester; section codes unique within an offering | `@@unique([courseId, semesterId])`, `@@unique([offeringId, code])` |
 | One active assignment per lecturer and section; at most one active primary lecturer per section | `lecturer_assignments_active_unique`, `lecturer_assignments_one_primary` partial unique indexes |
 | An ended assignment records who ended it | `lecturer_assignments_end_complete` check |
+
+**Added in Phase 2, step 4** (migration `20261108211815_students`):
+
+| Rule | Enforced by |
+| --- | --- |
+| One student profile per account; Student IDs unique | `student_profiles_user_id_key`, `student_profiles_student_number_key` unique indexes |
+| A verified record says who verified it | `student_profiles_verification_complete` check |
+| Student ID is exactly 8 digits (D-14) | The API (`StudentNumberSchema` in `packages/shared`), not the database, so a future format change needs no migration |
+| Edits never overwrite each other | `version` column, compared with the `If-Match` header in the service |
 
 `npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.
 

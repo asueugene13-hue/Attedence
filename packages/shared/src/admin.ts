@@ -28,29 +28,56 @@ const email = z
   .transform((v) => v.trim().toLowerCase());
 
 /** Ghana numbers: 0XXXXXXXXX or +233XXXXXXXXX (spaces allowed, removed). */
-const ghanaPhone = z
+export const GhanaPhoneSchema = z
   .string()
   .transform((v) => v.replace(/\s+/g, ''))
   .pipe(
     z.string().regex(/^(?:0|\+233)\d{9}$/, 'must be a Ghana number, e.g. 024 555 0123 or +233 24 555 0123'),
   );
 
-export const RoleGrantSchema = z.strictObject({
+const roleGrantFields = {
   role: z.enum(STAFF_ADMIN_ROLES),
-  /** Faculty and department scopes become available with the academic structure (Phase 2). */
-  scopeType: z.literal('INSTITUTION').default('INSTITUTION'),
-});
+  /** University Administrators may be limited to one faculty or department; other roles are university-wide. */
+  scopeType: z.enum(['INSTITUTION', 'FACULTY', 'DEPARTMENT']).default('INSTITUTION'),
+  scopeId: z.uuid().optional(),
+};
+
+type GrantShape = {
+  role: StaffAdminRole;
+  scopeType: 'INSTITUTION' | 'FACULTY' | 'DEPARTMENT';
+  scopeId?: string | undefined;
+};
+const scopeRules = <T extends GrantShape>(v: T, ctx: z.RefinementCtx) => {
+  if (v.scopeType !== 'INSTITUTION' && v.role !== 'UNIVERSITY_ADMIN') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['scopeType'],
+      message: 'only University Administrators can be limited to a faculty or department',
+    });
+  }
+  if ((v.scopeType === 'INSTITUTION') !== (v.scopeId === undefined)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['scopeId'],
+      message: 'give scopeId exactly when scopeType is FACULTY or DEPARTMENT',
+    });
+  }
+};
+
+export const RoleGrantSchema = z.strictObject(roleGrantFields).superRefine(scopeRules);
 
 export const CreateStaffUserSchema = z.strictObject({
   email,
   fullName: z.string().trim().min(2).max(200),
-  phone: ghanaPhone.optional(),
+  phone: GhanaPhoneSchema.optional(),
   roles: z.array(RoleGrantSchema).min(1).max(3),
   reason: ReasonSchema.optional(),
 });
 export type CreateStaffUser = z.infer<typeof CreateStaffUserSchema>;
 
-export const GrantRoleSchema = RoleGrantSchema.extend({ reason: ReasonSchema });
+export const GrantRoleSchema = z
+  .strictObject({ ...roleGrantFields, reason: ReasonSchema })
+  .superRefine(scopeRules);
 export const ReasonOnlySchema = z.strictObject({ reason: ReasonSchema });
 
 export const UserListQuerySchema = z.strictObject({

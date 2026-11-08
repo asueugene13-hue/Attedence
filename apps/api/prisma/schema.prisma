@@ -101,6 +101,9 @@ model User {
   lecturerProfile           LecturerProfile?
   assignmentsMade           LecturerAssignment[] @relation("AssignmentAssignedBy")
   assignmentsEnded          LecturerAssignment[] @relation("AssignmentEndedBy")
+  studentProfile            StudentProfile?      @relation("StudentUser")
+  studentsRegistered        StudentProfile[]     @relation("StudentRegisteredBy")
+  studentsVerified          StudentProfile[]     @relation("StudentVerifiedBy")
 
   @@map("users")
 }
@@ -363,8 +366,9 @@ model Programme {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  department Department      @relation(fields: [departmentId], references: [id])
-  sections   CourseSection[]
+  department      Department       @relation(fields: [departmentId], references: [id])
+  sections        CourseSection[]
+  studentProfiles StudentProfile[]
 
   @@index([departmentId])
   @@map("programmes")
@@ -380,7 +384,8 @@ model AcademicLevel {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  sections CourseSection[]
+  sections        CourseSection[]
+  studentProfiles StudentProfile[]
 
   @@map("academic_levels")
 }
@@ -395,7 +400,8 @@ model AcademicYear {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  semesters Semester[]
+  semesters       Semester[]
+  studentProfiles StudentProfile[]
 
   @@map("academic_years")
 }
@@ -415,6 +421,7 @@ model Semester {
   academicYear       AcademicYear        @relation(fields: [academicYearId], references: [id])
   calendarExceptions CalendarException[]
   offerings          CourseOffering[]
+  studentProfiles    StudentProfile[]
 
   @@unique([academicYearId, number])
   @@map("semesters")
@@ -606,4 +613,47 @@ model LecturerAssignment {
   @@index([sectionId])
   @@index([lecturerId])
   @@map("lecturer_assignments")
+}
+
+// ───────────────────────── Students (Phase 2) ─────────────────────────
+
+enum StudentStatus {
+  ACTIVE
+  DEFERRED
+  SUSPENDED
+  WITHDRAWN
+  GRADUATED
+}
+
+/// Faculty and department come from the programme, so they can never contradict it.
+model StudentProfile {
+  id                    String        @id @default(uuid(7)) @db.Uuid
+  userId                String        @unique @map("user_id") @db.Uuid
+  /// The university's Student ID: 8 digits (format confirmed by the product owner, 2026-11-08).
+  studentNumber         String        @unique @map("student_number")
+  programmeId           String        @map("programme_id") @db.Uuid
+  levelId               String        @map("level_id") @db.Uuid
+  currentAcademicYearId String        @map("current_academic_year_id") @db.Uuid
+  currentSemesterId     String        @map("current_semester_id") @db.Uuid
+  status                StudentStatus @default(ACTIVE)
+  /// Set by the Registrar for a student without a compatible phone (lecturer-assisted check-in).
+  noDeviceExemption     Boolean       @default(false) @map("no_device_exemption")
+  registeredById        String        @map("registered_by_id") @db.Uuid
+  verifiedAt            DateTime?     @map("verified_at") @db.Timestamptz(3)
+  verifiedById          String?       @map("verified_by_id") @db.Uuid
+  version               Int           @default(0)
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user                User          @relation("StudentUser", fields: [userId], references: [id])
+  programme           Programme     @relation(fields: [programmeId], references: [id])
+  level               AcademicLevel @relation(fields: [levelId], references: [id])
+  currentAcademicYear AcademicYear  @relation(fields: [currentAcademicYearId], references: [id])
+  currentSemester     Semester      @relation(fields: [currentSemesterId], references: [id])
+  registeredBy        User          @relation("StudentRegisteredBy", fields: [registeredById], references: [id])
+  verifiedBy          User?         @relation("StudentVerifiedBy", fields: [verifiedById], references: [id], onDelete: Restrict)
+
+  @@index([programmeId, levelId])
+  @@index([status])
+  @@map("student_profiles")
 }

@@ -7,6 +7,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { type CreateStaffUser, STAFF_ADMIN_ROLES, type StaffAdminRole } from '@attendsure/shared';
+
+/** A role grant with its scope (validated by RoleGrantSchema). */
+type RoleGrant = {
+  role: StaffAdminRole;
+  scopeType: 'INSTITUTION' | 'FACULTY' | 'DEPARTMENT';
+  scopeId?: string | undefined;
+};
 import type { RequestContext } from '../../common/request-context.js';
 import { Prisma, type RoleKey } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
@@ -145,10 +152,19 @@ export class UsersService {
         const created = await tx.user.create({
           data: { email: input.email, fullName: input.fullName, phone: input.phone ?? null },
         });
-        const roles = await tx.role.findMany({ where: { key: { in: roleKeys } } });
-        await tx.userRole.createMany({
-          data: roles.map((role) => ({ userId: created.id, roleId: role.id, grantedById: actor.userId })),
-        });
+        for (const grant of input.roles) {
+          await this.assertScopeExists(tx, grant);
+          const role = await tx.role.findUniqueOrThrow({ where: { key: grant.role } });
+          await tx.userRole.create({
+            data: {
+              userId: created.id,
+              roleId: role.id,
+              grantedById: actor.userId,
+              scopeType: grant.scopeType,
+              scopeId: grant.scopeId ?? null,
+            },
+          });
+        }
         await this.audit.record(
           {
             action: 'users.created',
@@ -303,10 +319,11 @@ export class UsersService {
   async grantRole(
     actor: AccessClaims,
     id: string,
-    role: StaffAdminRole,
+    grant: RoleGrant,
     reason: string,
     context: RequestContext,
   ) {
+    const role = grant.role;
     await this.prisma
       .$transaction(async (tx) => {
         const user = await this.lockedUser(tx, id);
@@ -316,9 +333,16 @@ export class UsersService {
             message: 'Deactivated accounts cannot receive roles.',
           });
         }
+        await this.assertScopeExists(tx, grant);
         const roleRow = await tx.role.findUniqueOrThrow({ where: { key: role } });
-        const grant = await tx.userRole.create({
-          data: { userId: id, roleId: roleRow.id, grantedById: actor.userId },
+        const created = await tx.userRole.create({
+          data: {
+            userId: id,
+            roleId: roleRow.id,
+            grantedById: actor.userId,
+            scopeType: grant.scopeType,
+            scopeId: grant.scopeId ?? null,
+          },
         });
         await this.audit.record(
           {
@@ -327,7 +351,7 @@ export class UsersService {
             entityId: id,
             actorUserId: actor.userId,
             actorRoleKey: actor.role,
-            after: { grantId: grant.id, role, scopeType: grant.scopeType },
+            after: { grantId: created.id, role, scopeType: created.scopeType, scopeId: created.scopeId },
             reason,
             context,
           },
@@ -407,6 +431,21 @@ export class UsersService {
   }
 
   // ───────────────────────── Safeguards ─────────────────────────
+
+  /** A faculty or department scope must name a real, active faculty or department. */
+  private async assertScopeExists(tx: Prisma.TransactionClient, grant: RoleGrant) {
+    if (grant.scopeType === 'INSTITUTION') return;
+    const target =
+      grant.scopeType === 'FACULTY'
+        ? await tx.faculty.findUnique({ where: { id: grant.scopeId! } })
+        : await tx.department.findUnique({ where: { id: grant.scopeId! } });
+    if (!target?.isActive) {
+      throw new BadRequestException({
+        code: 'INVALID_SCOPE',
+        message: `No such active ${grant.scopeType === 'FACULTY' ? 'faculty' : 'department'}.`,
+      });
+    }
+  }
 
   /** Reads the user and locks the row, so two administrators acting at once cannot both pass the checks. */
   private async lockedUser(tx: Prisma.TransactionClient, id: string) {

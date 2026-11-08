@@ -30,13 +30,23 @@ const opaqueToken = z.string().min(20).max(200);
 /** Two-step sign-in challenge (a signed JWT, longer than a link token). */
 const mfaToken = z.string().min(20).max(2000);
 
-export const LoginRequestSchema = z.strictObject({
-  email,
-  password: existingPassword,
-  client: ClientTypeSchema,
-  /** Optional: which of the user's roles to act as. Defaults to the least-privileged one held. */
-  role: z.enum(ROLE_KEYS).optional(),
-});
+/**
+ * Sign in with an email address, or (since Phase 2) with a Student ID or staff number in `identifier`.
+ * `identifier` may also hold an email. Exactly one of the two fields is sent.
+ */
+export const LoginRequestSchema = z
+  .strictObject({
+    email: email.optional(),
+    identifier: z.string().trim().min(1).max(254).optional(),
+    password: existingPassword,
+    client: ClientTypeSchema,
+    /** Optional: which of the user's roles to act as. Defaults to the least-privileged one held. */
+    role: z.enum(ROLE_KEYS).optional(),
+  })
+  .refine((v) => (v.email === undefined) !== (v.identifier === undefined), {
+    message: 'send either email or identifier',
+    path: ['identifier'],
+  });
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 
 export const MfaEnrollRequestSchema = z.strictObject({ mfaToken });

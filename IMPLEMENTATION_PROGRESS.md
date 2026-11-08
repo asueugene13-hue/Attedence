@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 2, academic management. Steps 1–3 are done; step 4 (student registration and scoped administrator grants) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 2, academic management. Steps 1–4 are done; step 5 (bulk import and file storage) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -63,7 +63,7 @@ Read this first in every session, and update it after every implementation step.
 | D-11 | Who can reschedule a class | The lecturer requests; an Administrator approves | Phase 3 |
 | D-12 | Who appoints course reps | An Administrator appoints; the lecturer may nominate | Phase 2 |
 | D-13 | Monitoring thresholds | Unconfirmed at 15 min; escalate at 30 min, or earlier once at least 3 students and at least 10% of the class report a problem | Phase 3 |
-| D-14 | Real academic data and ID formats | The Registrar and Administrators supply the structure. We need the real Student ID and Staff ID formats for validation. | Phase 2 |
+| D-14 | Real academic data and ID formats | The Registrar and Administrators supply the structure. Student ID: 8 digits (decided). Staff ID format still needed. | Phase 2 |
 | D-15 | Brand colours and crest | Knutsford supplies them; the design tokens are ready to swap | Phase 6 |
 | D-16 | Hosting, data location, Data Protection Commission registration | University IT and the university's data protection lead decide | File storage by Phase 2; hosting before Phase 8 |
 | D-17 | Email and SMS providers | The university's mail system or a transactional email service; a Ghanaian SMS gateway if SMS is wanted | Phase 3 |
@@ -83,6 +83,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-08 | D-05 | Install Docker Desktop (WSL 2), JDK 17, Android Studio | Product owner |
 | 2026-11-08 | D-06 | Activation link to university email. Open question: does every student have one? If not, SMS codes are the fallback. | Product owner |
 | 2026-11-08 | D-07 | Ask Knutsford IT about Microsoft 365 / Google accounts; design leaves room for SSO | Product owner |
+| 2026-11-08 | D-14 (part) | Student IDs are 8 digits; staff-number format still open | Product owner |
 
 ## Session log
 
@@ -557,7 +558,7 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 | 1 | Academic structure: faculties, departments, programmes, levels, academic years, semesters, calendar exceptions | Done (2026-11-08) |
 | 2 | Places: campuses, buildings, classrooms (geofences for later) | Done (2026-11-08) |
 | 3 | Courses, offerings, sections; lecturer profiles and assignments | Done (2026-11-08) |
-| 4 | Student registration (Registrar); faculty- and department-scoped administrator grants | Not started |
+| 4 | Student registration (Registrar); faculty- and department-scoped administrator grants | Done (2026-11-08) |
 | 5 | Bulk student import (CSV/XLSX): templates, validation, preview, confirm, error report, history | Not started |
 | 6 | Enrolments and course-rep assignments | Not started |
 | 7 | Dashboard screens, end-to-end tests, Phase 2 exit check | Not started |
@@ -671,3 +672,37 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed.
   - GitHub run 42522952063 on `a26c9ec`: **success**.
+
+### 2026-11-08 — Phase 2, step 4: student registration and scoped administrators
+
+- **Decision D-14 (partly):** Knutsford Student IDs are **8 digits**, confirmed by the product owner. The staff-number format is still open. No real Student ID appears in code, docs or tests; tests use `99xxxxxx` numbers.
+- **Built:**
+  - Table `student_profiles`. A student is an account with the Student role plus this profile. Faculty and department are not stored; they come from the programme, so they can never contradict it.
+  - 7 endpoints: `GET/POST /students`, `GET/PATCH /students/:id`, `POST /students/:id/status`, `POST /students/:id/verify`, `GET /me/student` (see API_DOCUMENTATION).
+  - **Registration** (Registrar or Super Admin):
+    - checks the Student ID (8 digits), the Ghana phone number, and that programme, level, year and semester exist, are active and fit together;
+    - a new email gets a pending account and an activation email;
+    - an existing staff account gains the Student role and profile instead of a second account.
+  - **Edits are version-checked.** The client sends the version it loaded in an `If-Match` header. If someone else saved first, the API answers `409 VERSION_CONFLICT` instead of silently overwriting their change.
+  - **Status changes** (deferred, suspended, withdrawn, graduated…) need a reason. They and Registrar verification are audited.
+  - **Sign-in by Student ID or staff number:** `/auth/login` accepts `identifier` (an email, Student ID or staff number) as well as `email`. An unknown ID gets the same answer as a wrong password, so nobody can probe which IDs exist. Rate limits count per identifier.
+  - **Scoped administrators:** a University Administrator role can now be limited to one faculty or department. The API checks that it exists and is active (`400 INVALID_SCOPE`). Other roles stay institution-wide.
+- **Bug found and fixed while testing:** combining the department and faculty filters on `GET /students` dropped the department filter (two conditions on one field; the second replaced the first). They now share one condition, and a test covers it.
+- **Files:**
+  - `apps/api/prisma/schema.prisma`, `prisma/migrations/20261108211815_students/`.
+  - `apps/api/src/modules/students/*` (new), `modules/auth/auth.service.ts`, `modules/users/users.{service,controller}.ts`, `common/rate-limit/rate-limit.ts`, `app.module.ts`.
+  - `packages/shared/src/{students.ts (new), admin.ts, auth.ts, index.ts}`.
+  - `apps/api/test/{students.test.ts (new), fixtures.ts}`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA.
+- **Database changes:**
+  - 1 table, 1 enum (`StudentStatus`).
+  - Unique Student ID and one profile per account.
+  - Check: a verified record says who verified it.
+  - Drift check: no difference.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **155** (11 new), mobile 9, web 8, so **185 passed**. Scenario 24 picked up the new routes automatically.
+- **Known limitations:**
+  - Profile photos wait for file storage (step 5, D-16).
+  - The web and mobile sign-in forms still say "Email"; the label changes to "Email or Student ID" with the dashboard screens.
+  - Students are registered one at a time until bulk import (step 5).
+  - Staff-number format still open (D-14).
+- **Next step:** Phase 2, step 5: bulk import (CSV and Excel with validation preview and error report) and file storage, including student photos.

@@ -19,6 +19,7 @@ import { CoursesModule } from './modules/courses/courses.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { PlacesModule } from './modules/places/places.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
+import { StudentsModule } from './modules/students/students.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
 /** Shared infrastructure used by both the API and the worker process. */
@@ -44,6 +45,7 @@ export const INFRASTRUCTURE_MODULES = [
     AcademicModule,
     PlacesModule,
     CoursesModule,
+    StudentsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },

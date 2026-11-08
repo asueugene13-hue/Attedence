@@ -41,7 +41,14 @@ function subjectOf(rule: RateLimitRule, req: Request): string | null {
   const ip = req.ip ?? 'unknown';
   if (rule.by === 'ip') return ip;
   const body = req.body as Record<string, unknown> | undefined;
-  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : null;
+  // The account being targeted: an email, or a Student ID / staff number sent as 'identifier'.
+  const raw =
+    typeof body?.email === 'string'
+      ? body.email
+      : typeof body?.identifier === 'string'
+        ? body.identifier
+        : null;
+  const email = raw ? raw.trim().toLowerCase() : null;
   if (!email) return rule.by === 'email' ? null : ip;
   // Emails are hashed so Redis never holds personal data.
   const hashed = createHash('sha256').update(email).digest('hex').slice(0, 32);

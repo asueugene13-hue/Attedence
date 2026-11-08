@@ -93,13 +93,8 @@ export class UsersController {
     @Req() req: Request,
   ) {
     const input = parseInput(GrantRoleSchema, body);
-    return this.users.grantRole(
-      auth,
-      parseInput(IdSchema, id),
-      input.role,
-      input.reason,
-      requestContextOf(req),
-    );
+    const { reason, ...grant } = input;
+    return this.users.grantRole(auth, parseInput(IdSchema, id), grant, reason, requestContextOf(req));
   }
 
   @Post(':id/roles/:grantId/revoke')

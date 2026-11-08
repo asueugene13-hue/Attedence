@@ -26,7 +26,7 @@ AttendSure exposes one versioned REST API at `/api/v1` and one Socket.IO namespa
 
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| POST | `/auth/login` | Anyone | `{ email, password, client: WEB|MOBILE, role? }`. Returns tokens, or `{ mfaRequired, enrollmentRequired, mfaToken }` for staff roles. Signing in with a Student or Staff ID number arrives with those records in Phase 2. **Built.** |
+| POST | `/auth/login` | Anyone | `{ email or identifier, password, client: WEB|MOBILE, role? }`. `identifier` may be an email, an 8-digit Student ID or a lecturer staff number; send exactly one of `email` and `identifier`. Returns tokens, or `{ mfaRequired, enrollmentRequired, mfaToken }` for staff roles. An unknown ID gets the same `INVALID_CREDENTIALS` answer as a wrong password. **Built.** |
 | POST | `/auth/mfa/enroll` | Staff, first sign-in | `{ mfaToken }` → `{ secret, otpauthUri }` for the authenticator app. **Built.** |
 | POST | `/auth/mfa/verify` | Staff | `{ mfaToken, code }` or `{ mfaToken, recoveryCode }`. On first enrolment the response also carries 10 recovery codes, shown once. 5 wrong codes end the attempt. **Built.** |
 | POST | `/auth/refresh` | Signed in | Mobile: `{ refreshToken }`. Web: the `as_refresh` cookie, accepted only with the dashboard's `Origin`. Rotates the token; reusing an old one revokes the session. **Built.** |
@@ -46,7 +46,7 @@ AttendSure exposes one versioned REST API at `/api/v1` and one Socket.IO namespa
 | GET | `/users/:id` | SA | Account, active roles, full grant history, active session count. Never returns hashes or secrets. **Built.** Editing name and phone comes with Phase 2 profiles. |
 | POST | `/users/:id/suspend` · `/users/:id/restore` | SA (UA where configured, never on staff administrators) | `{ reason }`. Suspending ends every session. You cannot suspend yourself or the last active Super Admin. **Built.** |
 | POST | `/users/:id/activation-email` · `/users/:id/mfa/reset` | SA | Resend activation; reset another person's two-step sign-in (`{ reason }`). **Built.** |
-| POST | `/users/:id/roles` · `/users/:id/roles/:grantId/revoke` | SA | Grant `{ role, reason }` (institution-wide until faculty and department scopes exist in Phase 2); revoke `{ reason }`, which ends sessions acting in that role. **Built.** |
+| POST | `/users/:id/roles` · `/users/:id/roles/:grantId/revoke` | SA | Grant `{ role, scopeType?, scopeId?, reason }`. Only the University Administrator role may be limited to a `FACULTY` or `DEPARTMENT` (`scopeId` must name an active one, else `400 INVALID_SCOPE`); other roles are institution-wide. The same scope fields are accepted in `POST /users` `roles`. Revoke `{ reason }`, which ends sessions acting in that role. **Built.** |
 | GET · PUT | `/roles` · `/roles/:key/permissions` | SA | List roles with held and assignable permissions; replace a role's permissions `{ permissions, reason }`, limited to the matrix. The Super Admin role is fixed. **Built.** |
 | GET · PUT | `/settings` · `/settings/:key` | SA | Institution settings, versioned. **Deferred to Phase 3**, when the first setting (class-monitoring timings) is actually used. |
 | GET | `/audit-logs` | SA, UA (institution-wide scope) | `?action=<prefix>&entityType=&entityId=&actorUserId=&from=&to=&limit=&cursor=`, newest first. Each search is itself audited. **Built.** |
@@ -68,10 +68,11 @@ AttendSure exposes one versioned REST API at `/api/v1` and one Socket.IO namespa
 
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| GET · POST | `/students` | SA, RG | Search, filter, register one student |
-| GET · PATCH | `/students/:id` | SA, RG | Full record and edits (version-checked) |
-| POST | `/students/:id/status` | SA, RG | Change academic status, with reason |
-| POST | `/students/:id/photo` | SA, RG | Upload a profile photo (via presigned upload) |
+| GET · POST | `/students` | SA, RG (`students.read_full`, `students.create`) | List `?q=&facultyId=&departmentId=&programmeId=&levelId=&status=&limit=&cursor=`. Register `{ studentNumber, fullName, email, phone, programmeId, departmentId?, facultyId?, levelId, academicYearId, semesterId, status? }`: the Student ID is exactly 8 digits (D-14), the phone a Ghana number; department and faculty are taken from the programme and, if sent, must match it (`PLACEMENT_MISMATCH`); the semester must belong to the year and not be closed. A new email gets a pending account with the Student role and an activation email; an existing staff account gains the Student role and profile instead. `409 STUDENT_NUMBER_IN_USE`, `409 ALREADY_STUDENT`. **Built.** |
+| GET · PATCH | `/students/:id` | SA, RG (`students.update` to edit) | Full record. Edits `{ fullName?, phone?, programmeId?, levelId?, academicYearId?, semesterId?, noDeviceExemption? }` need an `If-Match: <version>` header (`400 VERSION_REQUIRED` without it, `409 VERSION_CONFLICT` with `currentVersion` when someone else changed it first). **Built.** |
+| POST | `/students/:id/status` · `/students/:id/verify` | SA, RG | `{ status, reason }` (ACTIVE, DEFERRED, SUSPENDED, WITHDRAWN, GRADUATED…), and Registrar verification of the record. Both need `If-Match` and are audited. **Built.** |
+| GET | `/me/student` | Signed in | The caller's own student record, or `{ student: null }`. **Built.** |
+| POST | `/students/:id/photo` | SA, RG | Upload a profile photo (via presigned upload). Phase 2 step 5, with file storage. |
 | GET | `/imports/templates/:type?format=csv\|xlsx` | SA, RG | Download a template with the required columns |
 | POST | `/imports` | SA, RG | Upload a file, which starts validation |
 | GET | `/imports` · `/imports/:id` | SA, RG | History; progress and counts |

@@ -5,7 +5,12 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { type LoginRequest, MFA_REQUIRED_ROLES, type MfaVerifyRequest } from '@attendsure/shared';
+import {
+  type LoginRequest,
+  MFA_REQUIRED_ROLES,
+  type MfaVerifyRequest,
+  STUDENT_NUMBER_PATTERN,
+} from '@attendsure/shared';
 import type { RequestContext } from '../../common/request-context.js';
 import { AppConfig } from '../../config/app-config.js';
 import type { ClientType, RoleKey, User } from '../../generated/prisma/client.js';
@@ -80,7 +85,7 @@ export class AuthService {
 
   async login(input: LoginRequest, context: RequestContext): Promise<LoginResult> {
     const now = new Date();
-    const user = await this.prisma.user.findUnique({ where: { email: input.email } });
+    const user = await this.findSignInUser(input);
 
     if (!user) {
       await this.passwords.verify(null, input.password);
@@ -471,6 +476,27 @@ export class AuthService {
         context,
       });
     }
+  }
+
+  /**
+   * The account behind a sign-in: by email, or by Student ID, or by staff number. Unknown identifiers
+   * resolve to null and get the same answer as a wrong password.
+   */
+  private async findSignInUser(input: LoginRequest): Promise<User | null> {
+    const raw = (input.email ?? input.identifier ?? '').trim();
+    if (raw.includes('@')) return this.prisma.user.findUnique({ where: { email: raw.toLowerCase() } });
+    if (STUDENT_NUMBER_PATTERN.test(raw)) {
+      const student = await this.prisma.studentProfile.findUnique({
+        where: { studentNumber: raw },
+        include: { user: true },
+      });
+      if (student) return student.user;
+    }
+    const lecturer = await this.prisma.lecturerProfile.findUnique({
+      where: { staffNumber: raw.toUpperCase() },
+      include: { user: true },
+    });
+    return lecturer?.user ?? null;
   }
 
   private async heldRoles(userId: string): Promise<RoleKey[]> {
