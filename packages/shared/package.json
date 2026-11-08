@@ -1,0 +1,16 @@
+{
+  "name": "@attendsure/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Types, enums, permission keys and rules shared by the AttendSure API, web dashboard and mobile app",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "jest"
+  }
+}
