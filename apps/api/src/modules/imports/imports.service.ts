@@ -6,12 +6,7 @@ import {
   NotFoundException,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import {
-  IMPORT_LIMITS,
-  type ImportListQuerySchema,
-  type ImportRowsQuerySchema,
-  STUDENT_IMPORT_COLUMNS,
-} from '@attendsure/shared';
+import { IMPORT_LIMITS, type ImportListQuerySchema, type ImportRowsQuerySchema } from '@attendsure/shared';
 import type { z } from 'zod';
 import { auditEntry } from '../../common/audit-entry.js';
 import type { RequestContext } from '../../common/request-context.js';
@@ -22,11 +17,7 @@ import { AuditService } from '../audit-logs/audit.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { detectFileType } from '../files/file-type.js';
 import { FilesService } from '../files/files.service.js';
-import {
-  type CheckedRow,
-  StudentImportService,
-  type StudentImportInput,
-} from '../students/student-import.service.js';
+import { type CheckedRow, checkHeaders, type ImportHandler, REPORT_COLUMNS } from './import-handler.js';
 import { readRows, type SheetFormat, SpreadsheetError, writeRows } from './spreadsheet.js';
 
 const notFound = () => new NotFoundException({ code: 'NOT_FOUND', message: 'No such import.' });
@@ -36,11 +27,13 @@ const invalidFile = (code: string, message: string, errors?: unknown) =>
 /** A large confirmed import runs in one transaction, so it gets more time than Prisma's 5-second default. */
 const CONFIRM_TIMEOUT_MS = 5 * 60_000;
 
-const TEMPLATE_HEADERS = STUDENT_IMPORT_COLUMNS.map((c) => c.key);
+const headersOf = (handler: ImportHandler) => handler.columns.map((c) => c.key);
 
 /**
- * Bulk student import: upload → automatic check → preview → a person confirms or cancels.
- * Nothing reaches the student records until confirmation, and confirmation saves all valid rows or none.
+ * The shared import pipeline: upload → automatic check → preview → a person confirms or cancels.
+ * Nothing reaches the real records until confirmation, and confirmation saves all valid rows or none.
+ * Each import type (students, enrolments) supplies its rules through an ImportHandler, and every
+ * operation is given the handler for the URL it came through, so one type can never act on another's batch.
  */
 @Injectable()
 export class ImportsService implements OnModuleDestroy {
@@ -52,14 +45,13 @@ export class ImportsService implements OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly files: FilesService,
-    private readonly studentImport: StudentImportService,
   ) {}
 
-  template(format: SheetFormat) {
-    return writeRows(TEMPLATE_HEADERS, [], format);
+  template(handler: ImportHandler, format: SheetFormat) {
+    return writeRows(headersOf(handler), [], format);
   }
 
-  async upload(actor: AccessClaims, upload: UploadedBytes, context: RequestContext) {
+  async upload(handler: ImportHandler, actor: AccessClaims, upload: UploadedBytes, context: RequestContext) {
     const type = detectFileType(upload.buffer);
     const format: SheetFormat | null =
       type === 'text/csv' ? 'csv' : type?.includes('spreadsheetml') ? 'xlsx' : null;
@@ -72,7 +64,7 @@ export class ImportsService implements OnModuleDestroy {
       if (error instanceof SpreadsheetError) throw invalidFile('UNREADABLE_FILE', error.message);
       throw error;
     }
-    const { missing, unknown } = this.studentImport.checkHeaders(sheet.headers);
+    const { missing, unknown } = checkHeaders(handler.columns, sheet.headers);
     if (missing.length > 0 || unknown.length > 0) {
       throw invalidFile(
         'COLUMNS_DO_NOT_MATCH',
@@ -81,7 +73,7 @@ export class ImportsService implements OnModuleDestroy {
       );
     }
     if (sheet.rows.length === 0)
-      throw invalidFile('EMPTY_FILE', 'The file has a header row but no students.');
+      throw invalidFile('EMPTY_FILE', 'The file has a header row but no data rows.');
     if (sheet.rows.length > IMPORT_LIMITS.maxRows) {
       throw invalidFile(
         'TOO_MANY_ROWS',
@@ -89,7 +81,7 @@ export class ImportsService implements OnModuleDestroy {
       );
     }
 
-    const checked = await this.studentImport.check(sheet.rows);
+    const checked = await handler.check(sheet.rows);
     const rawByRow = new Map(sheet.rows.map((r) => [r.rowNumber, r.values]));
     const stored = await this.files.store({
       purpose: 'IMPORT_FILE',
@@ -102,7 +94,7 @@ export class ImportsService implements OnModuleDestroy {
       const batch = await this.prisma.$transaction(async (tx) => {
         const created = await tx.importBatch.create({
           data: {
-            type: 'STUDENTS',
+            type: handler.type,
             format: format === 'csv' ? 'CSV' : 'XLSX',
             fileId: stored.id,
             uploadedById: actor.userId,
@@ -129,17 +121,17 @@ export class ImportsService implements OnModuleDestroy {
         );
         return created;
       });
-      return this.get(batch.id);
+      return this.get(handler, batch.id);
     } catch (error) {
       await this.files.discard(stored);
       throw error;
     }
   }
 
-  async list(query: z.output<typeof ImportListQuerySchema>) {
+  async list(handler: ImportHandler, query: z.output<typeof ImportListQuerySchema>) {
     const rows = await this.prisma.importBatch.findMany({
       where: {
-        ...(query.type ? { type: query.type } : {}),
+        type: handler.type,
         ...(query.status ? { status: query.status } : {}),
         ...(query.cursor ? { id: { lt: query.cursor } } : {}),
       },
@@ -157,9 +149,9 @@ export class ImportsService implements OnModuleDestroy {
     };
   }
 
-  async get(id: string) {
+  async get(handler: ImportHandler, id: string) {
     const batch = await this.prisma.importBatch.findUnique({
-      where: { id },
+      where: { id, type: handler.type },
       include: {
         file: { select: { originalName: true } },
         uploadedBy: { select: { id: true, fullName: true } },
@@ -178,8 +170,8 @@ export class ImportsService implements OnModuleDestroy {
     };
   }
 
-  async rows(id: string, query: z.output<typeof ImportRowsQuerySchema>) {
-    await this.findBatch(id);
+  async rows(handler: ImportHandler, id: string, query: z.output<typeof ImportRowsQuerySchema>) {
+    await this.findBatch(handler, id);
     const rows = await this.prisma.importRow.findMany({
       where: {
         batchId: id,
@@ -206,8 +198,8 @@ export class ImportsService implements OnModuleDestroy {
    * the upload), then saves the valid ones in one transaction. Rows that became duplicates are skipped and
    * shown as such; if anything fails, nothing is saved and the batch can be confirmed again.
    */
-  async confirm(actor: AccessClaims, id: string, context: RequestContext) {
-    await this.findBatch(id);
+  async confirm(handler: ImportHandler, actor: AccessClaims, id: string, context: RequestContext) {
+    await this.findBatch(handler, id);
     const claimed = await this.prisma.importBatch.updateMany({
       where: { id, status: 'VALIDATED' },
       data: { status: 'IMPORTING', decidedById: actor.userId, decidedAt: new Date() },
@@ -219,16 +211,16 @@ export class ImportsService implements OnModuleDestroy {
         where: { batchId: id },
         orderBy: { rowNumber: 'asc' },
       });
-      const checked = await this.studentImport.check(
+      const checked = await handler.check(
         stored.map((r) => ({ rowNumber: r.rowNumber, values: r.raw as Record<string, string> })),
       );
       await this.prisma.$transaction(
         async (tx) => {
           const valid = checked.filter((r) => r.status === 'VALID' && r.normalized);
-          const created = await this.studentImport.importRows(
+          const created = await handler.importRows(
             tx,
             actor,
-            valid.map((r) => ({ rowNumber: r.rowNumber, input: r.normalized as StudentImportInput })),
+            valid.map((r) => ({ rowNumber: r.rowNumber, input: r.normalized })),
             id,
             context,
           );
@@ -241,8 +233,8 @@ export class ImportsService implements OnModuleDestroy {
                 ? {
                     ...rowFields(row),
                     status: 'IMPORTED',
-                    createdEntityId: made.profileId,
-                    emailStatus: made.newAccount ? 'PENDING' : null,
+                    createdEntityId: made.entityId,
+                    emailStatus: made.needsActivationEmail ? 'PENDING' : null,
                   }
                 : rowFields(row),
             });
@@ -273,13 +265,13 @@ export class ImportsService implements OnModuleDestroy {
       this.logger.error(`Import ${id} could not be confirmed: ${(error as Error).message}`);
       throw error;
     }
-    this.startActivationEmails(id);
-    return this.get(id);
+    if (handler.sendActivation) this.startActivationEmails(handler, id);
+    return this.get(handler, id);
   }
 
   /** Discards a checked file. Its stored copy is deleted; the row check results are kept as a record. */
-  async cancel(actor: AccessClaims, id: string, context: RequestContext) {
-    const batch = await this.findBatch(id);
+  async cancel(handler: ImportHandler, actor: AccessClaims, id: string, context: RequestContext) {
+    const batch = await this.findBatch(handler, id);
     const key = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.importBatch.updateMany({
         where: { id, status: 'VALIDATED' },
@@ -300,12 +292,12 @@ export class ImportsService implements OnModuleDestroy {
       return removedKey;
     });
     await this.files.deleteBytes(key);
-    return this.get(id);
+    return this.get(handler, id);
   }
 
   /** Rows that were not imported, with the problems in a last column, ready to fix and upload again. */
-  async errorReport(id: string, format: SheetFormat) {
-    await this.findBatch(id);
+  async errorReport(handler: ImportHandler, id: string, format: SheetFormat) {
+    await this.findBatch(handler, id);
     const rows = await this.prisma.importRow.findMany({
       where: {
         batchId: id,
@@ -313,18 +305,30 @@ export class ImportsService implements OnModuleDestroy {
       },
       orderBy: { rowNumber: 'asc' },
     });
-    const headers = [...TEMPLATE_HEADERS, 'row_number', 'problems'];
+    const template = headersOf(handler);
+    const headers = [...template, ...REPORT_COLUMNS];
     const lines = rows.map((row) => {
       const raw = row.raw as Record<string, string>;
       const problems = ((row.errors as { message: string }[] | null) ?? []).map((e) => e.message).join('; ');
-      return [...TEMPLATE_HEADERS.map((h) => raw[h] ?? ''), String(row.rowNumber), problems];
+      return [...template.map((h) => raw[h] ?? ''), String(row.rowNumber), problems];
     });
     return writeRows(headers, lines, format);
   }
 
   /** Sends (again) activation emails still pending or failed, for example after a mail outage. */
-  async retryActivationEmails(actor: AccessClaims, id: string, context: RequestContext) {
-    const batch = await this.findBatch(id);
+  async retryActivationEmails(
+    handler: ImportHandler,
+    actor: AccessClaims,
+    id: string,
+    context: RequestContext,
+  ) {
+    const batch = await this.findBatch(handler, id);
+    if (!handler.sendActivation) {
+      throw new ConflictException({
+        code: 'NO_ACTIVATION_EMAILS',
+        message: 'This kind of import sends no emails.',
+      });
+    }
     if (batch.status !== 'COMPLETED') throw notPending('Only a completed import has activation emails.');
     if (this.sending.has(id)) {
       throw new ConflictException({
@@ -345,8 +349,8 @@ export class ImportsService implements OnModuleDestroy {
         context,
       ),
     );
-    this.startActivationEmails(id);
-    return this.get(id);
+    this.startActivationEmails(handler, id);
+    return this.get(handler, id);
   }
 
   /**
@@ -354,9 +358,9 @@ export class ImportsService implements OnModuleDestroy {
    * mail problem never undoes the import and every failure is visible and retryable.
    * Limitation until Phase 3's job queue: if the API restarts mid-way, use the retry endpoint.
    */
-  private startActivationEmails(id: string) {
+  private startActivationEmails(handler: ImportHandler, id: string) {
     if (this.sending.has(id)) return;
-    const run = this.sendPending(id)
+    const run = this.sendPending(handler, id)
       .catch((error: unknown) =>
         this.logger.error(`Activation emails for import ${id} stopped: ${(error as Error).message}`),
       )
@@ -365,7 +369,8 @@ export class ImportsService implements OnModuleDestroy {
   }
 
   /** Exposed for tests, which need to wait until sending has finished. */
-  async sendPending(id: string): Promise<void> {
+  async sendPending(handler: ImportHandler, id: string): Promise<void> {
+    if (!handler.sendActivation) return;
     const pending = await this.prisma.importRow.findMany({
       where: { batchId: id, emailStatus: 'PENDING', createdEntityId: { not: null } },
       select: { id: true, createdEntityId: true },
@@ -373,7 +378,7 @@ export class ImportsService implements OnModuleDestroy {
     for (const row of pending) {
       let status: 'SENT' | 'FAILED' = 'SENT';
       try {
-        await this.studentImport.sendActivation(row.createdEntityId!);
+        await handler.sendActivation(row.createdEntityId!);
       } catch (error) {
         status = 'FAILED';
         this.logger.error(`Activation email for import row ${row.id} failed: ${(error as Error).message}`);
@@ -391,8 +396,9 @@ export class ImportsService implements OnModuleDestroy {
     return this.sending.has(id);
   }
 
-  private async findBatch(id: string) {
-    const batch = await this.prisma.importBatch.findUnique({ where: { id } });
+  /** A batch of this handler's type; another type's batch is treated as not found. */
+  private async findBatch(handler: ImportHandler, id: string) {
+    const batch = await this.prisma.importBatch.findUnique({ where: { id, type: handler.type } });
     if (!batch) throw notFound();
     return batch;
   }

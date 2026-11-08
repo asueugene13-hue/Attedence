@@ -297,6 +297,14 @@ export class LecturersService {
     });
   }
 
+  /** Whether this person currently teaches the section (an active assignment). */
+  async teaches(userId: string, sectionId: string): Promise<boolean> {
+    const count = await this.prisma.lecturerAssignment.count({
+      where: { sectionId, endedAt: null, lecturer: { userId } },
+    });
+    return count > 0;
+  }
+
   /** The signed-in lecturer's current class groups. */
   async myTeaching(userId: string) {
     const profile = await this.prisma.lecturerProfile.findUnique({ where: { userId } });

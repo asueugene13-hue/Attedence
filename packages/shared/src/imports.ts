@@ -15,7 +15,7 @@ export const IMPORT_LIMITS = {
 /** Profile photos: JPEG or PNG, checked from the file's bytes. */
 export const PHOTO_LIMITS = { maxFileBytes: 2 * 1024 * 1024 } as const;
 
-export const IMPORT_TYPES = ['STUDENTS'] as const;
+export const IMPORT_TYPES = ['STUDENTS', 'ENROLLMENTS'] as const;
 export const IMPORT_STATUSES = ['VALIDATED', 'IMPORTING', 'COMPLETED', 'CANCELLED'] as const;
 export const IMPORT_ROW_STATUSES = [
   'VALID',
@@ -75,7 +75,6 @@ export const ImportFormatQuerySchema = z.strictObject({
 });
 
 export const ImportListQuerySchema = z.strictObject({
-  type: z.enum(IMPORT_TYPES).optional(),
   status: z.enum(IMPORT_STATUSES).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.uuid().optional(),

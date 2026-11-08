@@ -311,6 +311,82 @@ export class CoursesService {
     return offering;
   }
 
+  /**
+   * What enrolments and course reps need to know about a section, without reading course tables
+   * themselves. Pass the transaction when the answer must hold until it commits.
+   */
+  async sectionFacts(id: string, tx: Prisma.TransactionClient = this.prisma) {
+    const section = await tx.courseSection.findUnique({
+      where: { id },
+      include: {
+        offering: {
+          include: {
+            course: { include: { department: { select: { id: true, facultyId: true } } } },
+            semester: { select: { id: true, name: true, status: true } },
+          },
+        },
+      },
+    });
+    return section ? toSectionFacts(section) : null;
+  }
+
+  /**
+   * Locks one section row until the transaction ends, so two people enrolling at the same moment
+   * cannot both take the last place.
+   */
+  async lockSection(tx: Prisma.TransactionClient, id: string): Promise<void> {
+    await tx.$queryRaw`SELECT 1 FROM "course_sections" WHERE "id" = ${id}::uuid FOR UPDATE`;
+  }
+
+  /** Sections for the given course codes, keyed by course code, year label, semester number and section code. */
+  async sectionsByCourseCodes(courseCodes: string[]) {
+    const sections = await this.prisma.courseSection.findMany({
+      where: { offering: { course: { code: { in: [...new Set(courseCodes)] } } } },
+      include: {
+        offering: {
+          include: {
+            course: { include: { department: { select: { id: true, facultyId: true } } } },
+            semester: {
+              select: {
+                id: true,
+                name: true,
+                status: true,
+                number: true,
+                academicYear: { select: { label: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    return new Map(
+      sections.map((s) => [
+        sectionKey(
+          s.offering.course.code,
+          s.offering.semester.academicYear.label,
+          s.offering.semester.number,
+          s.code,
+        ),
+        toSectionFacts(s),
+      ]),
+    );
+  }
+
+  async sectionSummaries(ids: string[]) {
+    const sections = await this.prisma.courseSection.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      include: {
+        offering: {
+          include: {
+            course: { include: { department: { select: { id: true, facultyId: true } } } },
+            semester: { select: { id: true, name: true, status: true } },
+          },
+        },
+      },
+    });
+    return new Map(sections.map((s) => [s.id, toSectionFacts(s)]));
+  }
+
   private async assertHints(programmeId?: string, levelId?: string) {
     if (programmeId) {
       const programme = await this.prisma.programme.findUnique({ where: { id: programmeId } });
@@ -326,3 +402,37 @@ export class CoursesService {
 }
 
 export { sectionInclude };
+
+export const sectionKey = (
+  courseCode: string,
+  yearLabel: string,
+  semesterNumber: number,
+  sectionCode: string,
+) => [courseCode, yearLabel, semesterNumber, sectionCode].join('|');
+
+type SectionWithOffering = Prisma.CourseSectionGetPayload<{
+  include: {
+    offering: {
+      include: {
+        course: { include: { department: { select: { id: true; facultyId: true } } } };
+        semester: { select: { id: true; name: true; status: true } };
+      };
+    };
+  };
+}>;
+
+/** A section's facts as other modules see them. */
+function toSectionFacts(s: SectionWithOffering) {
+  return {
+    id: s.id,
+    code: s.code,
+    isActive: s.isActive,
+    capacity: s.capacity,
+    offeringId: s.offeringId,
+    offeringStatus: s.offering.status,
+    course: { id: s.offering.course.id, code: s.offering.course.code, title: s.offering.course.title },
+    department: s.offering.course.department,
+    semester: s.offering.semester,
+  };
+}
+export type SectionFacts = ReturnType<typeof toSectionFacts>;

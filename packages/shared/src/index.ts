@@ -7,3 +7,4 @@ export * from './places.js';
 export * from './courses.js';
 export * from './students.js';
 export * from './imports.js';
+export * from './enrollments.js';

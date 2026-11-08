@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 2, academic management. Steps 1–5 are done; step 6 (enrolments and course reps) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 2, academic management. Steps 1–6 are done; step 7 (dashboard screens, e2e tests and the Phase 2 exit check) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -84,6 +84,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-08 | D-06 | Activation link to university email. Open question: does every student have one? If not, SMS codes are the fallback. | Product owner |
 | 2026-11-08 | D-07 | Ask Knutsford IT about Microsoft 365 / Google accounts; design leaves room for SSO | Product owner |
 | 2026-11-08 | D-14 (part) | Student IDs are 8 digits; staff-number format still open | Product owner |
+| 2026-11-08 | D-12 | Course reps: an Administrator appoints (within scope); a lecturer of the section may nominate for approval | Product owner (accepted the proposed default) |
 | 2026-11-08 | D-16 (part) | Development and CI file storage: SeaweedFS (S3-compatible, already in Docker). Production storage host still open; switching needs settings only. | Product owner |
 
 ## Session log
@@ -561,7 +562,7 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 | 3 | Courses, offerings, sections; lecturer profiles and assignments | Done (2026-11-08) |
 | 4 | Student registration (Registrar); faculty- and department-scoped administrator grants | Done (2026-11-08) |
 | 5 | Bulk student import (CSV/XLSX): templates, validation, preview, confirm, error report, history | Done (2026-11-08), with file storage and profile photos |
-| 6 | Enrolments and course-rep assignments | Not started |
+| 6 | Enrolments and course-rep assignments | Done (2026-11-08) |
 | 7 | Dashboard screens, end-to-end tests, Phase 2 exit check | Not started |
 
 ### 2026-11-08 — Phase 2, step 1: academic structure
@@ -753,3 +754,42 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
   - Clean-clone rehearsal of every CI step: all passed (API 168, e2e 1, audit clean).
   - GitHub run 42530609122 on `4b5eaa9`: **failure**. The new step that starts storage had literal `\n` text where line breaks belonged (a scripted edit went wrong), so `docker run` stopped with exit code 125. The rehearsal could not catch it because it runs CI's commands from a script, not from the workflow file.
   - Fixed in `ci.yml`: real line breaks and a sturdier readiness check. GitHub run 42531516222: **success**.
+
+### 2026-11-08 — Phase 2, step 6: enrolments and course reps
+
+- **Decision D-12:** the product owner accepted the proposed default. An Administrator appoints course reps, within their faculty or department scope. A lecturer of the section may nominate a student for an Administrator to approve or reject.
+- **Built:**
+  - **Enrolments** (Registrar or Super Admin):
+    - Enrol one student in one section. The student must be ACTIVE; the section must be active and its offering and semester not closed.
+    - A student holds at most one active enrolment per course offering, so they cannot sit in two sections of the same course.
+    - **Section capacity cannot be exceeded,** even when two people enrol at the same moment. The section's database row is locked while places are counted. A test sends two requests at once for the last place: exactly one succeeds. With the lock removed, that test failed 3 times out of 3, so it really checks this.
+    - Dropping or withdrawing needs a reason and keeps the record; the student can be enrolled again later.
+  - **Rosters:** a section's student list, for enrolment staff and for the lecturers who teach that section only. Students see their own enrolments.
+  - **Bulk enrolment** through the same import pipeline as students. Template, preview, error report and all-or-nothing confirm. It also checks section capacity in file order, and holds back a student listed twice for one course.
+  - **Imports now have one address per type:** `/imports/students` and `/imports/enrollments`, each guarded by its own permission (`students.import`, `enrollments.manage`). A batch can only be reached through its own type's address. The re-send-emails route exists only for student imports.
+  - **Course reps:**
+    - appoint, nominate, approve, reject, end;
+    - a rep must be enrolled in the section;
+    - one open nomination or appointment per student and section;
+    - ending a student's enrolment automatically ends their rep role there, with the reason recorded;
+    - a rep role counts only while its semester is open.
+  - Every change is audited.
+  - **Module boundaries:** enrolments and course reps read students, sections and lecturer assignments only through the services that own them. New read methods were added for this: `StudentsService.summaries`, `CoursesService.sectionFacts`, `LecturersService.teaches`, and others.
+- **Files:**
+  - New: `apps/api/src/modules/enrollments/*` (service, course-reps service, import handler, controller, module), `apps/api/src/modules/imports/import-handler.ts`, `packages/shared/src/enrollments.ts`, `apps/api/test/enrollments.test.ts`, migration `20261108230000_enrollments_and_course_reps`.
+  - Changed: `imports.{service,controller,module}.ts` (one pipeline for every import type), `students/student-import.service.ts` (now an import handler), `students.service.ts`, `courses.service.ts`, `lecturers.service.ts` (owner read methods), `schema.prisma`, `app.module.ts`, `test/{fixtures,imports.test}.ts`, `packages/shared/src/{imports,index}.ts`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA, KNOWN_LIMITATIONS (34–36).
+- **Database changes:**
+  - Tables `course_enrollments`, `course_rep_assignments`; enums `EnrollmentStatus`, `CourseRepStatus`; import type `ENROLLMENTS`.
+  - Two partial unique indexes and two completeness checks (see DATABASE_SCHEMA).
+  - Drift check: no difference.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **179** (11 new), mobile 9, web 8, so **209 passed**. Scenario 24 picked up the 21 new routes (13 enrolment and course-rep, 8 enrolment-import) and the re-addressed student-import routes automatically.
+- **Known limitations:**
+  - Moving a student to another section is "end, then enrol".
+  - Reps keep only the Student role until rep tools exist (Phase 3).
+  - **I found one breach of the module rule in my own earlier code:** steps 4–5 read academic and account tables directly from the students module. It is listed as KNOWN_LIMITATIONS 36, to be fixed in step 7.
+- **Next step:** Phase 2, step 7:
+  - Registrar and Administrator dashboard screens for students, imports, enrolments and course reps;
+  - the sign-in label "Email or Student ID";
+  - moving the step-4/5 lookups behind the owning services;
+  - Playwright end-to-end tests and the Phase 2 exit check.

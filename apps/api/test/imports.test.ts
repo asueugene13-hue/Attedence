@@ -97,7 +97,7 @@ beforeEach(async () => {
 });
 
 const upload = (bytes: Buffer, name = 'students.csv', auth = registrar) =>
-  http.post('/api/v1/imports').set(auth).attach('file', bytes, name);
+  http.post('/api/v1/imports/students').set(auth).attach('file', bytes, name);
 const get = (path: string) => http.get(`/api/v1${path}`).set(registrar);
 const post = (path: string, body: object = {}) => http.post(`/api/v1${path}`).set(registrar).send(body);
 
@@ -109,13 +109,13 @@ async function emailsSettled(id: string) {
 
 describe('templates', () => {
   it('downloads the student template as CSV and as Excel', async () => {
-    const asCsv = await get('/imports/templates/students?format=csv').expect(200);
+    const asCsv = await get('/imports/students/template?format=csv').expect(200);
     expect(asCsv.headers['content-disposition']).toContain('students-import-template.csv');
     expect(asCsv.text.trim()).toBe(HEADER);
-    const asXlsx = await get('/imports/templates/students?format=xlsx').responseType('blob').expect(200);
+    const asXlsx = await get('/imports/students/template?format=xlsx').responseType('blob').expect(200);
     const read = await readRows(asXlsx.body as Buffer, 'xlsx');
     expect(read.headers.join(',')).toBe(HEADER);
-    await get('/imports/templates/lecturers').expect(400);
+    await get('/imports/lecturers/template').expect(404);
   });
 });
 
@@ -155,7 +155,7 @@ describe('uploading and checking a file', () => {
     });
     expect(await prisma.studentProfile.count()).toBe(1);
 
-    const invalid = (await get(`/imports/${res.body.id}/rows?status=INVALID`).expect(200)).body.data;
+    const invalid = (await get(`/imports/students/${res.body.id}/rows?status=INVALID`).expect(200)).body.data;
     const codes = Object.fromEntries(
       invalid.map((r: { rowNumber: number; errors: { code: string }[] }) => [
         r.rowNumber,
@@ -168,12 +168,14 @@ describe('uploading and checking a file', () => {
       8: ['INVALID_VALUE'],
       10: ['UNKNOWN_SEMESTER'],
     });
-    const dups = (await get(`/imports/${res.body.id}/rows?status=DUPLICATE_IN_FILE`).expect(200)).body.data;
+    const dups = (await get(`/imports/students/${res.body.id}/rows?status=DUPLICATE_IN_FILE`).expect(200))
+      .body.data;
     expect(dups.map((r: { rowNumber: number }) => r.rowNumber)).toEqual([5, 6]);
-    const existing = (await get(`/imports/${res.body.id}/rows?status=DUPLICATE_EXISTING`).expect(200)).body
-      .data;
+    const existing = (
+      await get(`/imports/students/${res.body.id}/rows?status=DUPLICATE_EXISTING`).expect(200)
+    ).body.data;
     expect(existing[0]).toMatchObject({ rowNumber: 7, errors: [{ code: 'STUDENT_NUMBER_IN_USE' }] });
-    const page = (await get(`/imports/${res.body.id}/rows?limit=3`).expect(200)).body;
+    const page = (await get(`/imports/students/${res.body.id}/rows?limit=3`).expect(200)).body;
     expect(page.data).toHaveLength(3);
     expect(page.nextAfter).toBe(4);
   });
@@ -191,7 +193,7 @@ describe('uploading and checking a file', () => {
     );
     expect((await upload(many).expect(400)).body.code).toBe('TOO_MANY_ROWS');
     await upload(Buffer.alloc(5 * 1024 * 1024 + 1, 0x61)).expect(413);
-    await http.post('/api/v1/imports').set(registrar).expect(400);
+    await http.post('/api/v1/imports/students').set(registrar).expect(400);
     expect(await prisma.importBatch.count()).toBe(0);
   });
 
@@ -214,7 +216,7 @@ describe('uploading and checking a file', () => {
     ]).toBuffer();
     const res = await upload(sheet, 'students.xlsx').expect(201);
     expect(res.body).toMatchObject({ format: 'XLSX', validRows: 2, invalidRows: 0 });
-    await post(`/imports/${res.body.id}/confirm`).expect(200);
+    await post(`/imports/students/${res.body.id}/confirm`).expect(200);
     await emailsSettled(res.body.id);
     const students = await prisma.studentProfile.findMany({
       include: { user: true },
@@ -236,10 +238,10 @@ describe('confirming', () => {
         row('1', 'Bad', 'bad@example.test'),
       ),
     ).expect(201);
-    const done = (await post(`/imports/${res.body.id}/confirm`).expect(200)).body;
+    const done = (await post(`/imports/students/${res.body.id}/confirm`).expect(200)).body;
     expect(done).toMatchObject({ status: 'COMPLETED', importedRows: 2, decidedById: registrarId });
     await emailsSettled(res.body.id);
-    expect((await get(`/imports/${res.body.id}`).expect(200)).body.activationEmails).toEqual({
+    expect((await get(`/imports/students/${res.body.id}`).expect(200)).body.activationEmails).toEqual({
       pending: 0,
       sent: 2,
       failed: 0,
@@ -249,8 +251,10 @@ describe('confirming', () => {
     expect(audits).toHaveLength(2);
     expect(audits[0]!.after).toMatchObject({ importBatchId: res.body.id });
     expect(await prisma.auditLog.count({ where: { action: 'imports.confirmed' } })).toBe(1);
-    expect((await post(`/imports/${res.body.id}/confirm`).expect(409)).body.code).toBe('NOT_PENDING');
-    expect((await post(`/imports/${res.body.id}/cancel`).expect(409)).body.code).toBe('NOT_PENDING');
+    expect((await post(`/imports/students/${res.body.id}/confirm`).expect(409)).body.code).toBe(
+      'NOT_PENDING',
+    );
+    expect((await post(`/imports/students/${res.body.id}/cancel`).expect(409)).body.code).toBe('NOT_PENDING');
   });
 
   it('re-checks at confirmation, so a student registered meanwhile is not created twice', async () => {
@@ -268,9 +272,9 @@ describe('confirming', () => {
       academicYearId: (await prisma.academicYear.findFirstOrThrow()).id,
       semesterId: (await prisma.semester.findFirstOrThrow()).id,
     }).expect(201);
-    const done = (await post(`/imports/${res.body.id}/confirm`).expect(200)).body;
+    const done = (await post(`/imports/students/${res.body.id}/confirm`).expect(200)).body;
     expect(done).toMatchObject({ importedRows: 1, duplicateRows: 1 });
-    const rows = (await get(`/imports/${res.body.id}/rows`).expect(200)).body.data;
+    const rows = (await get(`/imports/students/${res.body.id}/rows`).expect(200)).body.data;
     expect(rows.map((r: { status: string }) => r.status)).toEqual(['IMPORTED', 'DUPLICATE_EXISTING']);
     expect(await prisma.studentProfile.count()).toBe(2);
   });
@@ -278,17 +282,17 @@ describe('confirming', () => {
   it('records failed activation emails and sends them again on request', async () => {
     mailFails = true;
     const res = await upload(csv(row('99000001', 'Valid One', 'one@example.test'))).expect(201);
-    await post(`/imports/${res.body.id}/confirm`).expect(200);
+    await post(`/imports/students/${res.body.id}/confirm`).expect(200);
     await emailsSettled(res.body.id);
-    expect((await get(`/imports/${res.body.id}`).expect(200)).body.activationEmails).toEqual({
+    expect((await get(`/imports/students/${res.body.id}`).expect(200)).body.activationEmails).toEqual({
       pending: 0,
       sent: 0,
       failed: 1,
     });
     mailFails = false;
-    await post(`/imports/${res.body.id}/activation-emails`).expect(200);
+    await post(`/imports/students/${res.body.id}/activation-emails`).expect(200);
     await emailsSettled(res.body.id);
-    expect((await get(`/imports/${res.body.id}`).expect(200)).body.activationEmails).toEqual({
+    expect((await get(`/imports/students/${res.body.id}`).expect(200)).body.activationEmails).toEqual({
       pending: 0,
       sent: 1,
       failed: 0,
@@ -302,12 +306,14 @@ describe('confirming', () => {
       where: { id: res.body.id },
       include: { file: true },
     });
-    expect((await post(`/imports/${res.body.id}/cancel`).expect(200)).body.status).toBe('CANCELLED');
+    expect((await post(`/imports/students/${res.body.id}/cancel`).expect(200)).body.status).toBe('CANCELLED');
     expect((await prisma.fileObject.findUniqueOrThrow({ where: { id: batch.fileId } })).status).toBe(
       'REMOVED',
     );
     await expect(app.get(StorageService).get(batch.file.key)).rejects.toThrow();
-    expect((await post(`/imports/${res.body.id}/confirm`).expect(409)).body.code).toBe('NOT_PENDING');
+    expect((await post(`/imports/students/${res.body.id}/confirm`).expect(409)).body.code).toBe(
+      'NOT_PENDING',
+    );
     expect(await prisma.studentProfile.count()).toBe(0);
   });
 });
@@ -317,7 +323,7 @@ describe('error reports', () => {
     const res = await upload(
       csv(row('99000001', 'Valid One', 'one@example.test'), row('123', '=1+1', 'formula@example.test')),
     ).expect(201);
-    const report = await get(`/imports/${res.body.id}/error-report?format=csv`).expect(200);
+    const report = await get(`/imports/students/${res.body.id}/error-report?format=csv`).expect(200);
     const read = await readRows(Buffer.from(report.text), 'csv');
     expect(read.headers.slice(-2)).toEqual(['row_number', 'problems']);
     expect(read.rows).toHaveLength(1);
@@ -333,6 +339,6 @@ describe('access', () => {
   it('is limited to staff with the import permission', async () => {
     const { auth } = await signInAs(app, prisma, 'lecturer@example.test', ['LECTURER']);
     await upload(csv(row('99000001', 'Valid One', 'one@example.test')), 'students.csv', auth).expect(403);
-    await http.get('/api/v1/imports').set(auth).expect(403);
+    await http.get('/api/v1/imports/students').set(auth).expect(403);
   });
 });

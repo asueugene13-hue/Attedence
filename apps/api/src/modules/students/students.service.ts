@@ -129,6 +129,48 @@ export class StudentsService {
     };
   }
 
+  /**
+   * The few facts other modules (enrolments, course reps) need about students, so they never read
+   * student tables themselves.
+   */
+  async summaries(ids: string[]) {
+    const rows = await this.prisma.studentProfile.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      include: {
+        user: { select: { fullName: true } },
+        programme: { select: { code: true, name: true } },
+        level: { select: { code: true, name: true } },
+      },
+    });
+    return new Map(
+      rows.map((s) => [
+        s.id,
+        {
+          id: s.id,
+          userId: s.userId,
+          studentNumber: s.studentNumber,
+          fullName: s.user.fullName,
+          status: s.status,
+          programme: s.programme,
+          level: s.level,
+        },
+      ]),
+    );
+  }
+
+  async byStudentNumbers(numbers: string[]) {
+    const rows = await this.prisma.studentProfile.findMany({
+      where: { studentNumber: { in: [...new Set(numbers)] } },
+      select: { id: true, studentNumber: true, status: true },
+    });
+    return new Map(rows.map((s) => [s.studentNumber, s]));
+  }
+
+  async idForUser(userId: string): Promise<string | null> {
+    const row = await this.prisma.studentProfile.findUnique({ where: { userId }, select: { id: true } });
+    return row?.id ?? null;
+  }
+
   async get(id: string) {
     const row = await this.prisma.studentProfile.findUnique({ where: { id }, include: studentInclude });
     if (!row) throw notFound();

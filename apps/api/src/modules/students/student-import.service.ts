@@ -1,18 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import { STUDENT_IMPORT_COLUMNS, StudentImportRowSchema, type StudentImportColumn } from '@attendsure/shared';
+import { STUDENT_IMPORT_COLUMNS, StudentImportRowSchema } from '@attendsure/shared';
 import type { RequestContext } from '../../common/request-context.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
+import {
+  basicRowProblems,
+  type CheckedRow,
+  type CheckedStatus,
+  type ImportHandler,
+  markDuplicatesInFile,
+  problem,
+  type SheetValues,
+} from '../imports/import-handler.js';
 import { StudentsService } from './students.service.js';
-
-export interface RowProblem {
-  column: string | null;
-  code: string;
-  message: string;
-}
-
-export type CheckedStatus = 'VALID' | 'INVALID' | 'DUPLICATE_IN_FILE' | 'DUPLICATE_EXISTING';
 
 export interface StudentImportInput {
   studentNumber: string;
@@ -28,16 +29,6 @@ export interface StudentImportInput {
   existingAccount: boolean;
 }
 
-export interface CheckedRow {
-  rowNumber: number;
-  status: CheckedStatus;
-  normalized: StudentImportInput | null;
-  errors: RowProblem[];
-}
-
-/** Columns a re-uploaded error report carries in addition to the template's. */
-export const REPORT_COLUMNS = ['row_number', 'problems'] as const;
-
 const CHUNK = 1000;
 const chunks = <T>(items: T[]) =>
   Array.from({ length: Math.ceil(items.length / CHUNK) }, (_, i) => items.slice(i * CHUNK, (i + 1) * CHUNK));
@@ -47,25 +38,23 @@ const chunks = <T>(items: T[]) =>
  * staff entered in the academic structure. Nothing is written here; `importRows` saves confirmed rows.
  */
 @Injectable()
-export class StudentImportService {
+export class StudentImportService implements ImportHandler<StudentImportInput> {
+  readonly type = 'STUDENTS' as const;
+  readonly slug = 'students';
+  readonly permission = 'students.import' as const;
+  readonly columns = STUDENT_IMPORT_COLUMNS;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly students: StudentsService,
   ) {}
 
-  /** Column problems that make the whole file unusable: missing required columns or unknown ones. */
-  checkHeaders(headers: string[]): { missing: string[]; unknown: string[] } {
-    const known = new Set<string>([...STUDENT_IMPORT_COLUMNS.map((c) => c.key), ...REPORT_COLUMNS]);
-    return {
-      missing: STUDENT_IMPORT_COLUMNS.filter((c) => c.required && !headers.includes(c.key)).map((c) => c.key),
-      unknown: headers.filter((h) => h !== '' && !known.has(h)),
-    };
-  }
-
-  async check(rows: { rowNumber: number; values: Record<string, string> }[]): Promise<CheckedRow[]> {
+  async check(rows: SheetValues[]): Promise<CheckedRow<StudentImportInput>[]> {
     const lookups = await this.loadLookups();
     const parsed = rows.map((row) => this.checkRow(row, lookups));
-    this.markDuplicatesInFile(parsed);
+    // Every row sharing a Student ID or email with another row is held back.
+    markDuplicatesInFile(parsed, (r) => r.studentNumber, 'student_number', 'student_number');
+    markDuplicatesInFile(parsed, (r) => r.email, 'email', 'email');
     await this.markExisting(parsed);
     return parsed.map(({ rowNumber, status, normalized, errors }) => ({
       rowNumber,
@@ -83,13 +72,13 @@ export class StudentImportService {
     batchId: string,
     context: RequestContext,
   ) {
-    const created: { rowNumber: number; profileId: string; newAccount: boolean }[] = [];
+    const created: { rowNumber: number; entityId: string; needsActivationEmail: boolean }[] = [];
     for (const { rowNumber, input } of rows) {
       const { profileId, newAccount } = await this.students.registerInTx(tx, actor, input, context, {
         importBatchId: batchId,
         importRowNumber: rowNumber,
       });
-      created.push({ rowNumber, profileId, newAccount });
+      created.push({ rowNumber, entityId: profileId, needsActivationEmail: newAccount });
     }
     return created;
   }
@@ -116,28 +105,14 @@ export class StudentImportService {
     };
   }
 
-  private checkRow(
-    row: { rowNumber: number; values: Record<string, string> },
-    lookups: Awaited<ReturnType<StudentImportService['loadLookups']>>,
-  ) {
-    const errors: RowProblem[] = [];
-    const blank = new Set<StudentImportColumn>();
-    for (const column of STUDENT_IMPORT_COLUMNS) {
-      if (column.required && (row.values[column.key] ?? '').trim() === '') {
-        blank.add(column.key);
-        errors.push({ column: column.key, code: 'REQUIRED', message: `${column.key} is required` });
-      }
-    }
+  private checkRow(row: SheetValues, lookups: Awaited<ReturnType<StudentImportService['loadLookups']>>) {
     const input = Object.fromEntries(STUDENT_IMPORT_COLUMNS.map((c) => [c.key, row.values[c.key] ?? '']));
     const result = StudentImportRowSchema.safeParse(input);
-    if (!result.success) {
-      for (const issue of result.error.issues) {
-        const column = String(issue.path[0] ?? '') as StudentImportColumn;
-        if (blank.has(column)) continue;
-        if (errors.some((e) => e.column === column)) continue;
-        errors.push({ column, code: 'INVALID_VALUE', message: `${column} ${issue.message}` });
-      }
-    }
+    const errors = basicRowProblems(
+      STUDENT_IMPORT_COLUMNS,
+      row.values,
+      result.success ? [] : result.error.issues,
+    );
     let normalized: StudentImportInput | null = null;
     if (result.success) {
       const v = result.data;
@@ -198,28 +173,8 @@ export class StudentImportService {
     };
   }
 
-  /** Every row sharing a Student ID or email with another row is held back: it is unclear which one is right. */
-  private markDuplicatesInFile(rows: CheckedRow[]) {
-    for (const field of ['studentNumber', 'email'] as const) {
-      const seen = new Map<string, number[]>();
-      for (const row of rows) {
-        if (!row.normalized) continue;
-        const key = row.normalized[field];
-        seen.set(key, [...(seen.get(key) ?? []), row.rowNumber]);
-      }
-      for (const row of rows) {
-        if (!row.normalized) continue;
-        const others = (seen.get(row.normalized[field]) ?? []).filter((n) => n !== row.rowNumber);
-        if (others.length === 0) continue;
-        row.status = 'DUPLICATE_IN_FILE';
-        const column = field === 'studentNumber' ? 'student_number' : 'email';
-        row.errors.push(problem(column, 'DUPLICATE_IN_FILE', `Same ${column} as row ${others.join(', ')}.`));
-      }
-    }
-  }
-
   /** Rows whose Student ID or email already belongs to a student, or whose account is deactivated. */
-  private async markExisting(rows: CheckedRow[]) {
+  private async markExisting(rows: CheckedRow<StudentImportInput>[]) {
     const candidates = rows.filter((r) => r.status === 'VALID' && r.normalized);
     const numbers = new Set<string>();
     const accounts = new Map<string, { isStudent: boolean; deactivated: boolean }>();
@@ -260,5 +215,3 @@ export class StudentImportService {
     }
   }
 }
-
-const problem = (column: string, code: string, message: string): RowProblem => ({ column, code, message });

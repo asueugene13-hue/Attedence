@@ -87,26 +87,31 @@ model User {
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  roles                     UserRole[]           @relation("UserRoleHolder")
-  rolesGranted              UserRole[]           @relation("UserRoleGrantedBy")
-  rolesRevoked              UserRole[]           @relation("UserRoleRevokedBy")
+  roles                     UserRole[]            @relation("UserRoleHolder")
+  rolesGranted              UserRole[]            @relation("UserRoleGrantedBy")
+  rolesRevoked              UserRole[]            @relation("UserRoleRevokedBy")
   authSessions              AuthSession[]
   tokens                    UserToken[]
-  devices                   UserDevice[]         @relation("DeviceOwner")
-  devicesApproved           UserDevice[]         @relation("DeviceApprovedBy")
-  devicesRevoked            UserDevice[]         @relation("DeviceRevokedBy")
+  devices                   UserDevice[]          @relation("DeviceOwner")
+  devicesApproved           UserDevice[]          @relation("DeviceApprovedBy")
+  devicesRevoked            UserDevice[]          @relation("DeviceRevokedBy")
   auditLogs                 AuditLog[]
   recoveryCodes             MfaRecoveryCode[]
-  calendarExceptionsCreated CalendarException[]  @relation("CalendarExceptionCreatedBy")
+  calendarExceptionsCreated CalendarException[]   @relation("CalendarExceptionCreatedBy")
   lecturerProfile           LecturerProfile?
-  assignmentsMade           LecturerAssignment[] @relation("AssignmentAssignedBy")
-  assignmentsEnded          LecturerAssignment[] @relation("AssignmentEndedBy")
-  studentProfile            StudentProfile?      @relation("StudentUser")
-  studentsRegistered        StudentProfile[]     @relation("StudentRegisteredBy")
-  studentsVerified          StudentProfile[]     @relation("StudentVerifiedBy")
+  assignmentsMade           LecturerAssignment[]  @relation("AssignmentAssignedBy")
+  assignmentsEnded          LecturerAssignment[]  @relation("AssignmentEndedBy")
+  studentProfile            StudentProfile?       @relation("StudentUser")
+  studentsRegistered        StudentProfile[]      @relation("StudentRegisteredBy")
+  studentsVerified          StudentProfile[]      @relation("StudentVerifiedBy")
   filesUploaded             FileObject[]
-  importsUploaded           ImportBatch[]        @relation("ImportUploadedBy")
-  importsDecided            ImportBatch[]        @relation("ImportDecidedBy")
+  importsUploaded           ImportBatch[]         @relation("ImportUploadedBy")
+  importsDecided            ImportBatch[]         @relation("ImportDecidedBy")
+  enrollmentsCreated        CourseEnrollment[]    @relation("EnrollmentCreatedBy")
+  enrollmentsEnded          CourseEnrollment[]    @relation("EnrollmentEndedBy")
+  repsNominated             CourseRepAssignment[] @relation("RepNominatedBy")
+  repsAssigned              CourseRepAssignment[] @relation("RepAssignedBy")
+  repsEnded                 CourseRepAssignment[] @relation("RepEndedBy")
 
   @@map("users")
 }
@@ -547,9 +552,10 @@ model CourseOffering {
   createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  course   Course          @relation(fields: [courseId], references: [id])
-  semester Semester        @relation(fields: [semesterId], references: [id])
-  sections CourseSection[]
+  course            Course             @relation(fields: [courseId], references: [id])
+  semester          Semester           @relation(fields: [semesterId], references: [id])
+  sections          CourseSection[]
+  courseEnrollments CourseEnrollment[]
 
   @@unique([courseId, semesterId])
   @@index([semesterId])
@@ -569,10 +575,12 @@ model CourseSection {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  offering    CourseOffering       @relation(fields: [offeringId], references: [id])
-  programme   Programme?           @relation(fields: [programmeId], references: [id], onDelete: Restrict)
-  level       AcademicLevel?       @relation(fields: [levelId], references: [id], onDelete: Restrict)
-  assignments LecturerAssignment[]
+  offering             CourseOffering        @relation(fields: [offeringId], references: [id])
+  programme            Programme?            @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  level                AcademicLevel?        @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  assignments          LecturerAssignment[]
+  courseEnrollments    CourseEnrollment[]
+  courseRepAssignments CourseRepAssignment[]
 
   @@unique([offeringId, code])
   @@map("course_sections")
@@ -650,14 +658,16 @@ model StudentProfile {
   createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user                User          @relation("StudentUser", fields: [userId], references: [id])
-  programme           Programme     @relation(fields: [programmeId], references: [id])
-  level               AcademicLevel @relation(fields: [levelId], references: [id])
-  currentAcademicYear AcademicYear  @relation(fields: [currentAcademicYearId], references: [id])
-  currentSemester     Semester      @relation(fields: [currentSemesterId], references: [id])
-  registeredBy        User          @relation("StudentRegisteredBy", fields: [registeredById], references: [id])
-  verifiedBy          User?         @relation("StudentVerifiedBy", fields: [verifiedById], references: [id], onDelete: Restrict)
-  photo               FileObject?   @relation(fields: [photoFileId], references: [id], onDelete: Restrict)
+  user                 User                  @relation("StudentUser", fields: [userId], references: [id])
+  programme            Programme             @relation(fields: [programmeId], references: [id])
+  level                AcademicLevel         @relation(fields: [levelId], references: [id])
+  currentAcademicYear  AcademicYear          @relation(fields: [currentAcademicYearId], references: [id])
+  currentSemester      Semester              @relation(fields: [currentSemesterId], references: [id])
+  registeredBy         User                  @relation("StudentRegisteredBy", fields: [registeredById], references: [id])
+  verifiedBy           User?                 @relation("StudentVerifiedBy", fields: [verifiedById], references: [id], onDelete: Restrict)
+  photo                FileObject?           @relation(fields: [photoFileId], references: [id], onDelete: Restrict)
+  courseEnrollments    CourseEnrollment[]
+  courseRepAssignments CourseRepAssignment[]
 
   @@index([programmeId, levelId])
   @@index([status])
@@ -702,6 +712,7 @@ model FileObject {
 
 enum ImportType {
   STUDENTS
+  ENROLLMENTS
 }
 
 enum ImportFormat {
@@ -749,10 +760,11 @@ model ImportBatch {
   completedAt   DateTime?    @map("completed_at") @db.Timestamptz(3)
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  file       FileObject  @relation(fields: [fileId], references: [id])
-  uploadedBy User        @relation("ImportUploadedBy", fields: [uploadedById], references: [id])
-  decidedBy  User?       @relation("ImportDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
-  rows       ImportRow[]
+  file              FileObject         @relation(fields: [fileId], references: [id])
+  uploadedBy        User               @relation("ImportUploadedBy", fields: [uploadedById], references: [id])
+  decidedBy         User?              @relation("ImportDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+  rows              ImportRow[]
+  courseEnrollments CourseEnrollment[]
 
   @@index([type, createdAt])
   @@map("import_batches")
@@ -777,4 +789,78 @@ model ImportRow {
   @@unique([batchId, rowNumber])
   @@index([batchId, status])
   @@map("import_rows")
+}
+
+// ───────────────────────── Enrolments and course reps (Phase 2) ─────────────────────────
+
+enum EnrollmentStatus {
+  ENROLLED
+  DROPPED
+  WITHDRAWN
+}
+
+/// Partial unique index (SQL): one ENROLLED row per student and offering. Ended rows stay as history.
+model CourseEnrollment {
+  id            String           @id @default(uuid(7)) @db.Uuid
+  studentId     String           @map("student_id") @db.Uuid
+  /// Stored with the section so one student cannot hold two sections of one offering.
+  offeringId    String           @map("offering_id") @db.Uuid
+  sectionId     String           @map("section_id") @db.Uuid
+  status        EnrollmentStatus @default(ENROLLED)
+  /// Server time. Classes before this moment do not count for the student.
+  enrolledAt    DateTime         @default(now()) @map("enrolled_at") @db.Timestamptz(3)
+  endedAt       DateTime?        @map("ended_at") @db.Timestamptz(3)
+  endedById     String?          @map("ended_by_id") @db.Uuid
+  endReason     String?          @map("end_reason")
+  importBatchId String?          @map("import_batch_id") @db.Uuid
+  createdById   String           @map("created_by_id") @db.Uuid
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student     StudentProfile @relation(fields: [studentId], references: [id])
+  offering    CourseOffering @relation(fields: [offeringId], references: [id])
+  section     CourseSection  @relation(fields: [sectionId], references: [id])
+  importBatch ImportBatch?   @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
+  createdBy   User           @relation("EnrollmentCreatedBy", fields: [createdById], references: [id])
+  endedBy     User?          @relation("EnrollmentEndedBy", fields: [endedById], references: [id], onDelete: Restrict)
+
+  @@index([sectionId, status])
+  @@index([studentId, status])
+  @@map("course_enrollments")
+}
+
+/// NOMINATED by a lecturer, then ACTIVE once an administrator approves (or appoints directly), until ENDED.
+enum CourseRepStatus {
+  NOMINATED
+  ACTIVE
+  ENDED
+  REJECTED
+}
+
+/// Partial unique index (SQL): one open (NOMINATED or ACTIVE) assignment per student and section.
+model CourseRepAssignment {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  studentId      String          @map("student_id") @db.Uuid
+  /// The semester comes from section → offering → semester.
+  sectionId      String          @map("section_id") @db.Uuid
+  status         CourseRepStatus
+  nominatedById  String?         @map("nominated_by_id") @db.Uuid
+  nominationNote String?         @map("nomination_note")
+  assignedById   String?         @map("assigned_by_id") @db.Uuid
+  startsAt       DateTime?       @map("starts_at") @db.Timestamptz(3)
+  endedAt        DateTime?       @map("ended_at") @db.Timestamptz(3)
+  endedById      String?         @map("ended_by_id") @db.Uuid
+  endReason      String?         @map("end_reason")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student     StudentProfile @relation(fields: [studentId], references: [id])
+  section     CourseSection  @relation(fields: [sectionId], references: [id])
+  nominatedBy User?          @relation("RepNominatedBy", fields: [nominatedById], references: [id], onDelete: Restrict)
+  assignedBy  User?          @relation("RepAssignedBy", fields: [assignedById], references: [id], onDelete: Restrict)
+  endedBy     User?          @relation("RepEndedBy", fields: [endedById], references: [id], onDelete: Restrict)
+
+  @@index([sectionId, status])
+  @@index([studentId, status])
+  @@map("course_rep_assignments")
 }

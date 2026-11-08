@@ -1119,11 +1119,21 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | Row counts are never negative and never exceed the total | `import_batches_counts_valid` check |
 | Row numbers match the spreadsheet (header is row 1) and are unique per batch | `import_rows_row_number_valid` check, `@@unique([batchId, rowNumber])` |
 
+**Added in Phase 2, step 6** (migration `20261108230000_enrollments_and_course_reps`): tables `course_enrollments` and `course_rep_assignments` (named `CourseRepAssignment` in Prisma; one table holds nominations and appointments, told apart by `status`), and the import type `ENROLLMENTS`.
+
+| Rule | Enforced by |
+| --- | --- |
+| One active enrolment per student and offering; dropped and withdrawn rows stay as history | `course_enrollments_active_unique` partial unique index |
+| An ended enrolment records when, by whom and why; an active one has none of these | `course_enrollments_end_complete` check |
+| One open (nominated or active) rep assignment per student and section | `course_rep_assignments_open_unique` partial unique index |
+| A nomination names its nominator; an appointment names who appointed and from when; an ended or rejected one records when, by whom and why | `course_rep_assignments_state_complete` check |
+| A section never takes more students than its capacity, even with simultaneous requests | Service: the section row is locked (`SELECT … FOR UPDATE`) while counting and inserting |
+
 `npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.
 
 Rules that need data from several tables are checked in services inside the transaction:
 
-- A course rep must be enrolled in the section they represent.
+- A course rep must be enrolled in the section they represent (checked on appointment and approval; ending the enrolment ends the rep role).
 - A section's lecturer assignment must be within the offering's semester.
 - Publishing a timetable is blocked when two entries share a section, room or lecturer at overlapping times. It warns when students enrolled in both of two overlapping sections would clash.
 - A timetable entry's classroom must be active, and its sections must belong to offerings in the same semester.

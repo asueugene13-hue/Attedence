@@ -18,6 +18,7 @@ import { AuthorizationModule } from './modules/authorization/authorization.modul
 import { PermissionGuard } from './modules/authorization/permission.guard.js';
 import { CoursesModule } from './modules/courses/courses.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { EnrollmentsModule } from './modules/enrollments/enrollments.module.js';
 import { ImportsModule } from './modules/imports/imports.module.js';
 import { PlacesModule } from './modules/places/places.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
@@ -50,6 +51,7 @@ export const INFRASTRUCTURE_MODULES = [
     PlacesModule,
     CoursesModule,
     StudentsModule,
+    EnrollmentsModule,
     ImportsModule,
   ],
   providers: [
