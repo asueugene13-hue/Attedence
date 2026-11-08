@@ -87,16 +87,17 @@ model User {
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  roles           UserRole[]        @relation("UserRoleHolder")
-  rolesGranted    UserRole[]        @relation("UserRoleGrantedBy")
-  rolesRevoked    UserRole[]        @relation("UserRoleRevokedBy")
-  authSessions    AuthSession[]
-  tokens          UserToken[]
-  devices         UserDevice[]      @relation("DeviceOwner")
-  devicesApproved UserDevice[]      @relation("DeviceApprovedBy")
-  devicesRevoked  UserDevice[]      @relation("DeviceRevokedBy")
-  auditLogs       AuditLog[]
-  recoveryCodes   MfaRecoveryCode[]
+  roles                     UserRole[]          @relation("UserRoleHolder")
+  rolesGranted              UserRole[]          @relation("UserRoleGrantedBy")
+  rolesRevoked              UserRole[]          @relation("UserRoleRevokedBy")
+  authSessions              AuthSession[]
+  tokens                    UserToken[]
+  devices                   UserDevice[]        @relation("DeviceOwner")
+  devicesApproved           UserDevice[]        @relation("DeviceApprovedBy")
+  devicesRevoked            UserDevice[]        @relation("DeviceRevokedBy")
+  auditLogs                 AuditLog[]
+  recoveryCodes             MfaRecoveryCode[]
+  calendarExceptionsCreated CalendarException[] @relation("CalendarExceptionCreatedBy")
 
   @@map("users")
 }
@@ -297,4 +298,135 @@ model MfaRecoveryCode {
 
   @@index([userId])
   @@map("mfa_recovery_codes")
+}
+
+// ───────────────────────── Academic structure (Phase 2) ─────────────────────────
+// Everything here is entered by authorised staff; nothing about Knutsford is seeded or invented.
+// Records are deactivated, never deleted, so history keeps pointing at them.
+
+enum SemesterStatus {
+  PLANNED
+  ACTIVE
+  CLOSED
+}
+
+enum CalendarExceptionType {
+  PUBLIC_HOLIDAY
+  UNIVERSITY_CLOSURE
+  EXAM_PERIOD
+  OTHER
+}
+
+model Faculty {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  departments Department[]
+
+  @@map("faculties")
+}
+
+model Department {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  facultyId String   @map("faculty_id") @db.Uuid
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  faculty    Faculty     @relation(fields: [facultyId], references: [id])
+  programmes Programme[]
+
+  @@index([facultyId])
+  @@map("departments")
+}
+
+model Programme {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  departmentId  String   @map("department_id") @db.Uuid
+  code          String   @unique
+  name          String
+  /// e.g. the award name, as the university states it
+  qualification String?
+  durationYears Int?     @map("duration_years")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  department Department @relation(fields: [departmentId], references: [id])
+
+  @@index([departmentId])
+  @@map("programmes")
+}
+
+model AcademicLevel {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  /// As the university names its levels (entered by staff).
+  code      String   @unique
+  name      String
+  sortOrder Int      @unique @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("academic_levels")
+}
+
+/// Partial unique index (SQL): only one current year. Exclusion constraint (SQL): years never overlap.
+model AcademicYear {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  label     String   @unique
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  isCurrent Boolean  @default(false) @map("is_current")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  semesters Semester[]
+
+  @@map("academic_years")
+}
+
+/// Partial unique index (SQL): at most one ACTIVE semester. Exclusion constraint (SQL): semesters never overlap.
+model Semester {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  academicYearId String         @map("academic_year_id") @db.Uuid
+  number         Int
+  name           String
+  startDate      DateTime       @map("start_date") @db.Date
+  endDate        DateTime       @map("end_date") @db.Date
+  status         SemesterStatus @default(PLANNED)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  academicYear       AcademicYear        @relation(fields: [academicYearId], references: [id])
+  calendarExceptions CalendarException[]
+
+  @@unique([academicYearId, number])
+  @@map("semesters")
+}
+
+/// Holidays and closures: no class sessions are generated on these dates (Phase 3).
+model CalendarException {
+  id                String                @id @default(uuid(7)) @db.Uuid
+  semesterId        String?               @map("semester_id") @db.Uuid
+  type              CalendarExceptionType
+  name              String
+  startDate         DateTime              @map("start_date") @db.Date
+  endDate           DateTime              @map("end_date") @db.Date
+  suppressesClasses Boolean               @default(true) @map("suppresses_classes")
+  createdById       String                @map("created_by_id") @db.Uuid
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  semester  Semester? @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+  createdBy User      @relation("CalendarExceptionCreatedBy", fields: [createdById], references: [id])
+
+  @@index([startDate, endDate])
+  @@map("calendar_exceptions")
 }

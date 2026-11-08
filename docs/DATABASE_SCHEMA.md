@@ -1073,6 +1073,16 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | Protected permissions only on SUPER_ADMIN, and cannot be marked protected while another role holds them | `role_permissions_protected` and `permissions_protected_flag` triggers |
 | Optional links (revoker, approver, audit actor, device, rotated token) cannot vanish | `ON DELETE RESTRICT`, set explicitly because Prisma defaults optional links to `SET NULL` |
 
+**Added in Phase 2, step 1** (migration `20261108193558_academic_structure`):
+
+| Rule | Enforced by |
+| --- | --- |
+| Faculty, department, programme and level codes stored in capitals | `*_code_upper` checks |
+| Programme duration 1–10 years when given | `programmes_duration_positive` check |
+| Dates run forwards (years, semesters, calendar entries) | `*_dates` checks |
+| Academic years never overlap; semesters never overlap | `academic_years_no_overlap`, `semesters_no_overlap` exclusion constraints |
+| One current academic year; at most one active semester | `academic_years_one_current`, `semesters_one_active` partial unique indexes |
+
 `npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.
 
 Rules that need data from several tables are checked in services inside the transaction:

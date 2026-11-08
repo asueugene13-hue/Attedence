@@ -55,9 +55,10 @@ AttendSure exposes one versioned REST API at `/api/v1` and one Socket.IO namespa
 
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| GET · POST · PATCH | `/faculties`, `/departments`, `/programmes`, `/academic-levels` | SA (UA where configured); read: RG | Structure |
-| GET · POST · PATCH | `/academic-years`, `/semesters`, `/calendar-exceptions` | SA (UA where configured) | Periods and holidays |
-| POST | `/semesters/:id/activate` · `/semesters/:id/close` | SA | One active semester at a time |
+| GET · POST · PATCH | `/faculties`, `/departments`, `/programmes`, `/academic-levels` | Read: SA, UA, RG (`academic_structure.read`). Change: SA; UA where the Super Admin switches on `academic_structure.manage`, with faculties and levels needing university-wide scope and departments and programmes allowed inside the administrator's faculty or department. | Codes are stored in capitals and unique. `?includeInactive=true`, `?facultyId=`, `?departmentId=`. Deactivate with `PATCH { isActive: false }` (refused while active children exist); nothing is deleted. **Built.** |
+| GET · POST · PATCH | `/academic-years`, `/semesters` | Read: as above. Change: university-wide scope with `academic_periods.manage` | Dates are `YYYY-MM-DD`. Years and semesters cannot overlap; semesters stay inside their year; dates change only while a semester is planned. `POST /academic-years/:id/make-current`. **Built.** |
+| GET · POST | `/calendar-exceptions` (`?semesterId=&from=&to=`) · `POST /calendar-exceptions/:id/remove { reason }` | As above | Holidays, closures and exam periods; no classes are generated on them (Phase 3). Only entries that have not started can be removed. **Built.** |
+| POST | `/semesters/:id/activate` · `/semesters/:id/close` | University-wide scope | One active semester at a time; activating also makes its academic year current. **Built.** |
 | GET · POST · PATCH | `/courses`, `/course-offerings`, `/course-sections` | SA, UA | Courses and class groups |
 | POST · DELETE | `/course-sections/:id/lecturers` · `…/lecturers/:assignmentId` | SA, UA | Lecturer assignments |
 | POST · DELETE | `/course-sections/:id/course-reps` · `…/course-reps/:assignmentId` | SA, UA (LE may nominate) | Rep assignments |

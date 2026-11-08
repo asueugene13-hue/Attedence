@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 1, foundation, is complete and green in GitHub CI (run 42515039638, 2026-11-08). One item stays open: the native Android build, which needs JDK 17 and the Android SDK. Phase 2 (academic management) is next.
+**Current phase:** Phase 2, academic management. Step 1 (academic structure) is done; step 2 (places: campuses, buildings, classrooms) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -25,7 +25,7 @@ Read this first in every session, and update it after every implementation step.
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
 | 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Done; CI green 2026-11-08 (native mobile build still open) |
-| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Not started |
+| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | In progress (step 1 of 7 done) |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Not started |
@@ -547,3 +547,62 @@ Read this first in every session, and update it after every implementation step.
 - **How it was verified:** a fresh `git clone` in a scratch folder, `npm ci`, no `.env`, CI-style environment variables and separate databases (`attendsure_ci`, Redis database 3). Every CI step was run in CI's order: format, lint, typecheck, build, test, mobile bundle, migrate/seed/drift, Playwright e2e (1 passed), `npm audit --audit-level=high`. **All passed.**
 - **Lesson kept for future steps:** before reporting a step as done, rehearse CI from a clean clone, then check the actual GitHub run.
 - **GitHub result:** run 42515039638 on `15433f9`, **success**. Every step passed: install, format, lint, typecheck, build, test, mobile bundle, migrate/seed/drift, Playwright install, end-to-end test and the audit gate.
+
+## Phase 2: academic management
+
+Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed green).
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 1 | Academic structure: faculties, departments, programmes, levels, academic years, semesters, calendar exceptions | Done (2026-11-08) |
+| 2 | Places: campuses, buildings, classrooms (geofences for later) | Not started |
+| 3 | Courses, offerings, sections; lecturer profiles and assignments | Not started |
+| 4 | Student registration (Registrar); faculty- and department-scoped administrator grants | Not started |
+| 5 | Bulk student import (CSV/XLSX): templates, validation, preview, confirm, error report, history | Not started |
+| 6 | Enrolments and course-rep assignments | Not started |
+| 7 | Dashboard screens, end-to-end tests, Phase 2 exit check | Not started |
+
+### 2026-11-08 — Phase 2, step 1: academic structure
+
+- **Built:**
+  - Seven tables: `faculties`, `departments`, `programmes`, `academic_levels`, `academic_years`, `semesters`, `calendar_exceptions`. Nothing about Knutsford is seeded.
+  - 23 endpoints (see API_DOCUMENTATION, "Academic structure").
+  - **Access rules:**
+    - Reads need `academic_structure.read` (Super Admin, Administrator, Registrar).
+    - Faculties and levels need university-wide scope.
+    - Departments and programmes may be managed inside an administrator's faculty or department scope (`OUT_OF_SCOPE` otherwise).
+    - Years, semesters and calendar entries need university-wide scope and `academic_periods.manage`.
+  - **Records are deactivated, never deleted.** A parent with active children cannot be deactivated, and nothing can be added or reactivated under an inactive parent.
+  - **Semesters:**
+    - stay inside their year and never overlap;
+    - change dates only while planned;
+    - only one can be active, and activating one makes its year current;
+    - an active semester closes explicitly.
+  - **Calendar entries** stay inside their semester when one is given. Only entries that have not started (Accra date) can be removed, with a reason.
+  - Every change is audited with before and after.
+  - Database rule violations become clear 409 messages (`CODE_IN_USE`, `PERIOD_OVERLAP`, `ANOTHER_SEMESTER_ACTIVE`, and so on) through `common/db-errors.ts`.
+- **Files:**
+  - `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/20261108193558_academic_structure/`.
+  - `apps/api/src/modules/academic/*` (access, structure and periods services, controller, module), `apps/api/src/common/db-errors.ts`, `apps/api/src/app.module.ts`.
+  - `packages/shared/src/academic.ts`.
+  - `apps/api/test/{academic.test.ts, fixtures.ts}`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA.
+- **Database changes:**
+  - 7 tables.
+  - 9 check constraints: upper-case codes, programme duration, date order, semester number.
+  - 2 exclusion constraints: years and semesters never overlap.
+  - 2 partial unique indexes: one current year, one active semester.
+  - Drift check: no difference.
+- **Commands run:**
+  - `prisma migrate dev`, `db:drift`.
+  - A throwaway probe to see how Prisma reports an exclusion-constraint breach (`P2039`, with PostgreSQL code `23P01` inside); deleted after use.
+  - `tsc`, `vitest`, `npm run check`.
+  - A clean-clone CI rehearsal and the GitHub run (recorded below).
+- **Tests run:**
+  - `npm run check` exit 0: design-tokens 3, shared 10, API **125** (14 new), web 8, mobile 9, so **155 passed**.
+  - Scenario 24 now also covers the 23 new endpoints automatically.
+- **Known limitations:**
+  - A department cannot be moved to another faculty yet: deactivate it and create a new one. This keeps history simple; a move with audit trail can follow if needed.
+  - `user_roles.scope_id` is still not validated against real faculties or departments; that is step 4.
+  - There are no dashboard screens for these records yet; that is step 7.
+- **Next step:** Phase 2, step 2: campuses, buildings and classrooms.

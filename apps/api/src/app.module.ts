@@ -8,6 +8,7 @@ import { LoggingModule } from './infrastructure/logging/logging.module.js';
 import { MailModule } from './infrastructure/mail/mail.module.js';
 import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
 import { RedisModule } from './infrastructure/redis/redis.module.js';
+import { AcademicModule } from './modules/academic/academic.module.js';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module.js';
 import { AuditModule } from './modules/audit-logs/audit.module.js';
 import { AccessTokenGuard } from './modules/auth/access-token.guard.js';
@@ -38,6 +39,7 @@ export const INFRASTRUCTURE_MODULES = [
     UsersModule,
     RolesModule,
     AuditLogsModule,
+    AcademicModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },

@@ -7,6 +7,13 @@ import type { PrismaClient, UserStatus } from '../src/generated/prisma/client.js
 export const TEST_PASSWORD = 'river-mango-lantern-42';
 
 const TABLES = [
+  'calendar_exceptions',
+  'semesters',
+  'academic_years',
+  'programmes',
+  'departments',
+  'faculties',
+  'academic_levels',
   'audit_logs',
   'mfa_recovery_codes',
   'refresh_tokens',
@@ -59,11 +66,17 @@ export async function signInAs(
   prisma: PrismaClient,
   email: string,
   roles: RoleKey[],
-  options: { mfaVerified?: boolean } = {},
+  options: { mfaVerified?: boolean; scope?: { type: 'FACULTY' | 'DEPARTMENT'; id: string } } = {},
 ) {
   const { SessionService } = await import('../src/modules/auth/session.service.js');
   const { TokenService } = await import('../src/modules/auth/token.service.js');
   const user = await createUser(prisma, { email, roles });
+  if (options.scope) {
+    await prisma.userRole.updateMany({
+      where: { userId: user.id },
+      data: { scopeType: options.scope.type, scopeId: options.scope.id },
+    });
+  }
   const { session } = await app.get(SessionService).create({
     userId: user.id,
     client: 'WEB',
