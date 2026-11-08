@@ -706,3 +706,6 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
   - Students are registered one at a time until bulk import (step 5).
   - Staff-number format still open (D-14).
 - **Next step:** Phase 2, step 5: bulk import (CSV and Excel with validation preview and error report) and file storage, including student photos.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (API 155, e2e 1, audit clean).
+  - GitHub run 42526616492 on `f6b4dda`: **success**.
