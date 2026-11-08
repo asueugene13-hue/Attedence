@@ -16,6 +16,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 import { PermissionGuard } from './modules/authorization/permission.guard.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { PlacesModule } from './modules/places/places.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
@@ -40,6 +41,7 @@ export const INFRASTRUCTURE_MODULES = [
     RolesModule,
     AuditLogsModule,
     AcademicModule,
+    PlacesModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },

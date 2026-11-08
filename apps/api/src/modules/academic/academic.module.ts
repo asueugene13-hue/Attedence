@@ -7,6 +7,6 @@ import { AcademicStructureService } from './academic-structure.service.js';
 @Module({
   controllers: [AcademicController],
   providers: [AcademicAccessService, AcademicStructureService, AcademicPeriodsService],
-  exports: [AcademicStructureService, AcademicPeriodsService],
+  exports: [AcademicAccessService, AcademicStructureService, AcademicPeriodsService],
 })
 export class AcademicModule {}

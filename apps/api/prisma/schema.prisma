@@ -430,3 +430,60 @@ model CalendarException {
   @@index([startDate, endDate])
   @@map("calendar_exceptions")
 }
+
+// ───────────────────────── Places (Phase 2) ─────────────────────────
+// Geofences are a centre point and radius in metres, entered by staff from a site survey.
+// A building's geofence, when set, overrides its campus's for rooms in that building.
+
+model Campus {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  code            String   @unique
+  name            String
+  geofenceLat     Decimal? @map("geofence_lat") @db.Decimal(9, 6)
+  geofenceLng     Decimal? @map("geofence_lng") @db.Decimal(9, 6)
+  geofenceRadiusM Int?     @map("geofence_radius_m")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  buildings Building[]
+
+  @@map("campuses")
+}
+
+model Building {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  campusId        String   @map("campus_id") @db.Uuid
+  code            String
+  name            String
+  geofenceLat     Decimal? @map("geofence_lat") @db.Decimal(9, 6)
+  geofenceLng     Decimal? @map("geofence_lng") @db.Decimal(9, 6)
+  geofenceRadiusM Int?     @map("geofence_radius_m")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  campus     Campus      @relation(fields: [campusId], references: [id])
+  classrooms Classroom[]
+
+  @@unique([campusId, code])
+  @@map("buildings")
+}
+
+model Classroom {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  buildingId String   @map("building_id") @db.Uuid
+  code       String
+  name       String
+  /// As the building labels it, e.g. "Ground" or "2".
+  floor      String?
+  capacity   Int?
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  building Building @relation(fields: [buildingId], references: [id])
+
+  @@unique([buildingId, code])
+  @@map("classrooms")
+}

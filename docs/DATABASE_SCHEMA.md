@@ -1083,6 +1083,14 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | Academic years never overlap; semesters never overlap | `academic_years_no_overlap`, `semesters_no_overlap` exclusion constraints |
 | One current academic year; at most one active semester | `academic_years_one_current`, `semesters_one_active` partial unique indexes |
 
+**Added in Phase 2, step 2** (migration `20261108200223_places`):
+
+| Rule | Enforced by |
+| --- | --- |
+| Campus, building and classroom codes stored in capitals; unique within their parent | `*_code_upper` checks; `@@unique([campusId, code])`, `@@unique([buildingId, code])` |
+| A geofence is complete or absent, with real coordinates and a 20–5,000 m radius | `campuses_geofence_valid`, `buildings_geofence_valid` checks |
+| Classroom capacity 1–5,000 when given | `classrooms_capacity_positive` check |
+
 `npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.
 
 Rules that need data from several tables are checked in services inside the transaction:

@@ -38,6 +38,15 @@ const UNPREFIXED = new Set(['health/live', 'health/ready']);
 const SAMPLE_PARAMS: Record<string, string> = { key: 'REGISTRAR' };
 const SAMPLE_ID = '01960000-0000-7000-8000-0000000000aa';
 
+const SIGN_IN_ROLES = ROLE_KEYS.filter((r): r is RoleKey => r !== 'COURSE_REP');
+
+/** Whether a role's default grants include every permission a route requires. */
+function roleMayUse(role: RoleKey, route: RouteInfo): boolean {
+  const keys = route.rule?.kind === 'permissions' ? route.rule.keys : [];
+  const held = new Set<string>(DEFAULT_ROLE_PERMISSIONS[role]);
+  return keys.every((k) => held.has(k));
+}
+
 const fakeMail = { send: async (_m: MailMessage) => undefined, onModuleDestroy: () => undefined };
 let app: INestApplication;
 let prisma: PrismaService;
@@ -130,13 +139,15 @@ describe('scenario 24: unauthorised access is refused on every endpoint', () => 
       }
     }
     expect(failures).toEqual([]);
-    // Every protected route was tried by at least one role that may not use it.
-    expect([...checked].sort()).toEqual(protectedRoutes.map((r) => r.name).sort());
+    // Every protected route that some role may not use was tried by such a role. (A route whose
+    // permission every role holds, such as viewing rooms, still needs sign-in: see the 401 test.)
+    const restrictable = protectedRoutes.filter((r) => SIGN_IN_ROLES.some((role) => !roleMayUse(role, r)));
+    expect([...checked].sort()).toEqual(restrictable.map((r) => r.name).sort());
   });
 
   it('records every refusal in the audit log', async () => {
     const { auth, user } = await signInAs(app, prisma, 'student@example.test', ['STUDENT']);
-    const adminOnly = routes.filter((r) => r.rule?.kind === 'permissions');
+    const adminOnly = routes.filter((r) => r.rule?.kind === 'permissions' && !roleMayUse('STUDENT', r));
     for (const route of adminOnly) {
       await request(app.getHttpServer())[route.method](route.path).set(auth).send({}).expect(403);
     }

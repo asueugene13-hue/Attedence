@@ -85,7 +85,7 @@ AttendSure exposes one versioned REST API at `/api/v1` and one Socket.IO namespa
 
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| GET · POST · PATCH | `/campuses`, `/buildings`, `/classrooms` | SA, UA | Places and geofences |
+| GET · POST · PATCH | `/campuses`, `/buildings`, `/classrooms` | Read: every role (`timetables.read`; room names are not sensitive). Change: `classrooms.manage` with university-wide scope | Geofence `{ lat, lng, radiusM }` (20–5,000 m) on a campus or a building; `null` clears it. A building's geofence overrides its campus's. `GET /classrooms` returns each room's building, campus and effective geofence; filters `?campusId=&buildingId=&minCapacity=&includeInactive=`. Codes are unique within the parent. Deactivate, never delete. **Built.** |
 | GET · POST · PATCH | `/beacons` | SA (UA where configured) | Register and configure beacons |
 | GET | `/beacons/:id/health` | SA, UA; LE during own class | Health history |
 | POST | `/beacons/:id/calibration` · `/beacons/:id/retire` | SA | Record a site survey; retire |

@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 2, academic management. Step 1 (academic structure) is done; step 2 (places: campuses, buildings, classrooms) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 2, academic management. Steps 1–2 are done; step 3 (courses, offerings, sections, lecturers) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -25,7 +25,7 @@ Read this first in every session, and update it after every implementation step.
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
 | 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Done; CI green 2026-11-08 (native mobile build still open) |
-| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | In progress (step 1 of 7 done) |
+| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | In progress (steps 1–2 of 7 done) |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Not started |
@@ -555,7 +555,7 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 | Step | Scope | Status |
 | --- | --- | --- |
 | 1 | Academic structure: faculties, departments, programmes, levels, academic years, semesters, calendar exceptions | Done (2026-11-08) |
-| 2 | Places: campuses, buildings, classrooms (geofences for later) | Not started |
+| 2 | Places: campuses, buildings, classrooms (geofences for later) | Done (2026-11-08) |
 | 3 | Courses, offerings, sections; lecturer profiles and assignments | Not started |
 | 4 | Student registration (Registrar); faculty- and department-scoped administrator grants | Not started |
 | 5 | Bulk student import (CSV/XLSX): templates, validation, preview, confirm, error report, history | Not started |
@@ -609,3 +609,17 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed.
   - GitHub run 42517252531 on `89aaf7e`: **success**.
+
+### 2026-11-08 — Phase 2, step 2: places
+
+- **Built:** `campuses`, `buildings` and `classrooms`, with 9 endpoints (see API_DOCUMENTATION, "Places, beacons, devices").
+  - Every role may read places (`timetables.read`, because room names are not sensitive). Changes need `classrooms.manage` and university-wide scope, because rooms serve every faculty.
+  - Each campus or building can have a geofence (centre and radius in metres, from a site survey); a building's overrides its campus's. `GET /classrooms` returns each room's effective geofence, ready for the Phase 4 location check.
+  - Codes are capitalised and unique within their parent. Records are deactivated, never deleted, with the same parent/child rules as step 1. Every change is audited.
+- **Files:** `apps/api/prisma/schema.prisma`, `prisma/migrations/20261108200223_places/`, `apps/api/src/modules/places/*`, `apps/api/src/modules/academic/academic.module.ts` (exports the access service), `apps/api/src/app.module.ts`, `packages/shared/src/places.ts`, `apps/api/test/{places.test.ts, fixtures.ts, scenario-24-unauthorised-access.test.ts}`, docs (API_DOCUMENTATION, DATABASE_SCHEMA).
+- **Database changes:** 3 tables; checks for capitalised codes, complete and valid geofences (20–5,000 m), and positive capacity. Drift check: no difference.
+- **Interruption:** the first `npm run check` was stopped part-way at the product owner's request. Prettier had already reformatted files, which is harmless. No leftover processes were found, and the check was re-run from the start.
+- **Problem found and fixed:** the re-run failed 2 scenario-24 tests. Their own assumptions were wrong, not the security: they expected every permission-protected route to refuse students, but viewing rooms is deliberately allowed to every role. The test now checks refusals wherever some role lacks access, and relies on the 401 test for routes every role may use. A repeated mutation check (guard forced open) still makes it fail.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **133** (8 new), web 8, mobile 9, so **163 passed**.
+- **Known limitations:** no beacons yet (Phase 4); no map or site-survey tool, so coordinates are typed in; no dashboard screens yet (step 7).
+- **Next step:** Phase 2, step 3: courses, course offerings and sections; lecturer profiles; lecturer assignments.
