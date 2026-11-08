@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 1, foundation. All 9 steps are done. Two items stay open before Phase 1 can be signed off: the GitHub CI result, which the product owner must check because the repository is private, and the native Android build (JDK 17 and the Android SDK). Phase 2 needs product-owner approval.
+**Current phase:** Phase 1, foundation, is complete and green in GitHub CI (run 42515039638, 2026-11-08). One item stays open: the native Android build, which needs JDK 17 and the Android SDK. Phase 2 (academic management) is next.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -17,14 +17,14 @@ Read this first in every session, and update it after every implementation step.
 | 6 | Super Admin API: users, role grants, role permissions, audit-log search (settings moved to Phase 3, when first used) | Done (2026-11-08) |
 | 7 | Web shell: Next.js, design tokens, login, MFA, role-aware sidebar, Super Admin screens | Done (2026-11-08) |
 | 8 | Mobile shell: Expo development build, login, secure token storage, role-based navigation | Done except the native build (needs JDK 17 and the Android SDK) |
-| 9 | Phase 1 exit: auth and RBAC test suite green in CI; scenario 24 covered for every Phase 1 endpoint | Done locally; CI result to be confirmed |
+| 9 | Phase 1 exit: auth and RBAC test suite green in CI; scenario 24 covered for every Phase 1 endpoint | Done; CI green |
 
 ## Phase status
 
 | Phase | Scope | Exit criteria | Status |
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
-| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Built; awaiting sign-off (CI result and native mobile build open) |
+| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Done; CI green 2026-11-08 (native mobile build still open) |
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Not started |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
@@ -546,3 +546,4 @@ Read this first in every session, and update it after every implementation step.
 - **Fix:** a root `build:packages` script (shared + design-tokens) now runs before `typecheck` and `test`.
 - **How it was verified:** a fresh `git clone` in a scratch folder, `npm ci`, no `.env`, CI-style environment variables and separate databases (`attendsure_ci`, Redis database 3). Every CI step was run in CI's order: format, lint, typecheck, build, test, mobile bundle, migrate/seed/drift, Playwright e2e (1 passed), `npm audit --audit-level=high`. **All passed.**
 - **Lesson kept for future steps:** before reporting a step as done, rehearse CI from a clean clone, then check the actual GitHub run.
+- **GitHub result:** run 42515039638 on `15433f9`, **success**. Every step passed: install, format, lint, typecheck, build, test, mobile bundle, migrate/seed/drift, Playwright install, end-to-end test and the audit gate.
