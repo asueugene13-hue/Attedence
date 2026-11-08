@@ -8,12 +8,15 @@ import { LoggingModule } from './infrastructure/logging/logging.module.js';
 import { MailModule } from './infrastructure/mail/mail.module.js';
 import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
 import { RedisModule } from './infrastructure/redis/redis.module.js';
+import { AuditLogsModule } from './modules/audit-logs/audit-logs.module.js';
 import { AuditModule } from './modules/audit-logs/audit.module.js';
 import { AccessTokenGuard } from './modules/auth/access-token.guard.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 import { PermissionGuard } from './modules/authorization/permission.guard.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { RolesModule } from './modules/roles/roles.module.js';
+import { UsersModule } from './modules/users/users.module.js';
 
 /** Shared infrastructure used by both the API and the worker process. */
 export const INFRASTRUCTURE_MODULES = [
@@ -27,7 +30,15 @@ export const INFRASTRUCTURE_MODULES = [
 ];
 
 @Module({
-  imports: [...INFRASTRUCTURE_MODULES, AuthorizationModule, HealthModule, AuthModule],
+  imports: [
+    ...INFRASTRUCTURE_MODULES,
+    AuthorizationModule,
+    HealthModule,
+    AuthModule,
+    UsersModule,
+    RolesModule,
+    AuditLogsModule,
+  ],
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },
     // Every request passes these in order: request limits, then sign-in, then permissions.

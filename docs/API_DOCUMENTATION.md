@@ -42,13 +42,14 @@ AttendSure exposes one versioned REST API at `/api/v1` and one Socket.IO namespa
 
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| GET · POST | `/users` | SA (UA where configured) | List and create staff accounts |
-| GET · PATCH | `/users/:id` | SA | View and edit |
-| POST | `/users/:id/suspend` · `/users/:id/restore` | SA (UA where configured) | Reason required |
-| POST · DELETE | `/users/:id/roles` · `/users/:id/roles/:grantId` | SA | Grant (with scope) and revoke |
-| GET · PUT | `/roles` · `/roles/:id/permissions` | SA | View roles; edit unprotected permissions |
-| GET · PUT | `/settings` · `/settings/:key` | SA | Institution settings, versioned |
-| GET | `/audit-logs` | SA, UA (scoped) | Filter by actor, entity, action, date |
+| GET · POST | `/users` | SA | List (`?q=&status=&role=&limit=&cursor=`) and create staff accounts (`{ email, fullName, phone?, roles: [{ role }], reason? }`; roles limited to Super Admin, University Administrator, Registrar; an activation email is sent and `activationEmailSent` says whether it went). **Built.** |
+| GET | `/users/:id` | SA | Account, active roles, full grant history, active session count. Never returns hashes or secrets. **Built.** Editing name and phone comes with Phase 2 profiles. |
+| POST | `/users/:id/suspend` · `/users/:id/restore` | SA (UA where configured, never on staff administrators) | `{ reason }`. Suspending ends every session. You cannot suspend yourself or the last active Super Admin. **Built.** |
+| POST | `/users/:id/activation-email` · `/users/:id/mfa/reset` | SA | Resend activation; reset another person's two-step sign-in (`{ reason }`). **Built.** |
+| POST | `/users/:id/roles` · `/users/:id/roles/:grantId/revoke` | SA | Grant `{ role, reason }` (institution-wide until faculty and department scopes exist in Phase 2); revoke `{ reason }`, which ends sessions acting in that role. **Built.** |
+| GET · PUT | `/roles` · `/roles/:key/permissions` | SA | List roles with held and assignable permissions; replace a role's permissions `{ permissions, reason }`, limited to the matrix. The Super Admin role is fixed. **Built.** |
+| GET · PUT | `/settings` · `/settings/:key` | SA | Institution settings, versioned. **Deferred to Phase 3**, when the first setting (class-monitoring timings) is actually used. |
+| GET | `/audit-logs` | SA, UA (institution-wide scope) | `?action=<prefix>&entityType=&entityId=&actorUserId=&from=&to=&limit=&cursor=`, newest first. Each search is itself audited. **Built.** |
 
 ### Academic structure
 

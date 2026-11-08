@@ -20,8 +20,9 @@ export interface SeedSummary {
  * Loads the six system roles, the permission catalogue and the default role grants from
  * packages/shared. This is the ONLY seed data in production: it never creates people, courses or rooms.
  *
- * Safe to run any number of times. It adds what is missing and updates permission descriptions,
- * but never removes a grant, so grants the Super Admin switched on later are kept.
+ * Safe to run any number of times. It adds new roles and permissions (with their default grants) and
+ * updates permission descriptions. It never adds or removes grants between roles and permissions that
+ * already existed, so the Super Admin's changes to a role are kept.
  */
 export async function seedSystemRoles(prisma: PrismaClient): Promise<SeedSummary> {
   return prisma.$transaction(async (tx) => {
@@ -56,11 +57,15 @@ export async function seedSystemRoles(prisma: PrismaClient): Promise<SeedSummary
 
     const roleIds = new Map((await tx.role.findMany()).map((r) => [r.key, r.id] as const));
     const permissionIds = new Map((await tx.permission.findMany()).map((p) => [p.key, p.id] as const));
+    // Default grants are added only where the role or the permission is new in this run. Once they exist,
+    // the Super Admin owns the role's permissions: a default they removed on purpose is not put back.
     const grants = ROLE_KEYS.flatMap((roleKey) =>
-      DEFAULT_ROLE_PERMISSIONS[roleKey].map((permissionKey) => ({
-        roleId: roleIds.get(roleKey)!,
-        permissionId: permissionIds.get(permissionKey)!,
-      })),
+      DEFAULT_ROLE_PERMISSIONS[roleKey]
+        .filter((permissionKey) => !existingRoles.has(roleKey) || !existingPermissions.has(permissionKey))
+        .map((permissionKey) => ({
+          roleId: roleIds.get(roleKey)!,
+          permissionId: permissionIds.get(permissionKey)!,
+        })),
     );
     const added = await tx.rolePermission.createMany({ data: grants, skipDuplicates: true });
     summary.grantsAdded = added.count;

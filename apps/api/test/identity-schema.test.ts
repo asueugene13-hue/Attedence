@@ -200,3 +200,36 @@ describe('database-enforced rules', () => {
     await expect(prisma.user.delete({ where: { id: user.id } })).rejects.toThrow();
   });
 });
+
+describe('seed respects the Super Admin', () => {
+  it('does not put back a default grant that was removed on purpose', async () => {
+    await seedSystemRoles(prisma);
+    const registrar = await prisma.role.findUniqueOrThrow({ where: { key: 'REGISTRAR' } });
+    const exportPersonal = await prisma.permission.findUniqueOrThrow({
+      where: { key: 'reports.export_personal' },
+    });
+    await prisma.rolePermission.delete({
+      where: { roleId_permissionId: { roleId: registrar.id, permissionId: exportPersonal.id } },
+    });
+
+    const again = await seedSystemRoles(prisma);
+    expect(again.grantsAdded).toBe(0);
+    expect(
+      await prisma.rolePermission.count({ where: { roleId: registrar.id, permissionId: exportPersonal.id } }),
+    ).toBe(0);
+  });
+
+  it('adds default grants for a permission that is new to the catalogue', async () => {
+    await seedSystemRoles(prisma);
+    const before = await prisma.rolePermission.count();
+    // Simulate an older database that lacks one catalogue permission.
+    const key = 'class_issues.report';
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { key } });
+    await prisma.rolePermission.deleteMany({ where: { permissionId: permission.id } });
+    await prisma.permission.delete({ where: { key } });
+
+    const summary = await seedSystemRoles(prisma);
+    expect(summary.permissionsCreated).toBe(1);
+    expect(await prisma.rolePermission.count()).toBe(before);
+  });
+});

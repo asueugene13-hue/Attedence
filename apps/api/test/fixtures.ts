@@ -49,3 +49,30 @@ export async function createUser(
 export async function resetRedis(redis: { client: { flushdb(): Promise<unknown> } }): Promise<void> {
   await redis.client.flushdb();
 }
+
+/**
+ * Creates a person and a session for them directly, as if they passed every sign-in step,
+ * and returns an Authorization header. Staff sessions are marked as two-step verified unless told otherwise.
+ */
+export async function signInAs(
+  app: { get<T>(type: new (...args: never[]) => T): T },
+  prisma: PrismaClient,
+  email: string,
+  roles: RoleKey[],
+  options: { mfaVerified?: boolean } = {},
+) {
+  const { SessionService } = await import('../src/modules/auth/session.service.js');
+  const { TokenService } = await import('../src/modules/auth/token.service.js');
+  const user = await createUser(prisma, { email, roles });
+  const { session } = await app.get(SessionService).create({
+    userId: user.id,
+    client: 'WEB',
+    role: roles[0]!,
+    mfaVerified: options.mfaVerified ?? true,
+    context: { requestId: undefined, ip: undefined, userAgent: undefined },
+  });
+  const { token } = await app
+    .get(TokenService)
+    .signAccess({ userId: user.id, sessionId: session.id, role: roles[0]! });
+  return { user, token, auth: { Authorization: `Bearer ${token}` } };
+}

@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 1, foundation. Steps 1–5 are done; step 6 (Super Admin API) is next.
+**Current phase:** Phase 1, foundation. Steps 1–6 are done; step 7 (web shell) is next.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -14,7 +14,7 @@ Read this first in every session, and update it after every implementation step.
 | 3 | Identity schema and migrations: users, roles, permissions, grants, sessions, tokens, devices, audit log (+ append-only trigger) | Done (2026-11-08) |
 | 4 | Authentication: activation, login, refresh rotation with reuse detection, logout, password reset, lockout, TOTP for staff | Done (2026-11-08) |
 | 5 | Authorisation: permission guard, scope policies, role switch, audit interceptor; Super Admin bootstrap command | Done (2026-11-08) |
-| 6 | Super Admin API: users, role grants, role permissions, settings, audit-log search | Not started |
+| 6 | Super Admin API: users, role grants, role permissions, audit-log search (settings moved to Phase 3, when first used) | Done (2026-11-08) |
 | 7 | Web shell: Next.js, design tokens, login, MFA, role-aware sidebar, Super Admin screens | Not started |
 | 8 | Mobile shell: Expo development build, login, secure token storage, role-based navigation | Not started; needs JDK 17 and Android Studio |
 | 9 | Phase 1 exit: auth and RBAC test suite green in CI; scenario 24 covered for every Phase 1 endpoint | Not started |
@@ -24,7 +24,7 @@ Read this first in every session, and update it after every implementation step.
 | Phase | Scope | Exit criteria | Status |
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
-| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–5 of 9 done) |
+| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–6 of 9 done) |
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Not started |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
@@ -331,3 +331,54 @@ Read this first in every session, and update it after every implementation step.
   - institution settings, versioned;
   - audit-log search.
   - Every action is audited, with a reason where the matrix requires one.
+
+### 2026-11-08 — Phase 1, step 6: Super Admin API
+
+- **Built:**
+  - **Accounts:**
+    - `GET/POST /users` (list with text, status and role filters and a cursor; create a staff account with its roles and an activation email);
+    - `GET /users/:id` (roles, grant history, active sessions; no hashes or secrets);
+    - suspend and restore with a reason (suspending ends every session);
+    - resend activation;
+    - reset another person's two-step sign-in.
+  - **Role grants:** `POST /users/:id/roles` and `/roles/:grantId/revoke`, with a reason. Revoking ends the sessions acting in that role.
+  - **Role permissions:** `GET /roles` (held and assignable per role) and `PUT /roles/:key/permissions`:
+    - limited to each role's defaults plus its configurable cells from the matrix;
+    - students and course reps can never receive attendance or class-control permissions;
+    - the Super Admin role itself is fixed;
+    - the cache is invalidated after commit.
+  - **`GET /audit-logs`:** filters by action prefix, entity, actor and date range, newest first, cursor pages. Each search is itself audited. Administrators scoped to a faculty are refused for now (`SCOPE_REQUIRED`).
+  - **Safeguards**, enforced with row locks so concurrent admins cannot race past them:
+    - no suspending yourself or resetting your own two-step sign-in;
+    - no removing your own Super Admin role;
+    - never leaving zero active Super Admins (`LAST_SUPER_ADMIN`);
+    - only a Super Admin can suspend or restore staff administrators, even if another role is given `accounts.suspend`.
+  - **Seed fix:** default grants are now added only for roles or permissions that are new in that run. Before, the seed would have put back a default permission the Super Admin had removed on purpose.
+- **Not built (on purpose):** the settings endpoints moved to Phase 3. No setting is read by any code yet, and an editable setting with no effect would break the "no buttons that do nothing" rule.
+- **Files:**
+  - `apps/api/src/modules/users/{users.service.ts, users.controller.ts, users.module.ts}`, `apps/api/src/modules/roles/*`.
+  - `apps/api/src/modules/audit-logs/{audit-logs.controller.ts, audit-logs.module.ts, audit.module.ts}`. The search endpoint is in its own module so the worker doesn't load it.
+  - `apps/api/src/database/seed-system-roles.ts`, `apps/api/src/app.module.ts`, `packages/shared/src/admin.ts`.
+  - `apps/api/test/{super-admin.test.ts, fixtures.ts (signInAs), identity-schema.test.ts}`; docs: API_DOCUMENTATION.
+- **Database changes:** none. The drift check reports no difference.
+- **Commands run:**
+  - Type-check, `npx vitest run`, built-worker start check, `npm run check`, `npm audit`, `npm run db:drift`.
+  - Mutation check: with the last-Super-Admin rule switched off, its 2 tests failed; with it restored, they passed.
+- **Tests run:** `npm run check` exit 0. Shared: **10 passed**. API: 7 files, **107 passed**. The 24 new tests cover:
+  - account creation (including email failure and resend), duplicates and invalid input, Super Admin only;
+  - list filters and cursor, 404 and 400, no secrets in responses;
+  - suspend and restore, including sessions ended, login refused, self-suspension, protected targets, and the concurrent last-Super-Admin case;
+  - role grant, duplicate, revoke ending sessions, own Super Admin role, and the concurrent last-Super-Admin case;
+  - two-step reset, including on yourself;
+  - role permission listing, a configurable grant that takes effect at once, refusals, and a removed default surviving a re-seed;
+  - audit search with self-audit, and refusal for a faculty-scoped administrator.
+- **Known limitations:**
+  - Editing an account's name and phone waits for Phase 2 profiles.
+  - Faculty and department role scopes wait for the academic tables (Phase 2).
+  - `npm audit` in CI depends on npm's audit service; a network failure there fails the job even when nothing is wrong. The same 10 moderate `minimatch` issues remain inside ESLint.
+- **Process note:** while checking the worker, a broad `taskkill` filtered on window title was run, which may have stopped other Node.js processes on this PC. One Node.js process from 3:29 PM survived and the Docker services were unaffected. Processes are stopped only by their own ID from now on.
+- **Next step:** Phase 1, step 7: the web shell.
+  - Next.js app with design tokens from the canvas.
+  - Sign-in with the two-step screens, activation and password-reset pages.
+  - Role-aware sidebar driven by `/auth/me` permissions.
+  - Super Admin screens for accounts, roles and the audit log, wired to the API built so far.
