@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 1, foundation. Steps 1–8 are done, except the native Android build of step 8, which waits for JDK 17 and the Android SDK. Step 9 (Phase 1 exit check) is next.
+**Current phase:** Phase 1, foundation. All 9 steps are done. Two items stay open before Phase 1 can be signed off: the GitHub CI result, which the product owner must check because the repository is private, and the native Android build (JDK 17 and the Android SDK). Phase 2 needs product-owner approval.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -17,14 +17,14 @@ Read this first in every session, and update it after every implementation step.
 | 6 | Super Admin API: users, role grants, role permissions, audit-log search (settings moved to Phase 3, when first used) | Done (2026-11-08) |
 | 7 | Web shell: Next.js, design tokens, login, MFA, role-aware sidebar, Super Admin screens | Done (2026-11-08) |
 | 8 | Mobile shell: Expo development build, login, secure token storage, role-based navigation | Done except the native build (needs JDK 17 and the Android SDK) |
-| 9 | Phase 1 exit: auth and RBAC test suite green in CI; scenario 24 covered for every Phase 1 endpoint | Not started |
+| 9 | Phase 1 exit: auth and RBAC test suite green in CI; scenario 24 covered for every Phase 1 endpoint | Done locally; CI result to be confirmed |
 
 ## Phase status
 
 | Phase | Scope | Exit criteria | Status |
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
-| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–8 of 9 done; native mobile build pending) |
+| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Built; awaiting sign-off (CI result and native mobile build open) |
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Not started |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
@@ -508,3 +508,34 @@ Read this first in every session, and update it after every implementation step.
 - **Next step:**
   - For the product owner: install JDK 17 and Android Studio (D-05), then this step's native build and an emulator run can be completed.
   - Phase 1 step 9, the Phase 1 exit check: CI green on GitHub; auth and RBAC suites complete; scenario 24 (unauthorised access) covered for every Phase 1 endpoint; documentation review.
+
+### 2026-11-08 — Phase 1, step 9: exit check
+
+- **Built:** `apps/api/test/scenario-24-unauthorised-access.test.ts`.
+  - It discovers every route from the running app, so endpoints added later are covered automatically.
+  - Every non-public route refuses a request without sign-in (401).
+  - Every permission-protected route refuses each role whose default grants lack a required permission (403 `PERMISSION_DENIED`) before validation runs. The test sends an empty body, so a 400 would mean validation ran first.
+  - Every protected route is tried by at least one role that may not use it, and every refusal is audited.
+  - Found 25 routes: 12 permission-protected, 4 for any signed-in user, 9 public.
+- **Mutation check:** with the permission guard forced to allow everything, 2 of the 4 scenario-24 tests failed; with it restored, all passed.
+- **Documentation review:** README status; TESTING (status, scenario 24 done, results log); DEPLOYMENT (local setup); SYSTEM_ARCHITECTURE §8 (Docker installed).
+- **Tests run:**
+  - `npm run check` exit 0: design-tokens 3, shared 10, API **111**, web 8, mobile 9, so **141 passed, 0 failed**.
+  - Playwright: **1 passed**.
+  - One lint error (`let` should be `const`) was caught and fixed on the way.
+
+#### Phase 1 exit criteria
+
+| Criterion | Status |
+| --- | --- |
+| Auth and RBAC tests pass | **Yes, locally** (141 tests plus the browser journey). **In CI: not confirmed.** The repository is private and this PC has no GitHub CLI, so the product owner must open the Actions tab. |
+| First Super Admin created with a one-time command, not a seeded password | **Yes.** `admin:create-super-admin`, tested in the API suite and used for real in the browser journey. |
+| Scenario 24 covered for every Phase 1 endpoint | **Yes.** Automatic, including future endpoints. |
+| Web shell signs in, enforces two-step sign-in for staff, and shows only permitted screens | **Yes.** Proven in Chromium. |
+| Mobile shell signs in with secure storage and role-based navigation | **Partly.** JavaScript tested, bundled, doctor 20/20, native project generated; **not yet built or run on a device** (JDK 17 and Android SDK missing; D-05). |
+
+#### Before Phase 2 can start
+1. The product owner confirms the latest CI run on GitHub is green, or sends the failing step so it can be fixed.
+2. The product owner approves Phase 2 (academic management).
+3. Optional but recommended: install JDK 17 and Android Studio, so the mobile native build can be completed and kept working.
+4. Decisions needed during Phase 2: D-12 (who appoints course reps), D-14 (real Student and Staff ID formats, and who supplies the academic structure), D-16 (where uploaded files are stored), and the BLE beacon trial (D-08).

@@ -200,7 +200,7 @@ Exact versions are pinned when each package is installed in its phase, using the
 | Node.js | v24.19.0 | Everything | Ready |
 | npm | 11.17.0 | Workspaces, packages | Ready |
 | Git | 2.56.0 | Version control | Ready. The folder is not a repository yet (D-04). |
-| Docker | Not found | Local PostgreSQL, Redis, SeaweedFS, Mailpit | Install Docker Desktop with WSL 2 (D-05) |
+| Docker | Installed 2026-11-08 (Docker Desktop 29.9.2, WSL 2) | Local PostgreSQL, Redis, SeaweedFS, Mailpit | Done (D-05) |
 | PostgreSQL, Redis | Not found | — | Not needed directly once Docker runs them |
 | Java | JDK 27; `JAVA_HOME` = `C:\Program Files\Java\jdk-27\bin` | Android builds | React Native's Android build recommends JDK 17. Install JDK 17 and point `JAVA_HOME` at the JDK folder itself, not at `bin`. |
 | Android tools | `adb` 1.0.41 found; `ANDROID_HOME` not set | Android builds and emulator | Install Android Studio with the SDK and set `ANDROID_HOME` |

@@ -22,7 +22,7 @@ Prerequisites on this PC (see SYSTEM_ARCHITECTURE.md §8 for what is already ins
 | SeaweedFS | S3-compatible file storage (the MinIO image is no longer published) | 8333 |
 | Mailpit | Catches outgoing email so nothing reaches real inboxes | 1025 (SMTP), 8025 (web) |
 
-Step-by-step commands are added to README.md when Phase 1 creates these files.
+Everyday commands are in the README, under "Getting started (Windows)".
 
 ## 2. Environments
 

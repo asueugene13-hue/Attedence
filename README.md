@@ -2,7 +2,7 @@
 
 Attendance management and classroom-presence verification for Knutsford University, Accra, Ghana.
 
-**Status (2026-11-08): Phase 1, foundation, in progress.** The repository foundation and the API skeleton are built. Progress, open decisions and the next step are in [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md).
+**Status (2026-11-08): Phase 1, foundation, is built and tested,** apart from the native mobile build, which needs JDK 17 and the Android SDK, and confirming that GitHub CI passes. It covers the API with sign-in, two-step sign-in, roles and permissions, audit log and Super Admin tools; the web dashboard; and the mobile app shell. Progress, open decisions and the next step are in [IMPLEMENTATION_PROGRESS.md](IMPLEMENTATION_PROGRESS.md).
 
 ## What it does
 

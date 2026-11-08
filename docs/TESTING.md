@@ -2,7 +2,7 @@
 
 Every phase ships with automated tests, and a phase is not done until its tests run green in CI. Results are reported exactly as they ran: a test that was not executed is never reported as passing.
 
-**Status (2026-11-08):** no tests exist, because there is no code yet. The tables below are the plan.
+**Status (2026-11-08, end of Phase 1):** 141 automated tests and 1 browser journey pass locally. Of the 25 required scenarios, scenario 24 is done; the rest belong to Phases 3–6.
 
 ## 1. Test levels and tools
 
@@ -51,11 +51,13 @@ Rules:
 | 21 | Cancelled class excluded from absence calculation | Unit (calculation) + integration | 5 | Not written |
 | 22 | Lecturer's device crashes during attendance | Integration + realtime | 5 | Not written |
 | 23 | Background job fails and recovers | Jobs | 3 | Not written |
-| 24 | Unauthorised user tries another role's dashboard or API | Integration (every endpoint × every role) + web end-to-end | 1 onward | Not written |
+| 24 | Unauthorised user tries another role's dashboard or API | Integration: every discovered endpoint × every role (`test/scenario-24-unauthorised-access.test.ts`) + web end-to-end (sign-out redirect) | 1 onward | **Done.** New endpoints are covered automatically. |
 | 25 | Many students check in at once | Integration (parallel) + load | 5 | Not written |
 
 ## 3. Results log
 
 | Date | Phase | Command | Result |
 | --- | --- | --- | --- |
-| — | — | — | No tests have been run yet |
+| 2026-11-08 | 1 (step 9) | `npm run check` | design-tokens 3, shared 10, API 111, web 8, mobile 9: **141 passed, 0 failed** |
+| 2026-11-08 | 1 (step 9) | `npm run e2e -w @attendsure/web` | **1 passed** (first Super Admin journey in Chromium) |
+| 2026-11-08 | 1 (step 9) | Mutation check: permission guard forced to allow everything | Scenario 24 failed as it should (2 tests); passes again once restored |
