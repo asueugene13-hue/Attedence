@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 1, foundation. Steps 1–4 are done; step 5 (authorisation) is next.
+**Current phase:** Phase 1, foundation. Steps 1–5 are done; step 6 (Super Admin API) is next.
 **Last updated:** 2026-11-08
 
 ### Phase 1 steps
@@ -13,7 +13,7 @@ Read this first in every session, and update it after every implementation step.
 | 2 | API skeleton: NestJS app and worker entry points, validated config, structured logging, health checks, Prisma connection | Done (2026-11-08) |
 | 3 | Identity schema and migrations: users, roles, permissions, grants, sessions, tokens, devices, audit log (+ append-only trigger) | Done (2026-11-08) |
 | 4 | Authentication: activation, login, refresh rotation with reuse detection, logout, password reset, lockout, TOTP for staff | Done (2026-11-08) |
-| 5 | Authorisation: permission guard, scope policies, role switch, audit interceptor; Super Admin bootstrap command | Not started |
+| 5 | Authorisation: permission guard, scope policies, role switch, audit interceptor; Super Admin bootstrap command | Done (2026-11-08) |
 | 6 | Super Admin API: users, role grants, role permissions, settings, audit-log search | Not started |
 | 7 | Web shell: Next.js, design tokens, login, MFA, role-aware sidebar, Super Admin screens | Not started |
 | 8 | Mobile shell: Expo development build, login, secure token storage, role-based navigation | Not started; needs JDK 17 and Android Studio |
@@ -24,7 +24,7 @@ Read this first in every session, and update it after every implementation step.
 | Phase | Scope | Exit criteria | Status |
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
-| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–4 of 9 done) |
+| 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | In progress (steps 1–5 of 9 done) |
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Not started |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
@@ -265,3 +265,69 @@ Read this first in every session, and update it after every implementation step.
   - Role switching (`/auth/switch-role`).
   - Audit interceptor, Helmet security headers, per-IP rate limiting (sign-in, reset, MFA).
   - A one-time command that creates the first Super Admin.
+
+### 2026-11-08 — Phase 1, step 5: authorisation
+
+- **Built:**
+  - **Global guards, in order:** request limits → sign-in (`AccessTokenGuard`) → permissions (`PermissionGuard`).
+  - **Access rules.** Every route must declare `@Public()`, `@Authenticated()` or `@RequirePermissions(...)`. A route with no rule is refused (`ACCESS_NOT_DECLARED`), even for the Super Admin, and a test fails if any real route lacks one.
+  - **Permission checks** use the active role's grants, cached in Redis for 60 s, with `invalidate()` when grants change. If Redis is down, the database is read directly. Refusals are audited (`authz.denied`).
+  - **Staff roles** (Super Admin, Administrator, Registrar) are accepted only on sessions whose sign-in passed two-step verification (new column `auth_sessions.mfa_verified_at`).
+  - **`POST /auth/switch-role`** changes the session's active role and issues a new access token; the old token stops working at once. Switching into a staff role needs a two-step-verified session (`MFA_REQUIRED`). Audited.
+  - **`ScopeService`** reads institution-wide, faculty and department grants for a role. Resource-level scope policies come with the resources in Phase 2.
+  - **Redis fixed-window rate limits,** shared by all API instances:
+    - default 3,000 per minute per IP (high because campus Wi-Fi shares addresses);
+    - login 300 per minute per IP, plus 10 per 15 min per IP+email;
+    - password reset 3 per hour per email, plus 30 per 15 min per IP;
+    - MFA verify 60 per minute; activate and reset 30 per 15 min.
+    - A blocked request gets 429 with `Retry-After`. Emails are hashed in Redis keys. If Redis is down, limits are skipped (logged).
+  - **Helmet security headers** with a strict CSP for this JSON-only API.
+  - **`TRUST_PROXY_HOPS`** setting, so rate limits see real client IPs behind load balancers.
+  - **One-time first-Super-Admin command** (`npm run admin:create-super-admin`): creates a `PENDING_ACTIVATION` account with the SUPER_ADMIN grant and an activation link, records a SYSTEM audit entry, and refuses once any Super Admin exists.
+- **Files:**
+  - `apps/api/src/modules/authorization/*` (decorators, permission guard and service, scope service, module), `apps/api/src/common/rate-limit/rate-limit.ts`.
+  - `apps/api/src/modules/auth/{access-token.guard.ts, auth.controller.ts, auth.service.ts, session.service.ts, auth.module.ts}`.
+  - `apps/api/src/modules/users/bootstrap-super-admin.ts`, `apps/api/src/cli/create-super-admin.ts`.
+  - `apps/api/src/{app.module.ts, configure-app.ts, config/app-config.ts}`, `apps/api/src/modules/health/health.controller.ts`.
+  - `packages/shared/src/auth.ts` (switch-role schema).
+  - `apps/api/test/{authorization.test.ts, health.test.ts, fixtures.ts, setup-env.ts, test-database.ts, auth.test.ts}`.
+  - `.env.example`; docs: SECURITY, ROLE_PERMISSION_MATRIX, KNOWN_LIMITATIONS, DEPLOYMENT, README.
+- **Database changes:** migration `*_session_mfa_verified` adds `auth_sessions.mfa_verified_at`. The drift check reports no difference.
+- **Dependencies added:** helmet 8.3.0. `npm audit`: the same 10 moderate `minimatch` issues inside ESLint; the CI gate (high) passes.
+- **Commands run:**
+  - Migrate, generate, type-check, `npx vitest run`.
+  - The first run had 1 failure: the health test's deliberately failing route had no access rule, so it was correctly refused with 401. It was marked `@Public()`.
+  - The CLI against the test database:
+    - bad input → exit 2 with the reasons;
+    - first run → account and link printed, exit 0;
+    - second run → refused, exit 3.
+  - `npm run check`.
+- **Tests run:** `npm run check` exit 0. Shared: **10 passed**. API: 6 files, **83 passed**. The 17 new tests cover:
+  - deny-by-default, including a route-coverage test that found all 13 real routes declared;
+  - each kind of access rule;
+  - an audited refusal;
+  - several required permissions on one route;
+  - cache invalidation;
+  - staff role without two-step verification refused;
+  - role switch, including old token retired, refresh keeping the role, a role not held, and two-step needed for a staff role;
+  - scopes;
+  - per-account login limit with `Retry-After`;
+  - per-email reset limit;
+  - security headers;
+  - the bootstrap → activate → MFA-required flow, and refusal on a second run.
+- **Decisions made while building:**
+  - Rate limiting is our own small Redis guard instead of `@nestjs/throttler` plus a third-party Redis store: one fewer dependency, and limits per IP+email are built in.
+  - When Redis is down, rate limits fail open and permission checks fall back to the database.
+  - Tests use Redis database 1, so they can clear counters safely.
+  - Permission refusals are audited in the guard; domain services keep auditing their own changes. No generic audit interceptor, which would duplicate entries.
+- **Known limitations:**
+  - Scope policies for specific resources (a faculty's courses, a lecturer's sections) don't exist yet, because the resources don't; they arrive with them from Phase 2.
+  - Rate limits are fixed-window: up to twice the limit can pass at a window boundary.
+  - Per-user limits for busy signed-in routes come with check-in (Phase 5).
+- **Next step:** Phase 1, step 6, the Super Admin API:
+  - list, create (with activation email), view, suspend and restore staff accounts;
+  - grant and revoke roles, with scope;
+  - edit unprotected role permissions, with cache invalidation;
+  - institution settings, versioned;
+  - audit-log search.
+  - Every action is audited, with a reason where the matrix requires one.

@@ -47,7 +47,14 @@ Fixtures and test accounts are never loaded into production.
 | Monitoring | Structured log collection, metrics (Prometheus format), uptime checks and alerting to on-call staff |
 | Location | Agreed with the university's data-protection lead under Act 843. Hosting choices to compare: a cloud region in Africa, a Ghanaian data centre, or university-run servers. |
 
-## 4. Release process
+## 4. First start on a new server
+
+1. Apply migrations: `npm run db:deploy -w @attendsure/api`.
+2. Load system roles: `npm run db:seed -w @attendsure/api`.
+3. Create the first Super Admin: `npm run admin:create-super-admin -w @attendsure/api -- --email <address> --name "<full name>"`. It prints a single-use activation link (valid 72 h); give it only to that person. The command refuses to run once a Super Admin exists.
+4. Set `TRUST_PROXY_HOPS` to the number of load balancers or proxies in front of the API, so rate limits see real client addresses.
+
+## 5. Release process
 
 1. CI runs on every push: lint, type-check, unit and integration tests, a migration check, `npm audit` and a secret scan.
 2. The main branch deploys to staging automatically.
@@ -55,7 +62,7 @@ Fixtures and test accounts are never loaded into production.
 4. Database migrations follow expand-then-contract: add new columns or tables first, deploy code that uses them, then remove old ones in a later release. An applied migration is never edited.
 5. Mobile builds go through Expo's cloud build service. Releases go out through Google Play and the App Store, or the university's own distribution for a pilot. Over-the-air updates are limited to JavaScript fixes; native changes need a store release.
 
-## 5. Backups and restore drills
+## 6. Backups and restore drills
 
 | Item | Plan |
 | --- | --- |

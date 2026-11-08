@@ -7,8 +7,9 @@ import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/configure-app.js';
 import { type MailMessage, MailService } from '../src/infrastructure/mail/mail.service.js';
 import { PrismaService } from '../src/infrastructure/prisma/prisma.service.js';
+import { RedisService } from '../src/infrastructure/redis/redis.service.js';
 import { AuthService } from '../src/modules/auth/auth.service.js';
-import { createUser, resetDatabase, TEST_PASSWORD } from './fixtures.js';
+import { createUser, resetDatabase, resetRedis, TEST_PASSWORD } from './fixtures.js';
 
 const sentMail: MailMessage[] = [];
 const fakeMail = { send: async (m: MailMessage) => void sentMail.push(m), onModuleDestroy: () => undefined };
@@ -37,6 +38,7 @@ afterAll(async () => {
 beforeEach(async () => {
   sentMail.length = 0;
   await resetDatabase(prisma);
+  await resetRedis(app.get(RedisService));
 });
 
 function tokenFromMail(path: string): string {

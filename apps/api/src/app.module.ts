@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter.js';
+import { RateLimitGuard } from './common/rate-limit/rate-limit.js';
 import { ConfigModule } from './config/config.module.js';
 import { CryptoModule } from './infrastructure/crypto/crypto.module.js';
 import { LoggingModule } from './infrastructure/logging/logging.module.js';
@@ -8,7 +9,10 @@ import { MailModule } from './infrastructure/mail/mail.module.js';
 import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
 import { RedisModule } from './infrastructure/redis/redis.module.js';
 import { AuditModule } from './modules/audit-logs/audit.module.js';
+import { AccessTokenGuard } from './modules/auth/access-token.guard.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { AuthorizationModule } from './modules/authorization/authorization.module.js';
+import { PermissionGuard } from './modules/authorization/permission.guard.js';
 import { HealthModule } from './modules/health/health.module.js';
 
 /** Shared infrastructure used by both the API and the worker process. */
@@ -23,7 +27,13 @@ export const INFRASTRUCTURE_MODULES = [
 ];
 
 @Module({
-  imports: [...INFRASTRUCTURE_MODULES, HealthModule, AuthModule],
-  providers: [{ provide: APP_FILTER, useClass: ProblemDetailsFilter }],
+  imports: [...INFRASTRUCTURE_MODULES, AuthorizationModule, HealthModule, AuthModule],
+  providers: [
+    { provide: APP_FILTER, useClass: ProblemDetailsFilter },
+    // Every request passes these in order: request limits, then sign-in, then permissions.
+    { provide: APP_GUARD, useClass: RateLimitGuard },
+    { provide: APP_GUARD, useExisting: AccessTokenGuard },
+    { provide: APP_GUARD, useExisting: PermissionGuard },
+  ],
 })
 export class AppModule {}

@@ -118,6 +118,8 @@ Protected keys (Super Admin only): `users.manage_admins`, `roles.assign`, `roles
 
 ## How the server enforces this
 
+**Built in Phase 1 step 5:** steps 1, 2 and 5 below, plus role switching and the scope lookup (`ScopeService`). Resource-level scope policies and scoped queries (steps 3–4) arrive with the resources they protect, starting in Phase 2. Routes declare `@Public()`, `@Authenticated()` or `@RequirePermissions(...)`; a route with none is refused, and a test checks that every route declares one.
+
 1. **Authentication.** The access token identifies the user, the session and the active role. A person with two roles, such as a lecturer who is also an administrator, switches role from the profile menu. Each request is checked against the active role only, and the audit log records which role acted.
 2. **Permission guard.** Every route declares its permission key, and a route without one is refused by default.
 3. **Scope policy.** A policy function confirms the target is in scope, for example `canManageSection(user, sectionId)` or `isEnrolledIn(student, sessionId)`.

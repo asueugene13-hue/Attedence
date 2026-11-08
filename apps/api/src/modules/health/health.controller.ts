@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { HealthCheck, HealthCheckService, PrismaHealthIndicator } from '@nestjs/terminus';
+import { Public } from '../authorization/access.decorators.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { RedisHealthIndicator } from './redis.health.js';
 
@@ -8,6 +9,7 @@ import { RedisHealthIndicator } from './redis.health.js';
  * - /health/ready: the database and Redis answer. Used to decide whether to send traffic here.
  */
 @Controller('health')
+@Public()
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,

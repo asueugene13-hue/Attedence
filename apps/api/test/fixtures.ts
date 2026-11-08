@@ -44,3 +44,8 @@ export async function createUser(
   }
   return user;
 }
+
+/** Clears rate-limit counters, MFA attempt counters and the permission cache (test Redis database only). */
+export async function resetRedis(redis: { client: { flushdb(): Promise<unknown> } }): Promise<void> {
+  await redis.client.flushdb();
+}

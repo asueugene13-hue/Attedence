@@ -168,6 +168,8 @@ model AuthSession {
   client        ClientType
   deviceId      String?    @map("device_id") @db.Uuid
   activeRoleKey RoleKey?   @map("active_role_key")
+  /// Set when the sign-in included a two-step code. Staff roles need it.
+  mfaVerifiedAt DateTime?  @map("mfa_verified_at") @db.Timestamptz(3)
   ip            String?
   userAgent     String?    @map("user_agent")
   createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)

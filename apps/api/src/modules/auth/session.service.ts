@@ -37,7 +37,13 @@ export class SessionService {
   ) {}
 
   async create(
-    input: { userId: string; client: ClientType; role: RoleKey; context: RequestContext },
+    input: {
+      userId: string;
+      client: ClientType;
+      role: RoleKey;
+      mfaVerified: boolean;
+      context: RequestContext;
+    },
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<IssuedSession> {
     const now = Date.now();
@@ -47,6 +53,7 @@ export class SessionService {
         userId: input.userId,
         client: input.client,
         activeRoleKey: input.role,
+        mfaVerifiedAt: input.mfaVerified ? new Date(now) : null,
         ip: input.context.ip,
         userAgent: input.context.userAgent,
         expiresAt,

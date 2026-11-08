@@ -22,6 +22,8 @@ const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+    /** Reverse proxies in front of the API (load balancer, CDN). Used to find the real client IP for rate limits. */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
     LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
     REDIS_URL: z.url({ protocol: /^rediss?$/ }),
@@ -87,6 +89,7 @@ export interface SmtpConfig {
 export class AppConfig {
   readonly nodeEnv: 'development' | 'test' | 'production';
   readonly port: number;
+  readonly trustProxyHops: number;
   readonly logLevel: (typeof LOG_LEVELS)[number];
   readonly databaseUrl: string;
   readonly redisUrl: string;
@@ -100,6 +103,7 @@ export class AppConfig {
   private constructor(env: z.infer<typeof EnvSchema>) {
     this.nodeEnv = env.NODE_ENV;
     this.port = env.PORT;
+    this.trustProxyHops = env.TRUST_PROXY_HOPS;
     this.logLevel = env.LOG_LEVEL;
     this.databaseUrl = env.DATABASE_URL;
     this.redisUrl = env.REDIS_URL;

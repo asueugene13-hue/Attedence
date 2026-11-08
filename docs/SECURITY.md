@@ -61,8 +61,8 @@ Fraud detection raises flags for people to review. It never changes attendance o
 | Formula injection in exports | Cells starting with `=`, `+`, `-`, `@`, tab or carriage return are prefixed with `'` in CSV and XLSX output |
 | Malicious uploads | Size limits; type checked from the file's bytes; allow-list (CSV, XLSX, JPEG, PNG, PDF); files stored privately with random keys; short-lived download links; optional ClamAV scan |
 | Bulk import abuse | Size and row limits; validation before saving; nothing is written until a person confirms the preview |
-| Denial of service and cost abuse | Rate limits per route; SMS only for critical categories; course-rep message limits |
-| Security headers | Helmet: HSTS, frame-ancestors none, no-sniff, referrer policy |
+| Denial of service and cost abuse | Rate limits per route, counted in Redis (built: sign-in 10 per 15 min per IP+email and 300 per min per IP; reset email 3 per hour per address; MFA 60 per min per IP; default 3,000 per min per IP); SMS only for critical categories; course-rep message limits |
+| Security headers | Helmet: HSTS, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` (the API serves only JSON), no-sniff, referrer policy. **Built** (Phase 1 step 5). |
 | Vulnerable dependencies | Lockfile committed; `npm audit` and Dependabot in CI; licences checked |
 | WebSocket abuse | Token-authenticated handshake; permission check on every room join; per-connection rate limit |
 

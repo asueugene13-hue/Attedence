@@ -71,3 +71,5 @@ export const ChangePasswordRequestSchema = z.strictObject({
   currentPassword: existingPassword,
   newPassword: NewPasswordSchema,
 });
+
+export const SwitchRoleRequestSchema = z.strictObject({ role: z.enum(ROLE_KEYS) });

@@ -1,5 +1,8 @@
 import { type CanActivate, createParamDecorator, type ExecutionContext, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { MFA_REQUIRED_ROLES } from '@attendsure/shared';
 import type { Request } from 'express';
+import { ACCESS_RULE, type AccessRule } from '../authorization/access.decorators.js';
 import { signInAgain } from './auth-errors.js';
 import { SessionService } from './session.service.js';
 import { type AccessClaims, TokenService } from './token.service.js';
@@ -7,19 +10,26 @@ import { type AccessClaims, TokenService } from './token.service.js';
 type AuthedRequest = Request & { auth?: AccessClaims };
 
 /**
- * Requires a valid access token whose session is still open and whose user is still active.
- * Checking the session on every request means logout, password reset and suspension take effect
- * immediately, not when the 15-minute token expires.
- * (Step 5 makes authentication the default for every route and adds permission checks.)
+ * Registered for every route. Requires a valid access token unless the route is @Public().
+ * The token's session must still be open, its user active, its role the session's active role, and a
+ * staff role must come from a sign-in that passed two-step verification. Checking the session on every
+ * request means sign-out, password reset and suspension take effect immediately.
  */
 @Injectable()
 export class AccessTokenGuard implements CanActivate {
   constructor(
+    private readonly reflector: Reflector,
     private readonly tokens: TokenService,
     private readonly sessions: SessionService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const rule = this.reflector.getAllAndOverride<AccessRule | undefined>(ACCESS_RULE, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (rule?.kind === 'public') return true;
+
     const req = context.switchToHttp().getRequest<AuthedRequest>();
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) throw signInAgain();
@@ -28,8 +38,10 @@ export class AccessTokenGuard implements CanActivate {
     if (!claims) throw signInAgain();
 
     const session = await this.sessions.findActive(claims.sessionId);
-    if (!session || session.userId !== claims.userId || session.activeRoleKey !== claims.role)
+    if (!session || session.userId !== claims.userId || session.activeRoleKey !== claims.role) {
       throw signInAgain();
+    }
+    if (MFA_REQUIRED_ROLES.includes(claims.role) && !session.mfaVerifiedAt) throw signInAgain();
 
     req.auth = claims;
     return true;

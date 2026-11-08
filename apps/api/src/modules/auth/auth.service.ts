@@ -264,6 +264,47 @@ export class AuthService {
     };
   }
 
+  /**
+   * Changes which of the user's roles this session acts as, and returns a new access token for it.
+   * The old access token stops working at once. Moving into a staff role needs a session whose
+   * sign-in included a two-step code.
+   */
+  async switchRole(
+    auth: AccessClaims,
+    role: RoleKey,
+    context: RequestContext,
+  ): Promise<{ accessToken: string; accessTokenExpiresAt: Date; activeRole: RoleKey; roles: RoleKey[] }> {
+    const roles = await this.heldRoles(auth.userId);
+    if (!roles.includes(role)) {
+      throw new ForbiddenException({ code: 'ROLE_NOT_HELD', message: 'You do not hold that role.' });
+    }
+    const session = await this.prisma.authSession.findUniqueOrThrow({ where: { id: auth.sessionId } });
+    if (MFA_REQUIRED_ROLES.includes(role) && !session.mfaVerifiedAt) {
+      throw new ForbiddenException({
+        code: 'MFA_REQUIRED',
+        message: 'This role needs two-step sign-in. Sign out and sign in again to continue.',
+      });
+    }
+    const switched = await this.prisma.authSession.updateMany({
+      where: { id: auth.sessionId, revokedAt: null, activeRoleKey: auth.role },
+      data: { activeRoleKey: role },
+    });
+    if (switched.count !== 1) throw signInAgain();
+
+    await this.audit.record({
+      action: 'auth.role.switched',
+      entityType: 'auth_session',
+      entityId: auth.sessionId,
+      actorUserId: auth.userId,
+      actorRoleKey: role,
+      before: { role: auth.role },
+      after: { role },
+      context,
+    });
+    const access = await this.tokens.signAccess({ userId: auth.userId, sessionId: auth.sessionId, role });
+    return { accessToken: access.token, accessTokenExpiresAt: access.expiresAt, activeRole: role, roles };
+  }
+
   // ───────────────────────── Activation and passwords ─────────────────────────
 
   /** Emails an activation link to a newly created account. Used by account creation (Phase 1 step 6). */
@@ -459,7 +500,10 @@ export class AuthService {
     context: RequestContext,
   ): Promise<SessionTokens> {
     const { session, refreshToken } = await this.prisma.$transaction(async (tx) => {
-      const issued = await this.sessions.create({ userId: user.id, client, role, context }, tx);
+      const issued = await this.sessions.create(
+        { userId: user.id, client, role, mfaVerified: method === 'password+totp', context },
+        tx,
+      );
       await tx.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
       await this.audit.record(
         {

@@ -77,4 +77,5 @@ docs/                    Design documents
 | `npm run dev -w @attendsure/api` | API in development mode |
 | `npm run db:migrate -w @attendsure/api` | Apply new database migrations (development) |
 | `npm run build -w @attendsure/api`, then `npm run db:seed -w @attendsure/api` | Load the system roles and permissions (safe to repeat) |
+| `npm run admin:create-super-admin -w @attendsure/api -- --email you@example.test --name "Your Name"` (after a build) | Create the first Super Admin; prints an activation link. Works only while no Super Admin exists. |
 | `npm run build -w @attendsure/api`, then `npm run start -w @attendsure/api` or `npm run start:worker -w @attendsure/api` | Built API or worker, as production runs them |

@@ -6,11 +6,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/configure-app.js';
 import { RedisService } from '../src/infrastructure/redis/redis.service.js';
+import { Public } from '../src/modules/authorization/access.decorators.js';
 
 // A route that fails unexpectedly, to prove internal error details never reach the caller.
 @Controller('test-only')
 class FailingController {
   @Get('boom')
+  @Public()
   boom(): never {
     throw new Error('database password is hunter2');
   }

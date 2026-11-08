@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  ForbiddenException,
-  Get,
-  HttpCode,
-  Post,
-  Req,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import {
   ActivateRequestSchema,
   ChangePasswordRequestSchema,
@@ -18,12 +8,15 @@ import {
   MfaVerifyRequestSchema,
   RefreshRequestSchema,
   ResetPasswordRequestSchema,
+  SwitchRoleRequestSchema,
 } from '@attendsure/shared';
 import type { CookieOptions, Request, Response } from 'express';
+import { RateLimit } from '../../common/rate-limit/rate-limit.js';
 import { requestContextOf } from '../../common/request-context.js';
 import { parseInput } from '../../common/validation/parse-input.js';
 import { AppConfig } from '../../config/app-config.js';
-import { AccessTokenGuard, CurrentAuth } from './access-token.guard.js';
+import { Authenticated, Public } from '../authorization/access.decorators.js';
+import { CurrentAuth } from './access-token.guard.js';
 import { signInAgain } from './auth-errors.js';
 import { AuthService, type SessionTokens } from './auth.service.js';
 import type { AccessClaims } from './token.service.js';
@@ -36,6 +29,8 @@ const REFRESH_COOKIE_OPTIONS: CookieOptions = {
   path: '/api/v1/auth', // only sent to the sign-in endpoints
 };
 
+const MINUTE = 60;
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -44,7 +39,12 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @Public()
   @HttpCode(200)
+  @RateLimit(
+    { name: 'login-ip', limit: 300, windowSeconds: MINUTE, by: 'ip' },
+    { name: 'login-account', limit: 10, windowSeconds: 15 * MINUTE, by: 'ip+email' },
+  )
   async login(@Body() body: unknown, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.login(parseInput(LoginRequestSchema, body), requestContextOf(req));
     if (result.kind === 'mfa') {
@@ -54,13 +54,17 @@ export class AuthController {
   }
 
   @Post('mfa/enroll')
+  @Public()
   @HttpCode(200)
+  @RateLimit({ name: 'mfa-enroll', limit: 20, windowSeconds: 15 * MINUTE, by: 'ip' })
   async mfaEnroll(@Body() body: unknown) {
     return this.auth.startMfaEnrollment(parseInput(MfaEnrollRequestSchema, body).mfaToken);
   }
 
   @Post('mfa/verify')
+  @Public()
   @HttpCode(200)
+  @RateLimit({ name: 'mfa-verify', limit: 60, windowSeconds: MINUTE, by: 'ip' })
   async mfaVerify(@Body() body: unknown, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const { recoveryCodes, ...tokens } = await this.auth.verifyMfa(
       parseInput(MfaVerifyRequestSchema, body),
@@ -71,7 +75,9 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Public()
   @HttpCode(200)
+  @RateLimit({ name: 'refresh', limit: 600, windowSeconds: MINUTE, by: 'ip' })
   async refresh(@Body() body: unknown, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const input = parseInput(RefreshRequestSchema, body);
     const context = requestContextOf(req);
@@ -90,9 +96,16 @@ export class AuthController {
     return this.sessionResponse(await this.auth.refresh(cookie, 'WEB', context), res);
   }
 
+  @Post('switch-role')
+  @Authenticated()
+  @HttpCode(200)
+  async switchRole(@CurrentAuth() auth: AccessClaims, @Body() body: unknown, @Req() req: Request) {
+    return this.auth.switchRole(auth, parseInput(SwitchRoleRequestSchema, body).role, requestContextOf(req));
+  }
+
   @Post('logout')
+  @Authenticated()
   @HttpCode(204)
-  @UseGuards(AccessTokenGuard)
   async logout(
     @CurrentAuth() auth: AccessClaims,
     @Req() req: Request,
@@ -103,19 +116,26 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(AccessTokenGuard)
+  @Authenticated()
   async me(@CurrentAuth() auth: AccessClaims) {
     return this.auth.me(auth);
   }
 
   @Post('activate')
+  @Public()
   @HttpCode(204)
+  @RateLimit({ name: 'activate', limit: 30, windowSeconds: 15 * MINUTE, by: 'ip' })
   async activate(@Body() body: unknown, @Req() req: Request) {
     await this.auth.activate(parseInput(ActivateRequestSchema, body), requestContextOf(req));
   }
 
   @Post('password/forgot')
+  @Public()
   @HttpCode(202)
+  @RateLimit(
+    { name: 'forgot-ip', limit: 30, windowSeconds: 15 * MINUTE, by: 'ip' },
+    { name: 'forgot-email', limit: 3, windowSeconds: 60 * MINUTE, by: 'email' },
+  )
   async forgotPassword(@Body() body: unknown, @Req() req: Request) {
     await this.auth.requestPasswordReset(
       parseInput(ForgotPasswordRequestSchema, body).email,
@@ -127,14 +147,17 @@ export class AuthController {
   }
 
   @Post('password/reset')
+  @Public()
   @HttpCode(204)
+  @RateLimit({ name: 'reset', limit: 30, windowSeconds: 15 * MINUTE, by: 'ip' })
   async resetPassword(@Body() body: unknown, @Req() req: Request) {
     await this.auth.resetPassword(parseInput(ResetPasswordRequestSchema, body), requestContextOf(req));
   }
 
   @Post('password/change')
+  @Authenticated()
   @HttpCode(204)
-  @UseGuards(AccessTokenGuard)
+  @RateLimit({ name: 'password-change', limit: 10, windowSeconds: 15 * MINUTE, by: 'ip' })
   async changePassword(@CurrentAuth() auth: AccessClaims, @Body() body: unknown, @Req() req: Request) {
     await this.auth.changePassword(
       auth,
