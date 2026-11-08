@@ -749,3 +749,7 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
   - the production storage host is not chosen.
   - The dashboard screens for imports and photos come in step 7.
 - **Next step:** Phase 2, step 6: enrolments (students into course sections, single and bulk through the same import pipeline) and course-rep appointments (D-12: an Administrator appoints; the lecturer may nominate).
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (API 168, e2e 1, audit clean).
+  - GitHub run 42530609122 on `4b5eaa9`: **failure**. The new step that starts storage had literal `\n` text where line breaks belonged (a scripted edit went wrong), so `docker run` stopped with exit code 125. The rehearsal could not catch it because it runs CI's commands from a script, not from the workflow file.
+  - Fixed in `ci.yml`: real line breaks and a sturdier readiness check. GitHub run 42531516222: **success**.
