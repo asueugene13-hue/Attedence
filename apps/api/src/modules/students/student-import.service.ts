@@ -3,6 +3,7 @@ import { STUDENT_IMPORT_COLUMNS, StudentImportRowSchema } from '@attendsure/shar
 import type { RequestContext } from '../../common/request-context.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import {
   basicRowProblems,
@@ -13,6 +14,7 @@ import {
   problem,
   type SheetValues,
 } from '../imports/import-handler.js';
+import { AccountsService } from '../users/accounts.service.js';
 import { StudentsService } from './students.service.js';
 
 export interface StudentImportInput {
@@ -47,6 +49,8 @@ export class StudentImportService implements ImportHandler<StudentImportInput> {
   constructor(
     private readonly prisma: PrismaService,
     private readonly students: StudentsService,
+    private readonly academic: AcademicLookupsService,
+    private readonly accounts: AccountsService,
   ) {}
 
   async check(rows: SheetValues[]): Promise<CheckedRow<StudentImportInput>[]> {
@@ -88,21 +92,8 @@ export class StudentImportService implements ImportHandler<StudentImportInput> {
     return this.students.sendActivationFor(profileId);
   }
 
-  private async loadLookups() {
-    const [programmes, levels, years] = await Promise.all([
-      this.prisma.programme.findMany({ include: { department: { include: { faculty: true } } } }),
-      this.prisma.academicLevel.findMany(),
-      this.prisma.academicYear.findMany({ include: { semesters: true } }),
-    ]);
-    return {
-      programmes: new Map(
-        programmes
-          .filter((p) => p.isActive && p.department.isActive && p.department.faculty.isActive)
-          .map((p) => [p.code, p.id]),
-      ),
-      levels: new Map(levels.filter((l) => l.isActive).map((l) => [l.code, l.id])),
-      years: new Map(years.map((y) => [y.label, y])),
-    };
+  private loadLookups() {
+    return this.academic.importLookups();
   }
 
   private checkRow(row: SheetValues, lookups: Awaited<ReturnType<StudentImportService['loadLookups']>>) {
@@ -184,16 +175,18 @@ export class StudentImportService implements ImportHandler<StudentImportInput> {
         select: { studentNumber: true },
       });
       found.forEach((f) => numbers.add(f.studentNumber));
-      const users = await this.prisma.user.findMany({
-        where: { email: { in: part.map((r) => r.normalized!.email) } },
-        select: { email: true, status: true, studentProfile: { select: { id: true } } },
-      });
-      users.forEach((u) =>
-        accounts.set(u.email, {
-          isStudent: u.studentProfile !== null,
-          deactivated: u.status === 'DEACTIVATED',
-        }),
+      const users = await this.accounts.byEmails(part.map((r) => r.normalized!.email));
+      const studentUsers = new Set(
+        (
+          await this.prisma.studentProfile.findMany({
+            where: { userId: { in: [...users.values()].map((u) => u.id) } },
+            select: { userId: true },
+          })
+        ).map((p) => p.userId),
       );
+      for (const u of users.values()) {
+        accounts.set(u.email, { isStudent: studentUsers.has(u.id), deactivated: u.status === 'DEACTIVATED' });
+      }
     }
     for (const row of candidates) {
       const input = row.normalized!;

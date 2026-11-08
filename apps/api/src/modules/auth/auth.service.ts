@@ -5,12 +5,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import {
-  type LoginRequest,
-  MFA_REQUIRED_ROLES,
-  type MfaVerifyRequest,
-  STUDENT_NUMBER_PATTERN,
-} from '@attendsure/shared';
+import { type LoginRequest, MFA_REQUIRED_ROLES, type MfaVerifyRequest } from '@attendsure/shared';
 import type { RequestContext } from '../../common/request-context.js';
 import { AppConfig } from '../../config/app-config.js';
 import type { ClientType, RoleKey, User } from '../../generated/prisma/client.js';
@@ -80,6 +75,8 @@ export class AuthService {
     private readonly mail: MailService,
     private readonly audit: AuditService,
   ) {}
+
+  private readonly identifierResolvers: ((identifier: string) => Promise<string | null>)[] = [];
 
   // ───────────────────────── Sign-in ─────────────────────────
 
@@ -485,18 +482,19 @@ export class AuthService {
   private async findSignInUser(input: LoginRequest): Promise<User | null> {
     const raw = (input.email ?? input.identifier ?? '').trim();
     if (raw.includes('@')) return this.prisma.user.findUnique({ where: { email: raw.toLowerCase() } });
-    if (STUDENT_NUMBER_PATTERN.test(raw)) {
-      const student = await this.prisma.studentProfile.findUnique({
-        where: { studentNumber: raw },
-        include: { user: true },
-      });
-      if (student) return student.user;
+    for (const resolver of this.identifierResolvers) {
+      const userId = await resolver(raw);
+      if (userId) return this.prisma.user.findUnique({ where: { id: userId } });
     }
-    const lecturer = await this.prisma.lecturerProfile.findUnique({
-      where: { staffNumber: raw.toUpperCase() },
-      include: { user: true },
-    });
-    return lecturer?.user ?? null;
+    return null;
+  }
+
+  /**
+   * Lets the module that owns an ID (students: Student ID; courses: staff number) answer "whose ID is
+   * this?" at sign-in, so this module never reads their tables. Tried in registration order.
+   */
+  registerSignInIdentifier(resolver: (identifier: string) => Promise<string | null>): void {
+    this.identifierResolvers.push(resolver);
   }
 
   private async heldRoles(userId: string): Promise<RoleKey[]> {

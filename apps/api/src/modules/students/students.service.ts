@@ -4,8 +4,14 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  type OnModuleInit,
 } from '@nestjs/common';
-import type { CreateStudent, StudentQuerySchema, UpdateStudentSchema } from '@attendsure/shared';
+import {
+  type CreateStudent,
+  STUDENT_NUMBER_PATTERN,
+  type StudentQuerySchema,
+  type UpdateStudentSchema,
+} from '@attendsure/shared';
 import type { z } from 'zod';
 import { auditEntry } from '../../common/audit-entry.js';
 import { rethrowAsConflict } from '../../common/db-errors.js';
@@ -14,10 +20,12 @@ import type { Prisma, StudentStatus } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { type UploadedBytes, unsupportedFile } from '../../common/upload.js';
 import { AuditService } from '../audit-logs/audit.service.js';
+import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
 import { AuthService } from '../auth/auth.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { detectFileType } from '../files/file-type.js';
 import { FilesService } from '../files/files.service.js';
+import { AccountsService } from '../users/accounts.service.js';
 
 const notFound = () => new NotFoundException({ code: 'NOT_FOUND', message: 'No such student.' });
 const invalid = (code: string, message: string) => new BadRequestException({ code, message });
@@ -82,7 +90,7 @@ export function toStudentView(s: StudentRow) {
  * profile. Edits are version-checked: two people editing one record cannot overwrite each other.
  */
 @Injectable()
-export class StudentsService {
+export class StudentsService implements OnModuleInit {
   private readonly logger = new Logger(StudentsService.name);
 
   constructor(
@@ -90,7 +98,21 @@ export class StudentsService {
     private readonly audit: AuditService,
     private readonly auth: AuthService,
     private readonly files: FilesService,
+    private readonly accounts: AccountsService,
+    private readonly academic: AcademicLookupsService,
   ) {}
+
+  /** Signing in with a Student ID is answered here, where Student IDs live. */
+  onModuleInit(): void {
+    this.auth.registerSignInIdentifier(async (identifier) => {
+      if (!STUDENT_NUMBER_PATTERN.test(identifier)) return null;
+      const row = await this.prisma.studentProfile.findUnique({
+        where: { studentNumber: identifier },
+        select: { userId: true },
+      });
+      return row?.userId ?? null;
+    });
+  }
 
   async list(query: z.output<typeof StudentQuerySchema>) {
     const rows = await this.prisma.studentProfile.findMany({
@@ -215,36 +237,22 @@ export class StudentsService {
     context: RequestContext,
     auditExtra: Record<string, unknown> = {},
   ) {
-    let user = await tx.user.findUnique({
-      where: { email: input.email },
-      include: { studentProfile: true },
-    });
-    if (user?.studentProfile) {
+    // The account (and its Student role) belongs to the users module; the profile belongs here.
+    const { userId, newAccount } = await this.accounts.ensureAccountWithRole(
+      tx,
+      { email: input.email, fullName: input.fullName, phone: input.phone },
+      'STUDENT',
+      actor.userId,
+    );
+    if (await tx.studentProfile.findUnique({ where: { userId } })) {
       throw new ConflictException({
         code: 'ALREADY_STUDENT',
         message: 'This email already belongs to a student.',
       });
     }
-    if (user?.status === 'DEACTIVATED') {
-      throw new ConflictException({
-        code: 'ACCOUNT_DEACTIVATED',
-        message: 'That account is deactivated.',
-      });
-    }
-    const newAccount = !user;
-    user ??= await tx.user.create({
-      data: { email: input.email, fullName: input.fullName, phone: input.phone },
-      include: { studentProfile: true },
-    });
-    const role = await tx.role.findUniqueOrThrow({ where: { key: 'STUDENT' } });
-    const holds = await tx.userRole.count({
-      where: { userId: user.id, roleId: role.id, revokedAt: null },
-    });
-    if (holds === 0)
-      await tx.userRole.create({ data: { userId: user.id, roleId: role.id, grantedById: actor.userId } });
     const profile = await tx.studentProfile.create({
       data: {
-        userId: user.id,
+        userId,
         studentNumber: input.studentNumber,
         programmeId: input.programmeId,
         levelId: input.levelId,
@@ -264,7 +272,7 @@ export class StudentsService {
       ),
       tx,
     );
-    return { profileId: profile.id, userId: user.id, newAccount };
+    return { profileId: profile.id, userId, newAccount };
   }
 
   /**
@@ -272,11 +280,9 @@ export class StudentsService {
    * activated (nothing to send); any other failure is thrown to the caller, which records it.
    */
   async sendActivationFor(profileId: string): Promise<boolean> {
-    const profile = await this.prisma.studentProfile.findUniqueOrThrow({
-      where: { id: profileId },
-      include: { user: { select: { status: true } } },
-    });
-    if (profile.user.status !== 'PENDING_ACTIVATION') return false;
+    const profile = await this.prisma.studentProfile.findUniqueOrThrow({ where: { id: profileId } });
+    const account = await this.accounts.find(profile.userId);
+    if (account?.status !== 'PENDING_ACTIVATION') return false;
     await this.auth.sendActivationEmail(profile.userId);
     return true;
   }
@@ -310,12 +316,7 @@ export class StudentsService {
         },
       });
       if (claimed.count !== 1) throw this.versionConflict(before.version);
-      if (input.fullName !== undefined || input.phone !== undefined) {
-        await tx.user.update({
-          where: { id: before.userId },
-          data: { fullName: input.fullName, phone: input.phone },
-        });
-      }
+      await this.accounts.updateContact(tx, before.userId, { fullName: input.fullName, phone: input.phone });
       const after = await tx.studentProfile.findUniqueOrThrow({ where: { id }, include: studentInclude });
       await this.audit.record(
         auditEntry(
@@ -492,22 +493,19 @@ export class StudentsService {
     departmentId?: string;
     facultyId?: string;
   }) {
-    const programme = await this.prisma.programme.findUnique({
-      where: { id: input.programmeId },
-      include: { department: { include: { faculty: true } } },
-    });
-    if (!programme?.isActive || !programme.department.isActive || !programme.department.faculty.isActive) {
+    const programme = await this.academic.programme(input.programmeId);
+    if (!programme?.isActive) {
       throw invalid('INVALID_PROGRAMME', 'No such active programme.');
     }
     if (input.departmentId && input.departmentId !== programme.departmentId) {
       throw invalid('PLACEMENT_MISMATCH', 'That programme belongs to a different department.');
     }
-    if (input.facultyId && input.facultyId !== programme.department.facultyId) {
+    if (input.facultyId && input.facultyId !== programme.facultyId) {
       throw invalid('PLACEMENT_MISMATCH', 'That programme belongs to a different faculty.');
     }
-    const level = await this.prisma.academicLevel.findUnique({ where: { id: input.levelId } });
+    const level = await this.academic.level(input.levelId);
     if (!level?.isActive) throw invalid('INVALID_LEVEL', 'No such active level.');
-    const semester = await this.prisma.semester.findUnique({ where: { id: input.semesterId } });
+    const semester = await this.academic.semester(input.semesterId);
     if (!semester || semester.academicYearId !== input.academicYearId) {
       throw invalid('PLACEMENT_MISMATCH', 'That semester does not belong to that academic year.');
     }

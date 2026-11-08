@@ -13,6 +13,7 @@ import type { RequestContext } from '../../common/request-context.js';
 import type { OfferingStatus, Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AcademicAccessService } from '../academic/academic-access.service.js';
+import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
 import { AuditService } from '../audit-logs/audit.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 
@@ -48,6 +49,7 @@ export class CoursesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly access: AcademicAccessService,
+    private readonly academic: AcademicLookupsService,
   ) {}
 
   // ───────── Courses ─────────
@@ -77,7 +79,7 @@ export class CoursesService {
     input: z.output<typeof CreateCourseSchema>,
     context: RequestContext,
   ) {
-    const department = await this.prisma.department.findUnique({ where: { id: input.departmentId } });
+    const department = await this.academic.department(input.departmentId);
     if (!department) throw notFound('department');
     await this.access.assertDepartment(actor, department);
     if (!department.isActive)
@@ -180,7 +182,7 @@ export class CoursesService {
     await this.access.assertDepartment(actor, course.department);
     if (!course.isActive)
       throw new BadRequestException({ code: 'PARENT_INACTIVE', message: 'The course is inactive.' });
-    const semester = await this.prisma.semester.findUnique({ where: { id: input.semesterId } });
+    const semester = await this.academic.semester(input.semesterId);
     if (!semester) throw notFound('semester');
     if (semester.status === 'CLOSED') throw conflict('SEMESTER_CLOSED', 'That semester is closed.');
     return this.prisma
@@ -389,12 +391,12 @@ export class CoursesService {
 
   private async assertHints(programmeId?: string, levelId?: string) {
     if (programmeId) {
-      const programme = await this.prisma.programme.findUnique({ where: { id: programmeId } });
+      const programme = await this.academic.programme(programmeId);
       if (!programme?.isActive)
         throw new BadRequestException({ code: 'INVALID_PROGRAMME', message: 'No such active programme.' });
     }
     if (levelId) {
-      const level = await this.prisma.academicLevel.findUnique({ where: { id: levelId } });
+      const level = await this.academic.level(levelId);
       if (!level?.isActive)
         throw new BadRequestException({ code: 'INVALID_LEVEL', message: 'No such active level.' });
     }

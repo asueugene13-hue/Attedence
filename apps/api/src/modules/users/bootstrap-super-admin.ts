@@ -2,6 +2,8 @@ import { z } from 'zod';
 import type { PrismaClient } from '../../generated/prisma/client.js';
 import { seedSystemRoles } from '../../database/seed-system-roles.js';
 import { hashToken, newOpaqueToken } from '../../infrastructure/crypto/tokens.js';
+import type { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { AuditService } from '../audit-logs/audit.service.js';
 import { LINK_LIFETIME_MS } from '../auth/account-tokens.service.js';
 
 export const BootstrapInputSchema = z.strictObject({
@@ -32,6 +34,8 @@ export async function bootstrapSuperAdmin(
   input: BootstrapInput,
 ): Promise<BootstrapResult> {
   await seedSystemRoles(prisma);
+  // Runs outside the Nest app (a one-time server command), so the audit service is built by hand.
+  const audit = new AuditService(prisma as PrismaService);
 
   return prisma.$transaction(async (tx) => {
     const existingAdmins = await tx.userRole.count({
@@ -61,16 +65,17 @@ export async function bootstrapSuperAdmin(
         expiresAt: activationExpiresAt,
       },
     });
-    await tx.auditLog.create({
-      data: {
-        actorType: 'SYSTEM',
+    // No signed-in actor, so the audit service records it as a SYSTEM action.
+    await audit.record(
+      {
         action: 'bootstrap.super_admin.created',
         entityType: 'user',
         entityId: user.id,
         after: { email: user.email, role: 'SUPER_ADMIN' },
         reason: 'First Super Admin created with the one-time server command.',
       },
-    });
+      tx,
+    );
     return { userId: user.id, activationToken, activationExpiresAt };
   });
 }

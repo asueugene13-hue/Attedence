@@ -17,6 +17,7 @@ type RoleGrant = {
 import type { RequestContext } from '../../common/request-context.js';
 import { Prisma, type RoleKey } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
 import { AuditService } from '../audit-logs/audit.service.js';
 import { AuthService } from '../auth/auth.service.js';
 import { SessionService } from '../auth/session.service.js';
@@ -73,6 +74,7 @@ export class UsersService {
     private readonly audit: AuditService,
     private readonly auth: AuthService,
     private readonly sessions: SessionService,
+    private readonly academic: AcademicLookupsService,
   ) {}
 
   async list(query: {
@@ -433,13 +435,9 @@ export class UsersService {
   // ───────────────────────── Safeguards ─────────────────────────
 
   /** A faculty or department scope must name a real, active faculty or department. */
-  private async assertScopeExists(tx: Prisma.TransactionClient, grant: RoleGrant) {
+  private async assertScopeExists(_tx: Prisma.TransactionClient, grant: RoleGrant) {
     if (grant.scopeType === 'INSTITUTION') return;
-    const target =
-      grant.scopeType === 'FACULTY'
-        ? await tx.faculty.findUnique({ where: { id: grant.scopeId! } })
-        : await tx.department.findUnique({ where: { id: grant.scopeId! } });
-    if (!target?.isActive) {
+    if (!(await this.academic.scopeTargetActive(grant.scopeType, grant.scopeId!))) {
       throw new BadRequestException({
         code: 'INVALID_SCOPE',
         message: `No such active ${grant.scopeType === 'FACULTY' ? 'faculty' : 'department'}.`,

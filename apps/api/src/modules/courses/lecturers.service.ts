@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  type OnModuleInit,
 } from '@nestjs/common';
 import type { CreateLecturerSchema, UpdateLecturerSchema } from '@attendsure/shared';
 import type { z } from 'zod';
@@ -13,9 +14,11 @@ import type { RequestContext } from '../../common/request-context.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AcademicAccessService } from '../academic/academic-access.service.js';
+import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
 import { AuditService } from '../audit-logs/audit.service.js';
 import { AuthService } from '../auth/auth.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
+import { AccountsService } from '../users/accounts.service.js';
 
 const notFound = (what: string) => new NotFoundException({ code: 'NOT_FOUND', message: `No such ${what}.` });
 const STAFF_NUMBER_IN_USE = {
@@ -33,7 +36,7 @@ const profileInclude = {
  * teaches) gets the profile and role added rather than a second account.
  */
 @Injectable()
-export class LecturersService {
+export class LecturersService implements OnModuleInit {
   private readonly logger = new Logger(LecturersService.name);
 
   constructor(
@@ -41,7 +44,20 @@ export class LecturersService {
     private readonly audit: AuditService,
     private readonly access: AcademicAccessService,
     private readonly auth: AuthService,
+    private readonly accounts: AccountsService,
+    private readonly academic: AcademicLookupsService,
   ) {}
+
+  /** Signing in with a staff number is answered here, where staff numbers live. */
+  onModuleInit(): void {
+    this.auth.registerSignInIdentifier(async (identifier) => {
+      const row = await this.prisma.lecturerProfile.findUnique({
+        where: { staffNumber: identifier.toUpperCase() },
+        select: { userId: true },
+      });
+      return row?.userId ?? null;
+    });
+  }
 
   listLecturers(filter: { q?: string; departmentId?: string; facultyId?: string; status?: string }) {
     return this.prisma.lecturerProfile.findMany({
@@ -97,7 +113,7 @@ export class LecturersService {
     input: z.output<typeof CreateLecturerSchema>,
     context: RequestContext,
   ) {
-    const department = await this.prisma.department.findUnique({ where: { id: input.departmentId } });
+    const department = await this.academic.department(input.departmentId);
     if (!department) throw notFound('department');
     await this.access.assertDepartment(actor, department);
     if (!department.isActive)
@@ -105,36 +121,22 @@ export class LecturersService {
 
     const { profile, newAccount } = await this.prisma
       .$transaction(async (tx) => {
-        let user = await tx.user.findUnique({
-          where: { email: input.email },
-          include: { lecturerProfile: true },
-        });
-        if (user?.lecturerProfile) {
+        // The account and its Lecturer role belong to the users module; the profile belongs here.
+        const { userId, newAccount } = await this.accounts.ensureAccountWithRole(
+          tx,
+          { email: input.email, fullName: input.fullName },
+          'LECTURER',
+          actor.userId,
+        );
+        if (await tx.lecturerProfile.findUnique({ where: { userId } })) {
           throw new ConflictException({
             code: 'ALREADY_LECTURER',
             message: 'This person already has a lecturer profile.',
           });
         }
-        if (user?.status === 'DEACTIVATED') {
-          throw new ConflictException({
-            code: 'ACCOUNT_DEACTIVATED',
-            message: 'That account is deactivated.',
-          });
-        }
-        const newAccount = !user;
-        user ??= await tx.user.create({
-          data: { email: input.email, fullName: input.fullName },
-          include: { lecturerProfile: true },
-        });
-        const role = await tx.role.findUniqueOrThrow({ where: { key: 'LECTURER' } });
-        const holds = await tx.userRole.count({
-          where: { userId: user.id, roleId: role.id, revokedAt: null },
-        });
-        if (holds === 0)
-          await tx.userRole.create({ data: { userId: user.id, roleId: role.id, grantedById: actor.userId } });
         const profile = await tx.lecturerProfile.create({
           data: {
-            userId: user.id,
+            userId,
             staffNumber: input.staffNumber,
             departmentId: input.departmentId,
             title: input.title,
@@ -181,7 +183,7 @@ export class LecturersService {
     if (!before) throw notFound('lecturer');
     await this.access.assertDepartment(actor, before.department);
     if (input.departmentId && input.departmentId !== before.departmentId) {
-      const target = await this.prisma.department.findUnique({ where: { id: input.departmentId } });
+      const target = await this.academic.department(input.departmentId);
       if (!target?.isActive)
         throw new BadRequestException({ code: 'INVALID_DEPARTMENT', message: 'No such active department.' });
       await this.access.assertDepartment(actor, target);
