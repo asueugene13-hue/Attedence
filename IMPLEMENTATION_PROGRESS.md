@@ -539,3 +539,10 @@ Read this first in every session, and update it after every implementation step.
 2. The product owner approves Phase 2 (academic management).
 3. Optional but recommended: install JDK 17 and Android Studio, so the mobile native build can be completed and kept working.
 4. Decisions needed during Phase 2: D-12 (who appoints course reps), D-14 (real Student and Staff ID formats, and who supplies the academic structure), D-16 (where uploaded files are stored), and the BLE beacon trial (D-08).
+
+### 2026-11-08 — CI repair (found after the repository was made public)
+
+- **What was wrong:** GitHub CI had failed on every push from step 3 (`9a4d225`) to step 9 (`1581216`). Steps 1–2 passed. The cause: `npm run typecheck` ran before anything was built, and on a fresh machine `packages/shared/dist` does not exist yet, so the API could not resolve `@attendsure/shared` ("Cannot find module"). Every check passed on this PC only because the packages had already been built here. Earlier progress entries reported local results; none claimed CI was green, but the CI result had not been checked until the repository became public.
+- **Fix:** a root `build:packages` script (shared + design-tokens) now runs before `typecheck` and `test`.
+- **How it was verified:** a fresh `git clone` in a scratch folder, `npm ci`, no `.env`, CI-style environment variables and separate databases (`attendsure_ci`, Redis database 3). Every CI step was run in CI's order: format, lint, typecheck, build, test, mobile bundle, migrate/seed/drift, Playwright e2e (1 passed), `npm audit --audit-level=high`. **All passed.**
+- **Lesson kept for future steps:** before reporting a step as done, rehearse CI from a clean clone, then check the actual GitHub run.
