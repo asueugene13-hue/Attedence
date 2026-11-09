@@ -30,7 +30,12 @@ function ThemedNavigation() {
 }
 
 export default function App() {
-  const [queryClient] = useState(() => new QueryClient());
+  return <AppRoot />;
+}
+
+/** The app with all its providers. Tests pass their own query client (without clean-up timers). */
+export function AppRoot({ queryClient: given }: { queryClient?: QueryClient }) {
+  const [queryClient] = useState(() => given ?? new QueryClient());
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>

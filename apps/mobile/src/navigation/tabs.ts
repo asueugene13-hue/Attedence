@@ -1,21 +1,22 @@
 import type { RoleKey } from '@attendsure/shared';
 
-export type TabName = 'Home' | 'Profile';
+export type TabName = 'Home' | 'Schedule' | 'Alerts' | 'Profile';
 
 /**
  * Bottom tabs per role. Only screens that exist are listed: no placeholder tabs. Later phases add
- * Schedule, Scan and Attendance for students and Schedule, Live and Reviews for lecturers
- * (design canvas: information architecture), each when it works.
+ * Scan and Attendance for students and Live and Reviews for lecturers (design canvas: information
+ * architecture), each when it works.
  */
 export function tabsForRole(role: RoleKey): TabName[] {
   switch (role) {
     case 'STUDENT':
     case 'COURSE_REP':
     case 'LECTURER':
+      return ['Home', 'Schedule', 'Alerts', 'Profile'];
     case 'SUPER_ADMIN':
     case 'UNIVERSITY_ADMIN':
     case 'REGISTRAR':
-      return ['Home', 'Profile'];
+      return ['Home', 'Alerts', 'Profile'];
   }
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import type { RoleKey } from '@attendsure/shared';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
@@ -16,6 +17,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [error, setError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
+  const unread = useQuery({
+    queryKey: ['unread-count'],
+    enabled: auth.status === 'signed-in',
+    queryFn: () => auth.call<{ unread: number }>('/me/notifications/unread-count'),
+    refetchInterval: 60_000,
+  });
 
   useEffect(() => {
     if (auth.status === 'signed-out') router.replace('/login');
@@ -62,6 +69,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 aria-current={active ? 'page' : undefined}
               >
                 {item.label}
+                {item.href === '/notifications' && unread.data?.unread ? (
+                  <span className="nav-count" aria-label={`${unread.data.unread} unread`}>
+                    {unread.data.unread}
+                  </span>
+                ) : null}
               </Link>
             );
           })}

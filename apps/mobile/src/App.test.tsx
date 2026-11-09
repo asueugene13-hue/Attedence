@@ -1,5 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import App from './App';
+import { QueryClient } from '@tanstack/react-query';
+import { fireEvent, render as renderTree, screen, waitFor } from '@testing-library/react-native';
+import type { ReactElement } from 'react';
+import App, { AppRoot } from './App';
 import { tabsForRole } from './navigation/tabs';
 
 // In-memory stand-in for the phone's secure storage.
@@ -34,19 +36,30 @@ const me = (role: string, roles = [role]) => ({
   permissions: [],
 });
 
+// Each test gets its own query cache with no clean-up timers, so Jest can exit as soon as it is done.
+let queryClient: QueryClient;
+const render = (_element: ReactElement) => renderTree(<AppRoot queryClient={queryClient} />);
+
 type Route = (body: Record<string, unknown> | undefined) => { status: number; body?: unknown };
 let routes: Record<string, Route>;
 const calls: { path: string; body?: Record<string, unknown> }[] = [];
 
 beforeEach(() => {
+  queryClient = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity, retry: false } } });
   mockSecureStore.clear();
   calls.length = 0;
-  routes = {};
+  // Every signed-in screen asks for these; tests override them when they matter.
+  routes = {
+    'GET /me/timetable': () => ({ status: 200, body: { as: 'STUDENT', data: [] } }),
+    'GET /me/notifications/unread-count': () => ({ status: 200, body: { unread: 0 } }),
+  };
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input).replace(/^.*\/api\/v1/, '');
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined;
     calls.push({ path, body });
-    const route = routes[`${init?.method ?? 'GET'} ${path}`];
+    const method = init?.method ?? 'GET';
+    // A route may be registered with or without its query string (dates change every day).
+    const route = routes[`${method} ${path}`] ?? routes[`${method} ${path.split('?')[0]}`];
     const result = route ? route(body) : { status: 404, body: { code: 'NOT_FOUND', detail: 'Not found' } };
     return new Response(result.body === undefined ? null : JSON.stringify(result.body), {
       status: result.status,
@@ -103,7 +116,7 @@ describe('signing in', () => {
     expect(await screen.findByText('Hello, Test Student')).toBeTruthy();
     expect(calls.find((c) => c.path === '/auth/login')?.body).toMatchObject({ client: 'MOBILE' });
     expect(mockSecureStore.get(TOKEN_KEY)).toBe('refresh-1');
-    expect(screen.getByText(/check-in/)).toBeTruthy();
+    expect(await screen.findByText('No classes today.')).toBeTruthy();
   });
 
   it('shows the server message for wrong credentials', async () => {
@@ -158,7 +171,7 @@ describe('signing out', () => {
     routes['POST /auth/logout'] = () => ({ status: 204 });
 
     await render(<App />);
-    expect(await screen.findByText(/Start class/)).toBeTruthy();
+    expect(await screen.findByText('No classes today.')).toBeTruthy();
     await fireEvent.press(screen.getByText('Profile'));
     await fireEvent.press(await screen.findByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(mockSecureStore.has(TOKEN_KEY)).toBe(false));
@@ -167,9 +180,63 @@ describe('signing out', () => {
   });
 });
 
+const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Accra' }).format(new Date());
+const aClass = (status = 'SCHEDULED') => ({
+  id: 'c1',
+  kind: 'REGULAR',
+  status,
+  scheduledStart: `${today()}T10:00:00.000Z`,
+  scheduledEnd: `${today()}T11:30:00.000Z`,
+  expectedStart: null,
+  sections: [{ id: 's1', code: 'A', course: { code: 'TST101', title: 'Test Course' } }],
+  lecturer: { id: 'l1', fullName: 'Test Lecturer', userId: 'u1' },
+  classroom: { id: 'r1', code: 'R1', name: 'Room 1 (test)' },
+  cancelReason: null,
+  cancelNote: null,
+});
+
+describe('classes', () => {
+  function signedInAs(role: string) {
+    mockSecureStore.set(TOKEN_KEY, 'refresh-old');
+    routes['POST /auth/refresh'] = () => ({ status: 200, body: session(role, 'refresh-new') });
+    routes['GET /auth/me'] = () => ({ status: 200, body: me(role) });
+    routes['GET /me/notifications/unread-count'] = () => ({ status: 200, body: { unread: 0 } });
+    routes['GET /me/timetable'] = () => ({ status: 200, body: { as: role, data: [aClass()] } });
+    routes['GET /class-sessions/c1'] = () => ({ status: 200, body: aClass() });
+  }
+
+  it('a student opens today’s class and reports that the lecturer has not arrived', async () => {
+    signedInAs('STUDENT');
+    routes['POST /class-sessions/c1/issue-reports'] = () => ({ status: 201, body: { id: 'r1' } });
+    await render(<App />);
+    await fireEvent.press(await screen.findByRole('button', { name: /TST101 A/ }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Report a problem' }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Lecturer has not arrived' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Send report' }));
+    expect(await screen.findByText(/Your report was recorded/)).toBeTruthy();
+    expect(calls.find((c) => c.path === '/class-sessions/c1/issue-reports')?.body).toEqual({
+      type: 'LECTURER_NOT_ARRIVED',
+    });
+    // Students never get the lecturer's buttons.
+    expect(screen.queryByRole('button', { name: 'Start class' })).toBeNull();
+  });
+
+  it('the class’s own lecturer can start it from the phone', async () => {
+    signedInAs('LECTURER');
+    routes['POST /class-sessions/c1/start'] = () => ({ status: 200, body: aClass('ACTIVE') });
+    await render(<App />);
+    await fireEvent.press(await screen.findByRole('button', { name: /TST101 A/ }));
+    expect(await screen.findByRole('button', { name: 'Confirm class' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Start class' }));
+    expect(await screen.findByText('Start class: done.')).toBeTruthy();
+    expect(calls.some((c) => c.path === '/class-sessions/c1/start')).toBe(true);
+  });
+});
+
 describe('navigation', () => {
   it('lists only built screens as tabs', () => {
-    expect(tabsForRole('STUDENT')).toEqual(['Home', 'Profile']);
-    expect(tabsForRole('LECTURER')).toEqual(['Home', 'Profile']);
+    expect(tabsForRole('STUDENT')).toEqual(['Home', 'Schedule', 'Alerts', 'Profile']);
+    expect(tabsForRole('LECTURER')).toEqual(['Home', 'Schedule', 'Alerts', 'Profile']);
+    expect(tabsForRole('UNIVERSITY_ADMIN')).toEqual(['Home', 'Alerts', 'Profile']);
   });
 });

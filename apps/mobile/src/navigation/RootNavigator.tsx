@@ -1,40 +1,66 @@
+import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useQuery } from '@tanstack/react-query';
+import type { ComponentProps } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
+import { AlertsScreen } from '../screens/AlertsScreen';
+import { ClassScreen } from '../screens/ClassScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { TwoStepScreen } from '../screens/TwoStepScreen';
 import { type TabName, tabsForRole } from './tabs';
+import type { RootStackParamList } from './types';
 
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator();
 
-const SCREENS: Record<TabName, () => React.JSX.Element | null> = { Home: HomeScreen, Profile: ProfileScreen };
+const SCREENS: Record<TabName, () => React.JSX.Element | null> = {
+  Home: HomeScreen,
+  Schedule: ScheduleScreen,
+  Alerts: AlertsScreen,
+  Profile: ProfileScreen,
+};
+type IconName = ComponentProps<typeof Ionicons>['name'];
+const ICONS: Record<TabName, [IconName, IconName]> = {
+  Home: ['home', 'home-outline'],
+  Schedule: ['calendar', 'calendar-outline'],
+  Alerts: ['notifications', 'notifications-outline'],
+  Profile: ['person-circle', 'person-circle-outline'],
+};
 
 function SignedInTabs() {
-  const { me } = useAuth();
+  const { me, call } = useAuth();
   const { palette } = useTheme();
   const tabs = tabsForRole(me!.activeRole);
+  const unread = useQuery({
+    queryKey: ['unread-count'],
+    queryFn: () => call<{ unread: number }>('/me/notifications/unread-count'),
+    refetchInterval: 60_000,
+  });
   return (
     <Tabs.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: palette.primary,
         tabBarInactiveTintColor: palette.textMuted,
         tabBarStyle: { backgroundColor: palette.surface, borderTopColor: palette.border },
-        // No icon set yet: without this the library draws a "missing icon" box. Labels only until the
-        // design system's icons are added with the full mobile screens (Phase 3 step 7).
-        tabBarIcon: () => null,
-        tabBarIconStyle: { display: 'none' },
-        tabBarLabelStyle: { fontSize: 15, fontWeight: '600' },
-        tabBarItemStyle: { justifyContent: 'center' },
-      }}
+        tabBarIcon: ({ focused, color, size }) => (
+          <Ionicons name={ICONS[route.name as TabName][focused ? 0 : 1]} size={size} color={color} />
+        ),
+      })}
     >
       {tabs.map((name) => (
-        <Tabs.Screen key={name} name={name} component={SCREENS[name]} />
+        <Tabs.Screen
+          key={name}
+          name={name}
+          component={SCREENS[name]}
+          options={name === 'Alerts' && unread.data?.unread ? { tabBarBadge: unread.data.unread } : undefined}
+        />
       ))}
     </Tabs.Navigator>
   );
@@ -63,7 +89,14 @@ export function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {auth.status === 'signed-in' && auth.me ? (
-        <Stack.Screen name="Main" component={SignedInTabs} />
+        <>
+          <Stack.Screen name="Main" component={SignedInTabs} />
+          <Stack.Screen
+            name="Class"
+            component={ClassScreen}
+            options={{ headerShown: true, title: 'Class' }}
+          />
+        </>
       ) : auth.pendingMfa ? (
         <Stack.Screen name="TwoStep" component={TwoStepScreen} />
       ) : (

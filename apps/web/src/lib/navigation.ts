@@ -9,10 +9,20 @@ export interface NavItem {
 
 /**
  * Sidebar items. Only screens that exist are listed: no placeholders, no dead links.
- * Later phases add Timetable, Classes, Reports and so on, each behind its permission.
+ * Later phases add Attendance, Reports and so on, each behind its permission.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/', label: 'Home' },
+  { href: '/today', label: 'Today', permission: 'class_sessions.start' },
+  { href: '/notifications', label: 'Notifications' },
+  { href: '/classes', label: 'Class monitor', permission: 'class_reviews.decide' },
+  { href: '/class-reviews', label: 'Class reviews', permission: 'class_reviews.decide' },
+  {
+    href: '/reschedule-requests',
+    label: 'Reschedule requests',
+    permission: ['class_sessions.reschedule', 'class_sessions.request_reschedule'],
+  },
+  { href: '/timetables', label: 'Timetables', permission: 'timetables.manage' },
   { href: '/students', label: 'Students', permission: 'students.read_full' },
   { href: '/imports', label: 'Bulk import', permission: ['students.import', 'enrollments.manage'] },
   { href: '/enrollments', label: 'Enrolments', permission: 'enrollments.manage' },
@@ -24,6 +34,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/admin/users', label: 'Accounts', permission: 'users.manage_admins' },
   { href: '/admin/roles', label: 'Roles and permissions', permission: 'roles.edit_permissions' },
   { href: '/admin/audit', label: 'Audit log', permission: 'audit_logs.read' },
+  { href: '/admin/settings', label: 'Settings', permission: 'settings.manage' },
+  { href: '/admin/system-health', label: 'System health', permission: 'system_health.read' },
 ];
 
 export function visibleNavItems(permissions: readonly string[]): NavItem[] {

@@ -109,9 +109,10 @@ describe('apiFetch', () => {
 
 describe('sidebar', () => {
   it('shows only screens the role may use', () => {
-    expect(visibleNavItems([]).map((i) => i.label)).toEqual(['Home']);
+    expect(visibleNavItems([]).map((i) => i.label)).toEqual(['Home', 'Notifications']);
     expect(visibleNavItems(['users.manage_admins', 'audit_logs.read']).map((i) => i.label)).toEqual([
       'Home',
+      'Notifications',
       'Accounts',
       'Audit log',
     ]);
@@ -121,12 +122,14 @@ describe('sidebar', () => {
     const registrar = ['students.read_full', 'students.import', 'enrollments.manage'];
     expect(visibleNavItems(registrar).map((i) => i.label)).toEqual([
       'Home',
+      'Notifications',
       'Students',
       'Bulk import',
       'Enrolments',
     ]);
     expect(visibleNavItems(['enrollments.manage']).map((i) => i.label)).toEqual([
       'Home',
+      'Notifications',
       'Bulk import',
       'Enrolments',
     ]);
@@ -135,12 +138,42 @@ describe('sidebar', () => {
   it('shows the setup screens to roles that may read the structure, and Places only to room managers', () => {
     expect(visibleNavItems(['academic_structure.read']).map((i) => i.label)).toEqual([
       'Home',
+      'Notifications',
       'Courses',
       'Lecturers',
       'Academic structure',
       'Academic calendar',
     ]);
-    expect(visibleNavItems(['classrooms.manage']).map((i) => i.label)).toEqual(['Home', 'Places']);
+    expect(visibleNavItems(['classrooms.manage']).map((i) => i.label)).toEqual([
+      'Home',
+      'Notifications',
+      'Places',
+    ]);
+  });
+
+  it('shows lecturers Today and their reschedule requests, and administrators the class screens', () => {
+    const lecturer = ['class_sessions.start', 'class_sessions.request_reschedule', 'timetables.read'];
+    expect(visibleNavItems(lecturer).map((i) => i.label)).toEqual([
+      'Home',
+      'Today',
+      'Notifications',
+      'Reschedule requests',
+    ]);
+    const admin = [
+      'class_reviews.decide',
+      'class_sessions.reschedule',
+      'timetables.manage',
+      'system_health.read',
+    ];
+    expect(visibleNavItems(admin).map((i) => i.label)).toEqual([
+      'Home',
+      'Notifications',
+      'Class monitor',
+      'Class reviews',
+      'Reschedule requests',
+      'Timetables',
+      'System health',
+    ]);
   });
 });
 

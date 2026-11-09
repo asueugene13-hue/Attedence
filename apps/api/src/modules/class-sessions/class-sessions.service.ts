@@ -125,7 +125,7 @@ export class ClassSessionsService {
           const info = sections.get(s.sectionId)!;
           return { id: info.id, code: info.code, course: info.course };
         }),
-        lecturer: lecturer ? { id: lecturer.id, fullName: lecturer.fullName } : null,
+        lecturer: lecturer ? { id: lecturer.id, fullName: lecturer.fullName, userId: lecturer.userId } : null,
         classroom: room ? { id: room.id, code: room.code, name: room.name } : null,
         cancelReason: r.cancelReason,
         cancelNote: r.cancelNote,
