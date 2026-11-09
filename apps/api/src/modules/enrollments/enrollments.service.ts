@@ -279,6 +279,17 @@ export class EnrollmentsService {
   }
 
   /** Whether the student currently holds an enrolment in the section (used by course reps). */
+  /** Currently enrolled students per section, for timetable clash warnings and room-size checks. */
+  async enrolledBySection(sectionIds: string[]): Promise<Map<string, string[]>> {
+    const rows = await this.prisma.courseEnrollment.findMany({
+      where: { sectionId: { in: [...new Set(sectionIds)] }, status: 'ENROLLED' },
+      select: { sectionId: true, studentId: true },
+    });
+    const bySection = new Map<string, string[]>();
+    for (const r of rows) bySection.set(r.sectionId, [...(bySection.get(r.sectionId) ?? []), r.studentId]);
+    return bySection;
+  }
+
   async isEnrolled(studentId: string, sectionId: string, tx: Tx = this.prisma): Promise<boolean> {
     return (await tx.courseEnrollment.count({ where: { studentId, sectionId, status: 'ENROLLED' } })) > 0;
   }

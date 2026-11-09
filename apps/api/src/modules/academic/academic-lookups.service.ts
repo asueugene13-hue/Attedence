@@ -38,7 +38,39 @@ export class AcademicLookupsService {
 
   async semester(id: string) {
     const s = await this.prisma.semester.findUnique({ where: { id } });
-    return s ? { id: s.id, academicYearId: s.academicYearId, number: s.number, status: s.status } : null;
+    return s
+      ? {
+          id: s.id,
+          academicYearId: s.academicYearId,
+          number: s.number,
+          name: s.name,
+          status: s.status,
+          startDate: toDay(s.startDate),
+          endDate: toDay(s.endDate),
+        }
+      : null;
+  }
+
+  /**
+   * Days on which no classes run, between two dates (YYYY-MM-DD): holidays, closures and exam periods
+   * marked "no classes", whether entered for the whole university or for this semester.
+   */
+  async noClassDays(semesterId: string, from: string, to: string) {
+    const rows = await this.prisma.calendarException.findMany({
+      where: {
+        suppressesClasses: true,
+        OR: [{ semesterId: null }, { semesterId }],
+        startDate: { lte: new Date(`${to}T00:00:00Z`) },
+        endDate: { gte: new Date(`${from}T00:00:00Z`) },
+      },
+    });
+    const days = new Map<string, string>();
+    for (const row of rows) {
+      for (let d = new Date(row.startDate); d <= row.endDate; d = new Date(d.getTime() + 86_400_000)) {
+        days.set(toDay(d), row.name);
+      }
+    }
+    return days;
   }
 
   /** Whether a faculty or department exists and is active (for scoped role grants). */
@@ -73,3 +105,6 @@ export class AcademicLookupsService {
     };
   }
 }
+
+/** A date-only value as YYYY-MM-DD (dates are stored at midnight UTC). */
+const toDay = (d: Date) => d.toISOString().slice(0, 10);

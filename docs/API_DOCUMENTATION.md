@@ -116,11 +116,14 @@ Imports have one address per type, `/imports/<type>` with `<type>` = `students` 
 
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| POST · GET | `/timetables` · `/timetables/:id` | SA, UA | Create a draft version; view it |
-| POST · PATCH · DELETE | `/timetables/:id/entries` · `/timetable-entries/:id` | SA, UA | Add, edit, cancel entries |
-| GET | `/timetables/:id/conflicts` | SA, UA | Room, lecturer, section and student clashes |
-| POST | `/timetables/:id/publish` | SA, UA | Blocked while hard conflicts remain |
-| GET | `/timetables/:id/history` | SA, UA | Change history |
+| GET · POST | `/timetables?semesterId=&status=` · `/timetables` | Read: `timetables.read` (every role). Create: `timetables.manage` with university-wide scope | Create `{ semesterId, name }`: one draft per semester (`409 DRAFT_EXISTS`); when a published timetable exists, the draft starts as a copy of it. Not in a closed semester. **Built.** |
+| GET | `/timetables/:id` | `timetables.read` | The timetable, its semester, and its entries with sections, lecturer, room, times (HH:MM, Africa/Accra), recurrence and exceptions. **Built.** |
+| POST · PATCH | `/timetables/:id/entries` · `/timetable-entries/:id` | `timetables.manage`, within the scope of every section in the entry | `{ sectionIds, lecturerId, classroomId, recurrence: WEEKLY\|EVERY_OTHER_WEEK\|SELECTED_WEEKS\|ONCE, dayOfWeek (1 = Mon), date (ONCE), startTime, endTime, effectiveFrom?, effectiveTo?, selectedWeeks? }`. Dates default to the semester's. The lecturer must teach every section (`LECTURER_NOT_ASSIGNED`); sections must be in this semester's open offerings; the room must be active; dates inside the semester (`OUTSIDE_SEMESTER`); at least one meeting (`NO_MEETINGS`). PATCH replaces the entry and needs `If-Match`. Drafts only (`409 NOT_DRAFT`) until step 4. **Built.** |
+| POST | `/timetable-entries/:id/cancel` · `/timetable-entries/:id/exceptions` · `…/exceptions/:exceptionId/remove` | `timetables.manage` within scope | Cancel `{ reason }` (kept, marked cancelled). Skip one date `{ date, reason }`; it must be one of the entry's meeting dates. **Built.** |
+| GET | `/timetable-entries/:id/dates` | `timetables.read` | `{ dates, skipped: [{ date, why }] }`: when the entry meets, and which dates holidays or exceptions remove. **Built.** |
+| GET | `/timetables/:id/conflicts` | `timetables.manage` | `{ blocking, warnings, canPublish }`. Blocking: the same room, lecturer or section at overlapping times on the same date. Warnings: students enrolled in two overlapping sections (with their Student IDs), rooms smaller than the enrolment, inactive rooms, lecturers on leave, dates removed by holidays, entries that never meet. **Built.** |
+| POST | `/timetables/:id/publish` | `timetables.publish` with university-wide scope | `{ reason? }`. Refused while blocking clashes remain (`409 HAS_CONFLICTS`, each clash listed) or with no entries. The semester's previous published version becomes SUPERSEDED. **Built.** Class meetings are generated in step 3. |
+| GET | `/timetables/:id/history` | `timetables.manage` | Every change, newest first, with who, when, before, after and reason. **Built.** |
 | GET | `/me/timetable?from=&to=` | LE, ST, CR | Own sessions with live status |
 | GET | `/class-sessions?from=&to=&status=&sectionId=` | SA, UA, LE (scoped) | Session list and monitor |
 | GET | `/class-sessions/:id` · `/class-sessions/:id/events` | Scoped | Details; event history |

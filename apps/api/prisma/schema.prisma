@@ -87,33 +87,38 @@ model User {
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  roles                     UserRole[]            @relation("UserRoleHolder")
-  rolesGranted              UserRole[]            @relation("UserRoleGrantedBy")
-  rolesRevoked              UserRole[]            @relation("UserRoleRevokedBy")
+  roles                     UserRole[]                @relation("UserRoleHolder")
+  rolesGranted              UserRole[]                @relation("UserRoleGrantedBy")
+  rolesRevoked              UserRole[]                @relation("UserRoleRevokedBy")
   authSessions              AuthSession[]
   tokens                    UserToken[]
-  devices                   UserDevice[]          @relation("DeviceOwner")
-  devicesApproved           UserDevice[]          @relation("DeviceApprovedBy")
-  devicesRevoked            UserDevice[]          @relation("DeviceRevokedBy")
+  devices                   UserDevice[]              @relation("DeviceOwner")
+  devicesApproved           UserDevice[]              @relation("DeviceApprovedBy")
+  devicesRevoked            UserDevice[]              @relation("DeviceRevokedBy")
   auditLogs                 AuditLog[]
   recoveryCodes             MfaRecoveryCode[]
-  calendarExceptionsCreated CalendarException[]   @relation("CalendarExceptionCreatedBy")
+  calendarExceptionsCreated CalendarException[]       @relation("CalendarExceptionCreatedBy")
   lecturerProfile           LecturerProfile?
-  assignmentsMade           LecturerAssignment[]  @relation("AssignmentAssignedBy")
-  assignmentsEnded          LecturerAssignment[]  @relation("AssignmentEndedBy")
-  studentProfile            StudentProfile?       @relation("StudentUser")
-  studentsRegistered        StudentProfile[]      @relation("StudentRegisteredBy")
-  studentsVerified          StudentProfile[]      @relation("StudentVerifiedBy")
+  assignmentsMade           LecturerAssignment[]      @relation("AssignmentAssignedBy")
+  assignmentsEnded          LecturerAssignment[]      @relation("AssignmentEndedBy")
+  studentProfile            StudentProfile?           @relation("StudentUser")
+  studentsRegistered        StudentProfile[]          @relation("StudentRegisteredBy")
+  studentsVerified          StudentProfile[]          @relation("StudentVerifiedBy")
   filesUploaded             FileObject[]
-  importsUploaded           ImportBatch[]         @relation("ImportUploadedBy")
-  importsDecided            ImportBatch[]         @relation("ImportDecidedBy")
-  enrollmentsCreated        CourseEnrollment[]    @relation("EnrollmentCreatedBy")
-  enrollmentsEnded          CourseEnrollment[]    @relation("EnrollmentEndedBy")
-  repsNominated             CourseRepAssignment[] @relation("RepNominatedBy")
-  repsAssigned              CourseRepAssignment[] @relation("RepAssignedBy")
-  repsEnded                 CourseRepAssignment[] @relation("RepEndedBy")
-  settingsUpdated           InstitutionSetting[]  @relation("SettingUpdatedBy")
-  systemEventsAcknowledged  SystemEvent[]         @relation("SystemEventAcknowledgedBy")
+  importsUploaded           ImportBatch[]             @relation("ImportUploadedBy")
+  importsDecided            ImportBatch[]             @relation("ImportDecidedBy")
+  enrollmentsCreated        CourseEnrollment[]        @relation("EnrollmentCreatedBy")
+  enrollmentsEnded          CourseEnrollment[]        @relation("EnrollmentEndedBy")
+  repsNominated             CourseRepAssignment[]     @relation("RepNominatedBy")
+  repsAssigned              CourseRepAssignment[]     @relation("RepAssignedBy")
+  repsEnded                 CourseRepAssignment[]     @relation("RepEndedBy")
+  settingsUpdated           InstitutionSetting[]      @relation("SettingUpdatedBy")
+  systemEventsAcknowledged  SystemEvent[]             @relation("SystemEventAcknowledgedBy")
+  timetablesPublished       Timetable[]               @relation("TimetablePublishedBy")
+  timetablesCreated         Timetable[]               @relation("TimetableCreatedBy")
+  timetableEntriesCreated   TimetableEntry[]          @relation("TimetableEntryCreatedBy")
+  timetableExceptions       TimetableEntryException[] @relation("TimetableExceptionCreatedBy")
+  timetableChanges          TimetableChange[]         @relation("TimetableChangedBy")
 
   @@map("users")
 }
@@ -432,6 +437,7 @@ model Semester {
   calendarExceptions CalendarException[]
   offerings          CourseOffering[]
   studentProfiles    StudentProfile[]
+  timetables         Timetable[]
 
   @@unique([academicYearId, number])
   @@map("semesters")
@@ -508,7 +514,8 @@ model Classroom {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  building Building @relation(fields: [buildingId], references: [id])
+  building         Building         @relation(fields: [buildingId], references: [id])
+  timetableEntries TimetableEntry[]
 
   @@unique([buildingId, code])
   @@map("classrooms")
@@ -577,12 +584,13 @@ model CourseSection {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  offering             CourseOffering        @relation(fields: [offeringId], references: [id])
-  programme            Programme?            @relation(fields: [programmeId], references: [id], onDelete: Restrict)
-  level                AcademicLevel?        @relation(fields: [levelId], references: [id], onDelete: Restrict)
-  assignments          LecturerAssignment[]
-  courseEnrollments    CourseEnrollment[]
-  courseRepAssignments CourseRepAssignment[]
+  offering               CourseOffering          @relation(fields: [offeringId], references: [id])
+  programme              Programme?              @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  level                  AcademicLevel?          @relation(fields: [levelId], references: [id], onDelete: Restrict)
+  assignments            LecturerAssignment[]
+  courseEnrollments      CourseEnrollment[]
+  courseRepAssignments   CourseRepAssignment[]
+  timetableEntrySections TimetableEntrySection[]
 
   @@unique([offeringId, code])
   @@map("course_sections")
@@ -599,9 +607,10 @@ model LecturerProfile {
   createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user        User                 @relation(fields: [userId], references: [id])
-  department  Department           @relation(fields: [departmentId], references: [id])
-  assignments LecturerAssignment[]
+  user             User                 @relation(fields: [userId], references: [id])
+  department       Department           @relation(fields: [departmentId], references: [id])
+  assignments      LecturerAssignment[]
+  timetableEntries TimetableEntry[]
 
   @@index([departmentId])
   @@map("lecturer_profiles")
@@ -950,4 +959,126 @@ model SystemEvent {
 
   @@index([severity, occurredAt])
   @@map("system_events")
+}
+
+// ───────────────────────── Timetables (Phase 3) ─────────────────────────
+
+enum TimetableStatus {
+  DRAFT
+  PUBLISHED
+  SUPERSEDED
+  ARCHIVED
+}
+
+/// How an entry repeats (decided 2026-11-09). WEEKLY is the default.
+enum Recurrence {
+  WEEKLY
+  EVERY_OTHER_WEEK
+  SELECTED_WEEKS
+  ONCE
+}
+
+/// Partial unique indexes (SQL): at most one DRAFT and one PUBLISHED timetable per semester.
+model Timetable {
+  id            String          @id @default(uuid(7)) @db.Uuid
+  semesterId    String          @map("semester_id") @db.Uuid
+  name          String
+  version       Int
+  status        TimetableStatus @default(DRAFT)
+  publishedAt   DateTime?       @map("published_at") @db.Timestamptz(3)
+  publishedById String?         @map("published_by_id") @db.Uuid
+  createdById   String          @map("created_by_id") @db.Uuid
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  semester    Semester          @relation(fields: [semesterId], references: [id])
+  publishedBy User?             @relation("TimetablePublishedBy", fields: [publishedById], references: [id], onDelete: Restrict)
+  createdBy   User              @relation("TimetableCreatedBy", fields: [createdById], references: [id])
+  entries     TimetableEntry[]
+  changes     TimetableChange[]
+
+  @@unique([semesterId, version])
+  @@map("timetables")
+}
+
+/// A repeating (or one-time) meeting: when, where, who teaches, which sections.
+model TimetableEntry {
+  id            String     @id @default(uuid(7)) @db.Uuid
+  timetableId   String     @map("timetable_id") @db.Uuid
+  lecturerId    String     @map("lecturer_id") @db.Uuid
+  classroomId   String     @map("classroom_id") @db.Uuid
+  /// 1 = Monday … 7 = Sunday.
+  dayOfWeek     Int        @map("day_of_week")
+  /// Minutes after midnight, Africa/Accra time.
+  startMinute   Int        @map("start_minute")
+  endMinute     Int        @map("end_minute")
+  recurrence    Recurrence @default(WEEKLY)
+  /// For SELECTED_WEEKS: teaching-week numbers, where week 1 is the semester's first week.
+  selectedWeeks Int[]      @map("selected_weeks")
+  effectiveFrom DateTime   @map("effective_from") @db.Date
+  effectiveTo   DateTime   @map("effective_to") @db.Date
+  isCancelled   Boolean    @default(false) @map("is_cancelled")
+  version       Int        @default(0)
+  createdById   String     @map("created_by_id") @db.Uuid
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  timetable  Timetable                 @relation(fields: [timetableId], references: [id])
+  lecturer   LecturerProfile           @relation(fields: [lecturerId], references: [id])
+  classroom  Classroom                 @relation(fields: [classroomId], references: [id])
+  createdBy  User                      @relation("TimetableEntryCreatedBy", fields: [createdById], references: [id])
+  sections   TimetableEntrySection[]
+  exceptions TimetableEntryException[]
+
+  @@index([timetableId])
+  @@map("timetable_entries")
+}
+
+/// Several sections can share one meeting (a combined class).
+model TimetableEntrySection {
+  entryId   String @map("entry_id") @db.Uuid
+  sectionId String @map("section_id") @db.Uuid
+
+  entry   TimetableEntry @relation(fields: [entryId], references: [id])
+  section CourseSection  @relation(fields: [sectionId], references: [id])
+
+  @@id([entryId, sectionId])
+  @@index([sectionId])
+  @@map("timetable_entry_sections")
+}
+
+/// One date an entry does not meet, besides university-wide holidays.
+model TimetableEntryException {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  entryId     String   @map("entry_id") @db.Uuid
+  date        DateTime @db.Date
+  reason      String
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  entry     TimetableEntry @relation(fields: [entryId], references: [id])
+  createdBy User           @relation("TimetableExceptionCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([entryId, date])
+  @@map("timetable_entry_exceptions")
+}
+
+/// History of every timetable change.
+model TimetableChange {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  timetableId String   @map("timetable_id") @db.Uuid
+  entryId     String?  @map("entry_id") @db.Uuid
+  /// CREATED | ENTRY_ADDED | ENTRY_UPDATED | ENTRY_CANCELLED | EXCEPTION_ADDED | EXCEPTION_REMOVED | PUBLISHED | SUPERSEDED
+  changeType  String   @map("change_type")
+  before      Json?
+  after       Json?
+  reason      String?
+  changedById String   @map("changed_by_id") @db.Uuid
+  changedAt   DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+
+  timetable Timetable @relation(fields: [timetableId], references: [id])
+  changedBy User      @relation("TimetableChangedBy", fields: [changedById], references: [id])
+
+  @@index([timetableId, changedAt])
+  @@map("timetable_changes")
 }

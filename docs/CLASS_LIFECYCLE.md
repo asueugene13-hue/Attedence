@@ -25,7 +25,7 @@ Publishing raises a warning, but is not blocked, when individual students enroll
 
 ## 2. Session generation
 
-When a timetable is published, a background job runs over every active entry. For each date between the entry's `effectiveFrom` and `effectiveTo` that matches its weekday and recurrence, it creates a class session. Recurrence (decided 2026-11-09): `WEEKLY` (default), `EVERY_OTHER_WEEK` (counted from `effectiveFrom`), `SELECTED_WEEKS` (listed teaching weeks, week 1 = the semester's first week) or `ONCE` (a single date):
+When a timetable is published, a background job runs over every active entry. For each date between the entry's `effectiveFrom` and `effectiveTo` that matches its weekday and recurrence, it creates a class session. Recurrence (decided 2026-11-09): `WEEKLY` (default), `EVERY_OTHER_WEEK` (counted from the first meeting on or after `effectiveFrom`, so the first class is never skipped), `SELECTED_WEEKS` (listed teaching weeks, week 1 = the semester's first week) or `ONCE` (a single date):
 
 - The date is skipped when a calendar exception (public holiday, closure, exam period) covers it, or when the entry has its own exception for that date.
 - Start and end times are converted from Africa/Accra wall-clock time to UTC.

@@ -483,7 +483,7 @@ model TimetableEntry {               // a repeating slot, e.g. Tuesdays 10:00-11
   startMinute   Int                     // minutes after midnight, Africa/Accra
   endMinute     Int
   recurrence    Recurrence  @default(WEEKLY)
-  // EVERY_OTHER_WEEK counts weeks from effectiveFrom. SELECTED_WEEKS lists teaching-week numbers, where week 1
+  // EVERY_OTHER_WEEK counts from the first meeting on or after effectiveFrom. SELECTED_WEEKS lists teaching-week numbers, where week 1
   // is the semester's first week. ONCE: effectiveFrom = effectiveTo = the date of the single class.
   selectedWeeks Int[]
   effectiveFrom DateTime    @db.Date
@@ -1142,6 +1142,11 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | A nomination names its nominator; an appointment names who appointed and from when; an ended or rejected one records when, by whom and why | `course_rep_assignments_state_complete` check |
 | Background job attempts are never negative; an acknowledged system event says who and when | `background_job_records_attempts_valid`, `system_events_ack_complete` checks (Phase 3 step 1, migration `20261109090000_jobs_outbox_settings`, which adds `institution_settings`, `outbox_events`, `background_job_records`, `system_events`) |
 | The outbox relay finds unpublished rows quickly | `outbox_events_unpublished` partial index |
+| At most one draft and one published timetable per semester | `timetables_one_draft`, `timetables_one_published` partial unique indexes (Phase 3 step 2, migration `20261109120000_timetables`) |
+| A published timetable says who published it and when; a draft has neither | `timetables_publish_complete` check |
+| Entry times, weekday and dates make sense; a one-time class has one date; only "selected weeks" lists weeks | `timetable_entries_times_valid`, `_day_valid`, `_dates_valid`, `_once_single_day`, `_selected_weeks` checks |
+| One exception per entry and date | `@@unique([entryId, date])` |
+| No room, lecturer or section booked twice at the same time | Service: the clash check runs on every publish and blocks it (concrete class meetings get database no-overlap rules in step 3) |
 | A section never takes more students than its capacity, even with simultaneous requests | Service: the section row is locked (`SELECT … FOR UPDATE`) while counting and inserting |
 
 `npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.

@@ -207,6 +207,26 @@ export class PlacesService {
 
   // ───────── Classrooms ─────────
 
+  /** What timetables need to know about rooms, without reading place tables themselves. */
+  async classroomFacts(ids: string[]) {
+    const rows = await this.prisma.classroom.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      include: { building: { select: { isActive: true, campus: { select: { isActive: true } } } } },
+    });
+    return new Map(
+      rows.map((r) => [
+        r.id,
+        {
+          id: r.id,
+          code: r.code,
+          name: r.name,
+          capacity: r.capacity,
+          isActive: r.isActive && r.building.isActive && r.building.campus.isActive,
+        },
+      ]),
+    );
+  }
+
   /** Rooms with their building and campus, and the geofence that applies to them (building's, else campus's). */
   async listClassrooms(filter: {
     includeInactive: boolean;

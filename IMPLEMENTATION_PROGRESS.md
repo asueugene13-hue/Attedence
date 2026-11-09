@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; step 1 (background jobs and settings) done; step 2 (timetables) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–2 done; step 3 (class sessions) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1015,3 +1015,39 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (API 189, e2e 4, audit clean).
   - GitHub run 42620376326 on `08ec1bc`: **success**.
+
+### 2026-11-09 — Phase 3, step 2: timetables
+
+- **Built:**
+  - **Timetables per semester:** one draft at a time, a published version, and older versions marked superseded. A new draft starts as a copy of the published one.
+  - **Entries:** one or more sections (a combined class), a lecturer, a room, start and end times, and the decided recurrence:
+    - weekly (default), every other week, selected teaching weeks, or a single date;
+    - optional start and end dates within the semester;
+    - per-entry skipped dates with a reason.
+    - "Every other week" counts from the first meeting, so the first class is never skipped. I changed this from my first version, which counted from the start date and could skip the first class.
+  - **Checks when adding or editing an entry:**
+    - the lecturer must teach every section;
+    - the sections must be in this semester's open offerings and within the administrator's scope;
+    - the room must be active;
+    - the dates must be inside the semester and give at least one meeting.
+  - **Meeting dates:** each entry lists its dates, and which dates holidays (from the academic calendar) or its own exceptions remove, and why.
+  - **Clash check:** a room, lecturer or section at overlapping times on the same date blocks publishing.
+    - Warnings: students enrolled in two overlapping sections (with their Student IDs), rooms smaller than the enrolment, inactive rooms, lecturers on leave, dates lost to holidays, entries that never meet.
+  - **Publishing:** refused while clashes remain or with no entries, and only from university-wide scope. A full change history is kept, and every change is audited.
+  - **Module boundaries:** the timetable module reads sections, lecturers, rooms, holidays, enrolments and students only through their owners' services. New read methods were added: `LecturersService.facts`, `PlacesService.classroomFacts`, `AcademicLookupsService.noClassDays`, `EnrollmentsService.enrolledBySection`.
+- **Design choice:** the dates an entry meets on are worked out by one plain function (`timetables/recurrence.ts`). The clash check uses it now, and generating the real class meetings (step 3) will use the same function, so the two can never disagree.
+- **Proof the key tests bite:**
+  - With the "back-to-back is not a clash" rule broken, the unit test failed.
+  - With the "no publishing with clashes" guard removed, the API test failed.
+  - Both were restored.
+- **Files:**
+  - New: `modules/timetables/{recurrence,conflicts,timetables.service,timetables.controller,timetables.module}.ts`, `modules/timetables/timetable-rules.test.ts`, `test/timetables.test.ts`, `packages/shared/src/timetables.ts`, migration `20261109120000_timetables`.
+  - Changed: `courses/lecturers.service.ts`, `places/places.service.ts`, `academic/academic-lookups.service.ts`, `enrollments/enrollments.service.ts`, `app.module.ts`, `test/fixtures.ts`, `packages/shared/src/index.ts`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA, CLASS_LIFECYCLE.
+- **Database changes:** tables `timetables`, `timetable_entries`, `timetable_entry_sections`, `timetable_entry_exceptions`, `timetable_changes`; enums `TimetableStatus`, `Recurrence`; two partial unique indexes and six checks. Drift check: no difference.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **209** (20 new: 10 rules, 10 API), mobile 9, web 12, so **243 passed**.
+- **Known limitations:**
+  - Editing a published timetable comes with the class lifecycle (step 4).
+  - Class meetings are generated in step 3.
+  - Timetable screens come in step 7.
+- **Next step:** Phase 3, step 3: generate every class meeting on publish (skipping holidays and exceptions, Accra time to UTC, safe to re-run), with database rules that stop a room or lecturer being booked twice.

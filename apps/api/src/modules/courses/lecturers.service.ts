@@ -299,6 +299,30 @@ export class LecturersService implements OnModuleInit {
     });
   }
 
+  /** What timetables need to know about lecturers: status, name and the sections they currently teach. */
+  async facts(lecturerIds: string[]) {
+    const rows = await this.prisma.lecturerProfile.findMany({
+      where: { id: { in: [...new Set(lecturerIds)] } },
+      include: {
+        user: { select: { fullName: true } },
+        assignments: { where: { endedAt: null }, select: { sectionId: true } },
+      },
+    });
+    return new Map(
+      rows.map((l) => [
+        l.id,
+        {
+          id: l.id,
+          userId: l.userId,
+          staffNumber: l.staffNumber,
+          fullName: l.user.fullName,
+          status: l.status,
+          sectionIds: new Set(l.assignments.map((a) => a.sectionId)),
+        },
+      ]),
+    );
+  }
+
   /** Whether this person currently teaches the section (an active assignment). */
   async teaches(userId: string, sectionId: string): Promise<boolean> {
     const count = await this.prisma.lecturerAssignment.count({

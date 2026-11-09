@@ -26,6 +26,7 @@ import { PlacesModule } from './modules/places/places.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
 import { SettingsModule } from './modules/settings/settings.module.js';
 import { StudentsModule } from './modules/students/students.module.js';
+import { TimetablesModule } from './modules/timetables/timetables.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
 /** Shared infrastructure used by both the API and the worker process. */
@@ -59,6 +60,7 @@ export const INFRASTRUCTURE_MODULES = [
     EnrollmentsModule,
     ImportsModule,
     SettingsModule,
+    TimetablesModule,
     // Runs background jobs in this process only when RUN_JOBS_IN_API=true; the worker always runs them.
     JobRunnerModule.forRoot('fromConfig'),
   ],

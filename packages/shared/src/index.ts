@@ -9,3 +9,4 @@ export * from './students.js';
 export * from './imports.js';
 export * from './enrollments.js';
 export * from './settings.js';
+export * from './timetables.js';
