@@ -1177,3 +1177,6 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
   - issue reports from students and course reps;
   - the review queue and decisions.
   - I will propose the exact course-rep weighting rule (D-13) for your confirmation first.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (e2e 4, audit clean).
+  - GitHub run 42648881232 on `ab021bf`: **success**.
