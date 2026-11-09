@@ -10,7 +10,9 @@ import { ReasonSchema } from './admin.js';
 export const RECURRENCES = ['WEEKLY', 'EVERY_OTHER_WEEK', 'SELECTED_WEEKS', 'ONCE'] as const;
 export const TIMETABLE_STATUSES = ['DRAFT', 'PUBLISHED', 'SUPERSEDED', 'ARCHIVED'] as const;
 
-const TimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'must be a time written HH:MM (24-hour)');
+export const TimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'must be a time written HH:MM (24-hour)');
 
 export const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 export const toHhmm = (minutes: number) =>

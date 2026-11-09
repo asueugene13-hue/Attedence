@@ -11,6 +11,7 @@ import { rethrowAsConflict } from '../../common/db-errors.js';
 import type { RequestContext } from '../../common/request-context.js';
 import { AppConfig } from '../../config/app-config.js';
 import type { Prisma } from '../../generated/prisma/client.js';
+import { OutboxService } from '../../infrastructure/jobs/outbox.service.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AuditService } from '../audit-logs/audit.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
@@ -51,6 +52,7 @@ export class AcademicPeriodsService {
     private readonly audit: AuditService,
     private readonly access: AcademicAccessService,
     private readonly config: AppConfig,
+    private readonly outbox: OutboxService,
   ) {}
 
   /** Today's date at the university (Africa/Accra), as YYYY-MM-DD. */
@@ -358,6 +360,7 @@ export class AcademicPeriodsService {
         this.exceptionView(row),
         context,
       );
+      if (row.suppressesClasses) await this.announceCalendarChange(tx, row, actor);
       return this.exceptionView(row);
     });
   }
@@ -375,6 +378,7 @@ export class AcademicPeriodsService {
         });
       }
       await tx.calendarException.delete({ where: { id } });
+      if (row.suppressesClasses) await this.announceCalendarChange(tx, row, actor);
       await this.record(
         tx,
         actor,
@@ -451,6 +455,24 @@ export class AcademicPeriodsService {
       endDate: toDay(r.endDate),
       suppressesClasses: r.suppressesClasses,
     };
+  }
+
+  /**
+   * Days without classes changed: queue the job that brings published class sessions in line
+   * (the class-sessions module owns that work). Queued in the same transaction, so it runs only if
+   * the change is saved.
+   */
+  private async announceCalendarChange(
+    tx: Prisma.TransactionClient,
+    row: { semesterId: string | null; startDate: Date; endDate: Date },
+    actor: AccessClaims,
+  ) {
+    await this.outbox.add(tx, 'system', 'calendar-changed', {
+      semesterId: row.semesterId,
+      from: toDay(row.startDate),
+      to: toDay(row.endDate),
+      changedById: actor.userId,
+    });
   }
 
   private async record(

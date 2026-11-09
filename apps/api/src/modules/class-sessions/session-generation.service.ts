@@ -1,10 +1,11 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { wallClockToUtc } from '../../common/time-zone.js';
+import { dayIn, wallClockToUtc } from '../../common/time-zone.js';
 import { AppConfig } from '../../config/app-config.js';
 import type { ClassStatus, Prisma } from '../../generated/prisma/client.js';
 import { Clock } from '../../infrastructure/clock/clock.js';
 import { JobRegistry } from '../../infrastructure/jobs/job-registry.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
 import { TimetablesService } from '../timetables/timetables.service.js';
 
 /** Statuses of a class that has not started yet: the only sessions a timetable change may alter. */
@@ -22,6 +23,10 @@ export interface GenerationSummary {
   updated: number;
   carriedOver: number;
   cancelled: number;
+  /** Classes a timetable or calendar change had cancelled, brought back because the change was undone. */
+  reinstated: number;
+  /** Such classes left cancelled because their room or lecturer has since been booked. */
+  notReinstated: number;
   unchanged: number;
 }
 
@@ -35,6 +40,9 @@ type Planned = NonNullable<Awaited<ReturnType<TimetablesService['plannedMeetings
  * - When a new version replaces an old one, future sessions of unchanged entries carry over (so
  *   confirmations and history stay); changed ones are updated; meetings that disappeared are cancelled
  *   with reason OTHER and the note "Timetable changed", recorded as the publishing administrator's act.
+ * - A meeting removed by a holiday is cancelled as PUBLIC_HOLIDAY or INSTITUTION_EVENT, "No classes: <name>".
+ * - A class cancelled by such a change (never one a person cancelled) comes back if the change is
+ *   undone, unless its room or lecturer has been booked meanwhile.
  * - A session that has started, or lies in the past, is never touched.
  * - The database refuses any room or lecturer double-booking when the transaction commits.
  */
@@ -46,6 +54,7 @@ export class SessionGenerationService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly jobs: JobRegistry,
     private readonly timetables: TimetablesService,
+    private readonly academic: AcademicLookupsService,
     private readonly config: AppConfig,
     private readonly clock: Clock,
   ) {}
@@ -57,6 +66,18 @@ export class SessionGenerationService implements OnModuleInit {
       attempts: 5,
       handle: async (data) => {
         await this.generate(data.timetableId, data.publishedById);
+      },
+    });
+    // Queued by the academic module when a holiday or closure is added or removed.
+    this.jobs.define<{ semesterId: string | null; from: string; to: string; changedById: string }>({
+      queue: 'system',
+      name: 'calendar-changed',
+      attempts: 5,
+      handle: async (data) => {
+        const semesterIds = await this.academic.semesterIdsOverlapping(data.from, data.to, data.semesterId);
+        for (const timetableId of await this.timetables.publishedTimetableIds(semesterIds)) {
+          await this.generate(timetableId, data.changedById);
+        }
       },
     });
   }
@@ -81,7 +102,21 @@ export class SessionGenerationService implements OnModuleInit {
         .filter((d) => d.start > now),
     );
 
-    const summary: GenerationSummary = { created: 0, updated: 0, carriedOver: 0, cancelled: 0, unchanged: 0 };
+    const summary: GenerationSummary = {
+      created: 0,
+      updated: 0,
+      carriedOver: 0,
+      cancelled: 0,
+      reinstated: 0,
+      notReinstated: 0,
+      unchanged: 0,
+    };
+    // Why a meeting of an entry (or of the entry it was copied from) no longer takes place.
+    const skipFor = (entryId: string | null, start: Date) => {
+      const day = dayIn(start, timeZone);
+      const entry = plan.entries.find((e) => e.entryId === entryId || e.sourceEntryId === entryId);
+      return entry?.skipped.get(day) ?? { reason: 'OTHER' as const, note: 'Timetable changed' };
+    };
     await this.prisma.$transaction(
       async (tx) => {
         // One generation per semester at a time; overlap rules are checked once, at commit.
@@ -109,6 +144,10 @@ export class SessionGenerationService implements OnModuleInit {
           if (session && !matched.has(session.id)) {
             matched.add(session.id);
             if (carried) summary.carriedOver += 1;
+            if (session.status === 'CANCELLED') {
+              await this.reinstateIfFree(tx, session, d, publishedById, timetableId, now, summary);
+              continue;
+            }
             await this.reconcile(tx, session, d, Boolean(carried), publishedById, timetableId, summary);
             continue;
           }
@@ -118,13 +157,15 @@ export class SessionGenerationService implements OnModuleInit {
 
         for (const s of existing) {
           if (matched.has(s.id) || !NOT_STARTED.includes(s.status)) continue;
+          const why = skipFor(s.timetableEntryId, s.scheduledStart);
           await tx.classSession.update({
             where: { id: s.id },
             data: {
               status: 'CANCELLED',
-              cancelReason: 'OTHER',
-              cancelNote: 'Timetable changed',
+              cancelReason: why.reason,
+              cancelNote: why.note,
               cancelledById: publishedById,
+              cancelledByTimetableChange: true,
               statusChangedAt: now,
               version: { increment: 1 },
             },
@@ -137,7 +178,7 @@ export class SessionGenerationService implements OnModuleInit {
               toStatus: 'CANCELLED',
               actorType: 'USER',
               actorUserId: publishedById,
-              payload: { reason: 'OTHER', note: 'Timetable changed', timetableId },
+              payload: { reason: why.reason, note: why.note, timetableId },
             },
           });
           summary.cancelled += 1;
@@ -174,6 +215,87 @@ export class SessionGenerationService implements OnModuleInit {
         payload: { timetableId },
       },
     });
+  }
+
+  /**
+   * A cancelled session whose meeting is back. Only a class that a timetable or calendar change
+   * cancelled returns, and only if its room and lecturer are still free; a class a person cancelled
+   * stays cancelled (it is only re-pointed to the new version's entry).
+   */
+  private async reinstateIfFree(
+    tx: Prisma.TransactionClient,
+    session: Prisma.ClassSessionGetPayload<{ include: { sections: { select: { sectionId: true } } } }>,
+    d: { entry: Planned; end: Date },
+    actorId: string,
+    timetableId: string,
+    now: Date,
+    summary: GenerationSummary,
+  ) {
+    const repoint = { timetableEntryId: d.entry.entryId };
+    if (!session.cancelledByTimetableChange || session.actualStart) {
+      await tx.classSession.update({ where: { id: session.id }, data: repoint });
+      summary.unchanged += 1;
+      return;
+    }
+    const taken = await tx.classSession.count({
+      where: {
+        id: { not: session.id },
+        status: { notIn: ['CANCELLED', 'RESCHEDULED'] },
+        scheduledStart: { lt: d.end },
+        scheduledEnd: { gt: session.scheduledStart },
+        OR: [{ classroomId: d.entry.classroomId }, { lecturerId: d.entry.lecturerId }],
+      },
+    });
+    if (taken > 0) {
+      await tx.classSession.update({ where: { id: session.id }, data: repoint });
+      summary.notReinstated += 1;
+      return;
+    }
+    await tx.classSession.update({
+      where: { id: session.id },
+      data: {
+        ...repoint,
+        status: 'SCHEDULED',
+        lecturerId: d.entry.lecturerId,
+        classroomId: d.entry.classroomId,
+        scheduledEnd: d.end,
+        cancelReason: null,
+        cancelNote: null,
+        cancelledById: null,
+        cancelledByTimetableChange: false,
+        expectedStart: null,
+        statusChangedAt: now,
+        version: { increment: 1 },
+      },
+    });
+    const sectionIds = [...d.entry.sectionIds].sort();
+    if (
+      session.sections
+        .map((x) => x.sectionId)
+        .sort()
+        .join() !== sectionIds.join()
+    ) {
+      await tx.classSessionSection.deleteMany({ where: { classSessionId: session.id } });
+      await tx.classSessionSection.createMany({
+        data: sectionIds.map((sectionId) => ({ classSessionId: session.id, sectionId })),
+      });
+    }
+    await tx.classEvent.create({
+      data: {
+        classSessionId: session.id,
+        type: 'REINSTATED',
+        fromStatus: 'CANCELLED',
+        toStatus: 'SCHEDULED',
+        actorType: 'USER',
+        actorUserId: actorId,
+        payload: {
+          note: 'The timetable or calendar change that cancelled this class was undone',
+          timetableId,
+        },
+        occurredAt: now,
+      },
+    });
+    summary.reinstated += 1;
   }
 
   /**

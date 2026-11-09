@@ -118,6 +118,15 @@ export const CLASS_ACTIONS = {
     needsReason: true,
     label: 'Reinstate class',
   },
+  /** Applied only through an approved reschedule request or a direct reschedule (D-11). */
+  reschedule: {
+    to: 'RESCHEDULED',
+    lecturerFrom: [],
+    adminFrom: [...NOT_STARTED, 'SUSPENDED'],
+    adminPermission: 'class_sessions.reschedule',
+    needsReason: true,
+    label: 'Reschedule class',
+  },
   openReview: {
     to: 'UNDER_REVIEW',
     lecturerFrom: [],

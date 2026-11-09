@@ -8,12 +8,14 @@ import { TimetablesModule } from '../timetables/timetables.module.js';
 import { ClassEventService } from './class-event.service.js';
 import { ClassSessionsController } from './class-sessions.controller.js';
 import { ClassSessionsService } from './class-sessions.service.js';
+import { RescheduleController } from './reschedule.controller.js';
+import { RescheduleService } from './reschedule.service.js';
 import { SessionGenerationService } from './session-generation.service.js';
 
 @Module({
   imports: [AcademicModule, TimetablesModule, CoursesModule, PlacesModule, EnrollmentsModule, StudentsModule],
-  controllers: [ClassSessionsController],
-  providers: [ClassSessionsService, SessionGenerationService, ClassEventService],
+  controllers: [ClassSessionsController, RescheduleController],
+  providers: [ClassSessionsService, SessionGenerationService, ClassEventService, RescheduleService],
   exports: [ClassSessionsService, SessionGenerationService, ClassEventService],
 })
 export class ClassSessionsModule {}

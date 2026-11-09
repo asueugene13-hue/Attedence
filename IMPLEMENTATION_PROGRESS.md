@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–3 and 4a done; step 4b (reschedules and changes to published timetables) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–4 done; step 5 (monitoring) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1132,3 +1132,48 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (e2e 4, audit clean).
   - GitHub run 42636879682 on `cf90203`: **success**.
+
+### 2026-11-09 — Phase 3, step 4b: reschedules and holidays after publishing
+
+- **Built:**
+  - **Reschedule requests (D-11).**
+    - A lecturer proposes a new date, time and room for their own class, with a reason. Before anything is saved they can run the conflict check.
+    - **Blockers** (refuse the request): the time has passed; the room does not exist or is out of use; the room is booked; the lecturer has another class.
+    - **Warnings** (shown, never refuse): students of the class have another class then (with a count); the day is a day without classes; the room is smaller than the class.
+    - Only one request per class can wait at a time. The lecturer can withdraw it.
+    - An administrator within scope approves (optional note) or rejects (note required). Approval runs the check again. Then, in one transaction, it creates the replacement class (kind REPLACEMENT, linked to the original), sets the original to RESCHEDULED through the lifecycle service, and writes class events and audit entries. The original is kept.
+    - **Direct reschedule:** an administrator moves a class without a request, in exceptional cases, with a required reason. It is recorded as an approved "direct" request and closes any waiting request.
+  - **Holidays and closures after publishing.**
+    - Adding or removing a calendar entry that stops classes queues a background job in the same transaction.
+    - The job cancels that day's classes as PUBLIC_HOLIDAY or INSTITUTION_EVENT with "No classes: <name>".
+    - Removing the entry brings those classes back. It never brings back a class a person cancelled, nor one whose room or lecturer was booked meanwhile.
+    - The same "undo" works when a new timetable version restores a removed meeting.
+  - **Changing a published timetable** stays as before: publish a new version (copy, edit, publish). No second "edit in place" path was added, so every change goes through the clash check (KNOWN_LIMITATIONS 37).
+  - **Fix found by the race test:** a clash caught by the database at commit time came back as a 500 error instead of a clear 409. The shared error helper now recognises that form, which also protects session generation and lifecycle actions.
+- **Proof the key tests bite:** with the re-check at approval removed, the "room booked since the request" test failed (the database still refused the double booking, with SLOT_TAKEN). Restored. The two-approvals race test passed 3 runs out of 3.
+- **Files:**
+  - New: `packages/shared/src/reschedules.ts`, `modules/class-sessions/reschedule.service.ts`, `reschedule.controller.ts`, `test/reschedules.test.ts`, migration `20261109180000_reschedules`.
+  - Changed:
+    - `schema.prisma`;
+    - `class-event.service.ts` (a reschedule runs its writes inside the status-change transaction);
+    - `session-generation.service.ts` (holiday reasons, reinstating, calendar job);
+    - `class-sessions.service.ts`, `class-sessions.module.ts`;
+    - `timetables.service.ts` (skip reasons, published timetables per semester);
+    - `academic-periods.service.ts` (queues the calendar job), `academic-lookups.service.ts` (closure days with type, overlapping semesters), `academic-access.service.ts` (`covers`);
+    - `common/db-errors.ts`;
+    - shared `class-lifecycle.ts` (`reschedule` action), `timetables.ts` (exports `TimeSchema`);
+    - `test/class-sessions.test.ts` (2 holiday tests), `test/fixtures.ts`.
+  - Docs: API_DOCUMENTATION, CLASS_LIFECYCLE, DATABASE_SCHEMA, KNOWN_LIMITATIONS (37 resolved; 40–42 new).
+  - Also in this push: the mobile tab fix from the phone run (`2774c88`: hides the missing-icon placeholder until icons arrive in step 7).
+- **Database changes:**
+  - New table `reschedule_requests` with enum `RescheduleStatus`.
+  - New columns on `class_sessions`: `cancelled_by_timetable_change` and `rescheduled_from_id` (unique).
+  - SQL rules: one pending request per class; a decision is complete; an approved request names its replacement; time order; only a replacement links to an original.
+  - Applied to the local database; drift check clean.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **243** (12 new: 10 reschedule, 2 holiday), mobile 9, web 12, so **277 passed**.
+- **Known limitations:** no notifications yet (step 6). A waiting request is not closed automatically when its class is cancelled (40). A class not restored because its room was taken is not yet shown on a screen (41). There are no screens for reschedules yet (step 7).
+- **Next step:** Phase 3, step 5: monitoring.
+  - UNCONFIRMED and UNDER_REVIEW sweeps on server time;
+  - issue reports from students and course reps;
+  - the review queue and decisions.
+  - I will propose the exact course-rep weighting rule (D-13) for your confirmation first.

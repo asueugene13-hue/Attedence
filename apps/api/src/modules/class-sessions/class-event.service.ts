@@ -18,6 +18,16 @@ import { PermissionService } from '../authorization/permission.service.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { LecturersService } from '../courses/lecturers.service.js';
 
+/**
+ * Extra work done in the same transaction as the status change, before it (a reschedule creates the
+ * replacement session here). Whatever it returns is added to the class event and the audit entry.
+ */
+export type InTransaction = (
+  tx: Prisma.TransactionClient,
+  session: ClassSession,
+  now: Date,
+) => Promise<Record<string, Prisma.InputJsonValue>>;
+
 export interface ActionInput {
   reason?: string;
   minutes?: number;
@@ -36,6 +46,7 @@ const EVENT: Record<ClassActionName, ClassEventType> = {
   suspend: 'SUSPENDED',
   liftHold: 'RESUMED',
   void: 'CANCELLED',
+  reschedule: 'RESCHEDULED',
   reinstate: 'REINSTATED',
   openReview: 'ESCALATED',
 };
@@ -75,7 +86,11 @@ export class ClassEventService {
     action: ClassActionName,
     input: ActionInput,
     context: RequestContext,
+    inTransaction?: InTransaction,
   ) {
+    if (action === 'reschedule' && !inTransaction) {
+      throw new Error('A reschedule is applied only with its replacement session.');
+    }
     const def = CLASS_ACTIONS[action];
     const session = await this.prisma.classSession.findUnique({
       where: { id: sessionId },
@@ -95,6 +110,14 @@ export class ClassEventService {
 
     await this.prisma
       .$transaction(async (tx) => {
+        let extra: Record<string, Prisma.InputJsonValue> = {};
+        if (inTransaction) {
+          // The replacement may overlap the class it replaces; overlap rules are checked at commit.
+          await tx.$executeRawUnsafe(
+            'SET CONSTRAINTS "class_sessions_room_no_overlap", "class_sessions_lecturer_no_overlap" DEFERRED',
+          );
+          extra = await inTransaction(tx, session, now);
+        }
         const claimed = await tx.classSession.updateMany({
           where: { id: session.id, status: session.status, version: session.version },
           data: { ...data, status: def.to, statusChangedAt: now, version: { increment: 1 } },
@@ -115,6 +138,7 @@ export class ClassEventService {
           ...(input.note ? { note: input.note } : {}),
           ...(action === 'void' ? { voided: true } : {}),
           ...(action === 'liftHold' ? { holdLifted: true } : {}),
+          ...extra,
         };
         await tx.classEvent.create({
           data: {

@@ -534,7 +534,19 @@ export class TimetablesService {
     });
     if (!timetable) return null;
     const semester = (await this.academic.semester(timetable.semesterId))!;
-    const noClassDays = await this.academic.noClassDays(semester.id, semester.startDate, semester.endDate);
+    const closures = await this.academic.closureDays(semester.id, semester.startDate, semester.endDate);
+    const noClassDays = new Map([...closures].map(([day, c]) => [day, c.name]));
+    // Why a meeting date is skipped, so a class it removes is cancelled with the right reason.
+    const skipReason = (date: string, entryExceptions: Map<string, string>) => {
+      const own = entryExceptions.get(date);
+      if (own) return { reason: 'OTHER' as const, note: `Timetable changed: ${own}` };
+      const closure = closures.get(date)!;
+      return {
+        reason:
+          closure.type === 'PUBLIC_HOLIDAY' ? ('PUBLIC_HOLIDAY' as const) : ('INSTITUTION_EVENT' as const),
+        note: `No classes: ${closure.name}`,
+      };
+    };
     const previous = await this.prisma.timetable.findFirst({
       where: { semesterId: timetable.semesterId, version: { lt: timetable.version } },
       orderBy: { version: 'desc' },
@@ -556,9 +568,32 @@ export class TimetablesService {
           sectionIds: e.sections.map((s) => s.sectionId),
           startMinute: e.startMinute,
           endMinute: e.endMinute,
-          dates: meetingDates(this.ruleOf(e), semester.startDate, noClassDays, exceptionsOf(e)).dates,
+          ...this.meetingsWithReasons(e, semester.startDate, noClassDays, skipReason),
         })),
     };
+  }
+
+  private meetingsWithReasons(
+    e: EntryRow,
+    semesterStart: string,
+    noClassDays: Map<string, string>,
+    skipReason: (
+      date: string,
+      own: Map<string, string>,
+    ) => { reason: 'OTHER' | 'PUBLIC_HOLIDAY' | 'INSTITUTION_EVENT'; note: string },
+  ) {
+    const own = exceptionsOf(e);
+    const { dates, skipped } = meetingDates(this.ruleOf(e), semesterStart, noClassDays, own);
+    return { dates, skipped: new Map(skipped.map((x) => [x.date, skipReason(x.date, own)])) };
+  }
+
+  /** The published timetable of each of these semesters. */
+  async publishedTimetableIds(semesterIds: string[]): Promise<string[]> {
+    const rows = await this.prisma.timetable.findMany({
+      where: { semesterId: { in: semesterIds }, status: 'PUBLISHED' },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
   }
 
   /** Entry ids of a timetable (all, including cancelled), for finding sessions to reconcile. */

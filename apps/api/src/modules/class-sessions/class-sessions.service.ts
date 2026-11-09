@@ -91,6 +91,15 @@ export class ClassSessionsService {
     return { as: 'STUDENT', data: await this.views(rows) };
   }
 
+  /** Session views by id, for other parts of this module (reschedule requests). */
+  async summaries(ids: string[]) {
+    const rows = await this.prisma.classSession.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      include: sessionInclude,
+    });
+    return new Map((await this.views(rows)).map((v) => [v.id, v]));
+  }
+
   private range(from: string, to: string) {
     const tz = this.config.institutionTimezone;
     return { scheduledStart: { gte: wallClockToUtc(from, 0, tz), lt: wallClockToUtc(nextDay(to), 0, tz) } };
@@ -121,6 +130,7 @@ export class ClassSessionsService {
         cancelReason: r.cancelReason,
         cancelNote: r.cancelNote,
         timetableEntryId: r.timetableEntryId,
+        rescheduledFromId: r.rescheduledFromId,
         version: r.version,
       };
     });

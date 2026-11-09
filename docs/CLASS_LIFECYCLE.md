@@ -38,7 +38,9 @@ When a timetable is published, a background job runs over every active entry. Fo
 
 - A future meeting that still exists keeps its session (the same row, so a lecturer's confirmation and its history stay) and moves to the new version's entry.
 - If the lecturer, room, end time or sections changed, a session that has not started is updated in place, with an `UPDATED` event (`VENUE_CHANGED` when only the room changed).
-- A session that was already cancelled or rescheduled keeps that status; a timetable change never brings a cancelled class back.
+- A session that was already cancelled or rescheduled keeps that status. A timetable change never brings back a class that a person cancelled.
+- **Holidays and closures entered after publishing (step 4b).** Adding or removing a calendar entry that stops classes queues a background job, in the same transaction, that reconciles every published timetable whose semester overlaps those dates. A class on such a day is cancelled as `PUBLIC_HOLIDAY` (public holidays) or `INSTITUTION_EVENT` (closures, exam periods, other), with the note "No classes: <name>".
+- Classes cancelled by a timetable or calendar change are marked as such (`cancelledByTimetableChange`). If the change is undone (the holiday removed, or the entry restored in a new version), they come back as `SCHEDULED` with a `REINSTATED` event. The exception is a class whose room or lecturer has been booked meanwhile: it stays cancelled.
 - A future meeting that no longer exists (entry removed, or its start time changed) is cancelled with reason `OTHER` and the note "Timetable changed", recorded as the publishing administrator's act. This is the administrator's decision to change the timetable, not an automatic cancellation by the monitoring system.
 - New meetings get new sessions.
 
@@ -132,7 +134,16 @@ Every other transition is refused. COMPLETED, CANCELLED and RESCHEDULED are fina
    - links the original and the replacement,
    - sets the original to `RESCHEDULED`.
    The database's no-overlap constraints reject a clash even if two approvals race.
-4. Students, course reps and the lecturer are notified with the old and new times.
+4. Students, course reps and the lecturer are notified with the old and new times (step 6).
+
+**As built (Phase 3 step 4b):**
+
+- Blockers: the new time has passed; the room does not exist or is not in use; the room is booked; the lecturer has another class. Warnings: students of the class have another class then (with a count); the day is marked as a day without classes; the room holds fewer people than are enrolled. The class being moved is ignored, so it can change room within its own slot.
+- A request with a blocker is refused. Only one request per class can wait at a time. The lecturer may withdraw it while it waits.
+- Approval repeats the check. The request moves to `APPROVED` only if it is still pending, and the original to `RESCHEDULED` only if nobody changed it first. If the class was cancelled or started meanwhile, approval is refused and the administrator rejects the request.
+- A direct reschedule is stored as an approved request marked "direct", so every reschedule has one record. It closes any request still waiting for that class.
+- `RESCHEDULED` is final. A replacement class can itself be rescheduled; it then points to the class it replaces.
+- A replacement class is not part of the timetable. Later timetable versions and calendar changes leave it alone.
 
 ## 6. How a status change is applied
 

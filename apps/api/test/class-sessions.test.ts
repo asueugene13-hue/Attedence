@@ -187,7 +187,15 @@ describe('generating class sessions on publish', () => {
   it('is safe to run again: nothing is duplicated', async () => {
     const { timetable } = await firstVersion();
     const summary = await app.get(SessionGenerationService).generate(timetable.id, adminId);
-    expect(summary).toEqual({ created: 0, updated: 0, carriedOver: 0, cancelled: 0, unchanged: 17 });
+    expect(summary).toEqual({
+      created: 0,
+      updated: 0,
+      carriedOver: 0,
+      cancelled: 0,
+      reinstated: 0,
+      notReinstated: 0,
+      unchanged: 17,
+    });
     expect(await prisma.classSession.count()).toBe(17);
   });
 
@@ -355,6 +363,128 @@ describe('reading sessions', () => {
       as: 'NONE',
       data: [],
     });
+  });
+});
+
+describe('holidays added or removed after publishing', () => {
+  const HOLIDAY_START = new Date('2030-10-15T10:00:00Z'); // a Tuesday class
+
+  async function superAdmin() {
+    return (await signInAs(app, prisma, 'super@example.test', ['SUPER_ADMIN'])).auth;
+  }
+  const atHoliday = (entryId: string) =>
+    prisma.classSession.findFirstOrThrow({
+      where: { timetableEntryId: entryId, scheduledStart: HOLIDAY_START },
+    });
+  /** The calendar job runs in the background; wait until the class reaches the expected state. */
+  async function waitUntil(check: () => Promise<boolean>) {
+    for (let i = 0; i < 200; i++) {
+      if (await check()) return;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error('The calendar change was not applied');
+  }
+  async function addHoliday(auth: Record<string, string>) {
+    const body = {
+      type: 'PUBLIC_HOLIDAY',
+      name: 'Test Holiday (fake)',
+      startDate: '2030-10-15',
+      endDate: '2030-10-15',
+    };
+    return (await http.post('/api/v1/calendar-exceptions').set(auth).send(body).expect(201)).body;
+  }
+  const removeHoliday = (auth: Record<string, string>, id: string) =>
+    http
+      .post(`/api/v1/calendar-exceptions/${id}/remove`)
+      .set(auth)
+      .send({ reason: 'Entered by mistake (test)' })
+      .expect(204);
+
+  it('cancels that day’s classes as a public holiday, and brings them back when it is removed', async () => {
+    const { entry } = await firstVersion();
+    const sa = await superAdmin();
+    const holiday = await addHoliday(sa);
+    await waitUntil(async () => (await atHoliday(entry.id)).status === 'CANCELLED');
+    expect(await atHoliday(entry.id)).toMatchObject({
+      cancelReason: 'PUBLIC_HOLIDAY',
+      cancelNote: 'No classes: Test Holiday (fake)',
+      cancelledByTimetableChange: true,
+    });
+    // Other weeks are untouched.
+    expect(await prisma.classSession.count({ where: { status: 'CANCELLED' } })).toBe(1);
+
+    await removeHoliday(sa, holiday.id);
+    await waitUntil(async () => (await atHoliday(entry.id)).status === 'SCHEDULED');
+    const back = await atHoliday(entry.id);
+    expect(back).toMatchObject({ cancelReason: null, cancelNote: null, cancelledByTimetableChange: false });
+    const events = await prisma.classEvent.findMany({
+      where: { classSessionId: back.id },
+      orderBy: { occurredAt: 'asc' },
+    });
+    expect(events.map((e) => e.type)).toEqual(['GENERATED', 'CANCELLED', 'REINSTATED']);
+  });
+
+  it('never brings back a class a person cancelled, nor one whose room was booked meanwhile', async () => {
+    const { entry } = await firstVersion();
+    const sa = await superAdmin();
+    const byLecturer = await atHoliday(entry.id);
+    await prisma.classSession.update({
+      where: { id: byLecturer.id },
+      data: { status: 'CANCELLED', cancelReason: 'ILLNESS' },
+    });
+    const nextWeek = new Date('2030-10-22T10:00:00Z');
+    const holiday = (
+      await http
+        .post('/api/v1/calendar-exceptions')
+        .set(sa)
+        .send({
+          type: 'UNIVERSITY_CLOSURE',
+          name: 'Closure (fake)',
+          startDate: '2030-10-15',
+          endDate: '2030-10-22',
+        })
+        .expect(201)
+    ).body;
+    const closed = () =>
+      prisma.classSession.findFirstOrThrow({
+        where: { timetableEntryId: entry.id, scheduledStart: nextWeek },
+      });
+    await waitUntil(async () => (await closed()).status === 'CANCELLED');
+    expect(await closed()).toMatchObject({
+      cancelReason: 'INSTITUTION_EVENT',
+      cancelNote: 'No classes: Closure (fake)',
+    });
+    expect(await atHoliday(entry.id)).toMatchObject({
+      cancelReason: 'ILLNESS',
+      cancelledByTimetableChange: false,
+    });
+
+    // While the closure stood, someone else's class took the room on the 22nd.
+    const otherUser = await createUser(prisma, { email: 'other.lecturer@example.test', roles: ['LECTURER'] });
+    const lecturerRow = await prisma.lecturerProfile.findUniqueOrThrow({ where: { id: ids.lecturer } });
+    const other = await prisma.lecturerProfile.create({
+      data: { userId: otherUser.id, staffNumber: 'TL9', departmentId: lecturerRow.departmentId },
+    });
+    await prisma.classSession.create({
+      data: {
+        kind: 'MAKEUP',
+        lecturerId: other.id,
+        classroomId: ids.room1,
+        scheduledStart: nextWeek,
+        scheduledEnd: new Date('2030-10-22T11:00:00Z'),
+      },
+    });
+
+    await removeHoliday(sa, holiday.id);
+    // Both calendar jobs (adding and removing the closure) have finished.
+    await waitUntil(
+      async () =>
+        (await prisma.backgroundJobRecord.count({
+          where: { name: 'calendar-changed', status: 'SUCCEEDED' },
+        })) === 2,
+    );
+    expect((await atHoliday(entry.id)).status).toBe('CANCELLED'); // the lecturer's cancellation stands
+    expect((await closed()).status).toBe('CANCELLED'); // the room is taken now
   });
 });
 

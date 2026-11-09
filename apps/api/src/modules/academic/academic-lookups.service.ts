@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { CalendarExceptionType } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 
 /**
@@ -56,6 +57,12 @@ export class AcademicLookupsService {
    * marked "no classes", whether entered for the whole university or for this semester.
    */
   async noClassDays(semesterId: string, from: string, to: string) {
+    const closures = await this.closureDays(semesterId, from, to);
+    return new Map([...closures].map(([day, c]) => [day, c.name]));
+  }
+
+  /** As noClassDays, with each day's calendar entry type (public holiday, closure, exam period, other). */
+  async closureDays(semesterId: string, from: string, to: string) {
     const rows = await this.prisma.calendarException.findMany({
       where: {
         suppressesClasses: true,
@@ -64,13 +71,26 @@ export class AcademicLookupsService {
         endDate: { gte: new Date(`${from}T00:00:00Z`) },
       },
     });
-    const days = new Map<string, string>();
+    const days = new Map<string, { name: string; type: CalendarExceptionType }>();
     for (const row of rows) {
       for (let d = new Date(row.startDate); d <= row.endDate; d = new Date(d.getTime() + 86_400_000)) {
-        days.set(toDay(d), row.name);
+        days.set(toDay(d), { name: row.name, type: row.type });
       }
     }
     return days;
+  }
+
+  /** Semesters whose dates overlap `from`–`to` (YYYY-MM-DD), or just `semesterId` if given. */
+  async semesterIdsOverlapping(from: string, to: string, semesterId?: string | null): Promise<string[]> {
+    const rows = await this.prisma.semester.findMany({
+      where: {
+        ...(semesterId ? { id: semesterId } : {}),
+        startDate: { lte: new Date(`${to}T00:00:00Z`) },
+        endDate: { gte: new Date(`${from}T00:00:00Z`) },
+      },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
   }
 
   /** Whether a faculty or department exists and is active (for scoped role grants). */

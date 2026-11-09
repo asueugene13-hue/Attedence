@@ -121,6 +121,8 @@ model User {
   timetableChanges          TimetableChange[]         @relation("TimetableChangedBy")
   classSessionsCancelled    ClassSession[]            @relation("ClassSessionCancelledBy")
   classEvents               ClassEvent[]              @relation("ClassEventActor")
+  rescheduleRequests        RescheduleRequest[]       @relation("RescheduleRequestedBy")
+  rescheduleDecisions       RescheduleRequest[]       @relation("RescheduleDecidedBy")
 
   @@map("users")
 }
@@ -516,9 +518,10 @@ model Classroom {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  building         Building         @relation(fields: [buildingId], references: [id])
-  timetableEntries TimetableEntry[]
-  classSessions    ClassSession[]
+  building           Building            @relation(fields: [buildingId], references: [id])
+  timetableEntries   TimetableEntry[]
+  classSessions      ClassSession[]
+  rescheduleRequests RescheduleRequest[]
 
   @@unique([buildingId, code])
   @@map("classrooms")
@@ -1158,33 +1161,42 @@ enum CancelReason {
 /// One concrete class meeting. Exclusion constraints (SQL): no room and no lecturer has two live
 /// sessions at overlapping times. A re-run of generation never duplicates (entry, start).
 model ClassSession {
-  id               String        @id @default(uuid(7)) @db.Uuid
+  id                         String        @id @default(uuid(7)) @db.Uuid
   /// Null for make-up and replacement sessions.
-  timetableEntryId String?       @map("timetable_entry_id") @db.Uuid
-  kind             SessionKind   @default(REGULAR)
-  lecturerId       String        @map("lecturer_id") @db.Uuid
-  classroomId      String        @map("classroom_id") @db.Uuid
-  scheduledStart   DateTime      @map("scheduled_start") @db.Timestamptz(3)
-  scheduledEnd     DateTime      @map("scheduled_end") @db.Timestamptz(3)
+  timetableEntryId           String?       @map("timetable_entry_id") @db.Uuid
+  kind                       SessionKind   @default(REGULAR)
+  lecturerId                 String        @map("lecturer_id") @db.Uuid
+  classroomId                String        @map("classroom_id") @db.Uuid
+  scheduledStart             DateTime      @map("scheduled_start") @db.Timestamptz(3)
+  scheduledEnd               DateTime      @map("scheduled_end") @db.Timestamptz(3)
   /// Set when a delay is reported.
-  expectedStart    DateTime?     @map("expected_start") @db.Timestamptz(3)
-  actualStart      DateTime?     @map("actual_start") @db.Timestamptz(3)
-  actualEnd        DateTime?     @map("actual_end") @db.Timestamptz(3)
-  status           ClassStatus   @default(SCHEDULED)
-  statusChangedAt  DateTime      @default(now()) @map("status_changed_at") @db.Timestamptz(3)
-  cancelReason     CancelReason? @map("cancel_reason")
-  cancelNote       String?       @map("cancel_note")
-  cancelledById    String?       @map("cancelled_by_id") @db.Uuid
-  version          Int           @default(0)
-  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  expectedStart              DateTime?     @map("expected_start") @db.Timestamptz(3)
+  actualStart                DateTime?     @map("actual_start") @db.Timestamptz(3)
+  actualEnd                  DateTime?     @map("actual_end") @db.Timestamptz(3)
+  status                     ClassStatus   @default(SCHEDULED)
+  statusChangedAt            DateTime      @default(now()) @map("status_changed_at") @db.Timestamptz(3)
+  cancelReason               CancelReason? @map("cancel_reason")
+  cancelNote                 String?       @map("cancel_note")
+  cancelledById              String?       @map("cancelled_by_id") @db.Uuid
+  /// True when a timetable or calendar change cancelled the class (not a person's decision), so undoing
+  /// that change may bring the class back. A class a person cancelled is never brought back.
+  cancelledByTimetableChange Boolean       @default(false) @map("cancelled_by_timetable_change")
+  /// On a replacement session: the session it replaces.
+  rescheduledFromId          String?       @unique @map("rescheduled_from_id") @db.Uuid
+  version                    Int           @default(0)
+  createdAt                  DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                  DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  timetableEntry TimetableEntry?       @relation(fields: [timetableEntryId], references: [id], onDelete: Restrict)
-  lecturer       LecturerProfile       @relation(fields: [lecturerId], references: [id])
-  classroom      Classroom             @relation(fields: [classroomId], references: [id])
-  cancelledBy    User?                 @relation("ClassSessionCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
-  sections       ClassSessionSection[]
-  events         ClassEvent[]
+  timetableEntry     TimetableEntry?       @relation(fields: [timetableEntryId], references: [id], onDelete: Restrict)
+  lecturer           LecturerProfile       @relation(fields: [lecturerId], references: [id])
+  classroom          Classroom             @relation(fields: [classroomId], references: [id])
+  cancelledBy        User?                 @relation("ClassSessionCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  sections           ClassSessionSection[]
+  events             ClassEvent[]
+  rescheduledFrom    ClassSession?         @relation("SessionReplacement", fields: [rescheduledFromId], references: [id], onDelete: Restrict)
+  replacedBy         ClassSession?         @relation("SessionReplacement")
+  rescheduleRequests RescheduleRequest[]   @relation("RescheduleOriginal")
+  replacementFor     RescheduleRequest?    @relation("RescheduleReplacement")
 
   @@unique([timetableEntryId, scheduledStart])
   @@index([status, scheduledStart])
@@ -1222,4 +1234,43 @@ model ClassEvent {
 
   @@index([classSessionId, occurredAt])
   @@map("class_events")
+}
+
+// ───────────────────────── Reschedules (Phase 3) ─────────────────────────
+
+enum RescheduleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+/// A lecturer's request to move a class (D-11), or an administrator's direct reschedule (recorded as
+/// approved at once). Partial unique index (SQL): at most one pending request per session.
+model RescheduleRequest {
+  id                   String           @id @default(uuid(7)) @db.Uuid
+  classSessionId       String           @map("class_session_id") @db.Uuid
+  requestedById        String           @map("requested_by_id") @db.Uuid
+  proposedStart        DateTime         @map("proposed_start") @db.Timestamptz(3)
+  proposedEnd          DateTime         @map("proposed_end") @db.Timestamptz(3)
+  proposedClassroomId  String           @map("proposed_classroom_id") @db.Uuid
+  reason               String
+  status               RescheduleStatus @default(PENDING)
+  /// True when an administrator rescheduled directly, without a lecturer's request.
+  isDirect             Boolean          @default(false) @map("is_direct")
+  decidedById          String?          @map("decided_by_id") @db.Uuid
+  decidedAt            DateTime?        @map("decided_at") @db.Timestamptz(3)
+  decisionNote         String?          @map("decision_note")
+  replacementSessionId String?          @unique @map("replacement_session_id") @db.Uuid
+  createdAt            DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  classSession       ClassSession  @relation("RescheduleOriginal", fields: [classSessionId], references: [id])
+  replacementSession ClassSession? @relation("RescheduleReplacement", fields: [replacementSessionId], references: [id], onDelete: Restrict)
+  proposedClassroom  Classroom     @relation(fields: [proposedClassroomId], references: [id])
+  requestedBy        User          @relation("RescheduleRequestedBy", fields: [requestedById], references: [id])
+  decidedBy          User?         @relation("RescheduleDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([classSessionId])
+  @@map("reschedule_requests")
 }

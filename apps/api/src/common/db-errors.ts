@@ -28,6 +28,15 @@ interface AdapterCause {
  *  - other rule violations (P2039 …): `code` such as 23P01 and the name inside `originalMessage`.
  */
 export function dbErrorInfo(error: unknown): DbErrorInfo | null {
+  // A rule checked when the transaction commits (a deferred constraint) surfaces as the driver
+  // adapter's own error, not wrapped by Prisma, with the same details in `cause`.
+  if (error instanceof Error && error.name === 'DriverAdapterError') {
+    const cause = (error as Error & { cause?: AdapterCause }).cause;
+    return {
+      pgCode: cause?.originalCode ?? cause?.code,
+      constraint: cause?.constraint?.index ?? cause?.originalMessage?.match(/constraint "([^"]+)"/)?.[1],
+    };
+  }
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return null;
   const meta = error.meta as { target?: unknown; driverAdapterError?: { cause?: AdapterCause } } | undefined;
   const cause = meta?.driverAdapterError?.cause;

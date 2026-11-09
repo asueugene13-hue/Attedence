@@ -52,7 +52,7 @@ enum IssueType           { LECTURER_NOT_ARRIVED VERBAL_CANCELLATION CLASS_DELAYE
 enum ReporterRole        { STUDENT COURSE_REP LECTURER }
 enum ReviewTrigger       { SYSTEM_ESCALATION ADMIN_OPENED LECTURER_REQUEST }
 enum ReviewDecision      { CLASS_HELD CANCELLED POSTPONED RESCHEDULED NO_ACTION }
-enum RescheduleStatus    { REQUESTED APPROVED REJECTED WITHDRAWN }
+enum RescheduleStatus    { PENDING APPROVED REJECTED WITHDRAWN }
 
 enum AttendanceSessionStatus { OPEN CLOSED VOIDED }
 enum VerificationOutcome { VERIFIED REJECTED PENDING_VERIFICATION MANUAL_REVIEW_REQUIRED EXCEPTION_APPROVED }
@@ -543,6 +543,8 @@ model ClassSession {                 // one concrete meeting on one date
   cancelReason     CancelReason?
   cancelNote       String?
   cancelledById    String?       @db.Uuid
+  cancelledByTimetableChange Boolean @default(false) // a timetable or calendar change cancelled it, not a person
+  rescheduledFromId String?      @unique @db.Uuid  // on a replacement: the session it replaces
   version          Int           @default(0)
   createdAt
   updatedAt
@@ -601,21 +603,24 @@ model ClassStatusReview {
   // partial unique index (SQL): one OPEN review per session
 }
 
-model ClassRescheduleRelationship {
+model RescheduleRequest {            // Phase 3 step 4b (D-11); table reschedule_requests
   id
-  originalSessionId    String           @db.Uuid
-  replacementSessionId String?          @unique @db.Uuid   // set when approved
+  classSessionId       String           @db.Uuid           // the class to move
+  requestedById        String           @db.Uuid
   proposedStart        DateTime
   proposedEnd          DateTime
   proposedClassroomId  String           @db.Uuid
   reason               String
-  status               RescheduleStatus @default(REQUESTED)
-  conflictReport       Json?
-  requestedById        String           @db.Uuid
+  status               RescheduleStatus @default(PENDING)
+  isDirect             Boolean          @default(false)    // an administrator rescheduled without a request
   decidedById          String?          @db.Uuid
   decidedAt            DateTime?
+  decisionNote         String?
+  replacementSessionId String?          @unique @db.Uuid   // set when approved
   createdAt
-  @@index([originalSessionId])
+  @@index([status, createdAt])
+  @@index([classSessionId])
+  // partial unique index (SQL): one PENDING request per class
 }
 
 model MakeupSuggestion {             // from course reps; the lecturer decides
@@ -1151,6 +1156,9 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | Generation never creates a session twice | `@@unique([timetableEntryId, scheduledStart])` |
 | A session ends after it starts; a cancelled one has a reason, any other has none; regular sessions come from an entry, make-up and replacement sessions do not | `class_sessions_time_order`, `class_sessions_cancel_complete`, `class_sessions_kind_source` checks |
 | Class history cannot be edited or deleted | `class_events_append_only` trigger |
+| At most one waiting reschedule request per class | `reschedule_requests_one_pending` partial unique index (Phase 3 step 4b, migration `20261109180000_reschedules`) |
+| A decided request says who decided and when; an approved one names its replacement; the new time ends after it starts | `reschedule_requests_decision_complete`, `reschedule_requests_time_order` checks |
+| Only a replacement session points to the session it replaces, and a session is replaced at most once | `class_sessions_replacement_link` check, unique `rescheduled_from_id` |
 | A section never takes more students than its capacity, even with simultaneous requests | Service: the section row is locked (`SELECT … FOR UPDATE`) while counting and inserting |
 
 `npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.
@@ -1183,7 +1191,7 @@ Rules that need data from several tables are checked in services inside the tran
 | Check-in | Attempt, evidence rows, engine decision, record insert or upgrade, outbox row for the roster push |
 | Close attendance | Session closed; `ABSENT` rows for eligible students with no record (`INSERT … ON CONFLICT DO NOTHING`); class event; outbox |
 | Cancel a class | Conditional status update (`WHERE status IN (…) AND version = n`); class event; audit; if attendance had started, records set to `VOIDED` with one correction row each; outbox for notifications |
-| Approve a reschedule | Replacement session insert (the exclusion constraints reject a clash atomically); relationship row; original set to `RESCHEDULED`; events; outbox |
+| Approve a reschedule | Conflict check repeated; replacement session insert (the exclusion constraints, checked at commit, reject a clash even if two approvals race); request set to `APPROVED` only if still pending; original set to `RESCHEDULED` only if unchanged; class events; audit. Notifications come with step 6 |
 | Correct a record | Version-checked update; correction row; audit |
 | Grant or revoke a role | User-role row; audit; session refresh forced |
 | Confirm a bulk import | One transaction per batch of up to 5,000 rows, so the batch is all-or-nothing. Larger files run in chunks of 1,000 with per-row status, and each row is protected by the unique student number, so a resumed import cannot duplicate anyone. |
