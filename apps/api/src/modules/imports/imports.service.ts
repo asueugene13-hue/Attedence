@@ -4,7 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  type OnModuleDestroy,
+  type OnModuleInit,
 } from '@nestjs/common';
 import { IMPORT_LIMITS, type ImportListQuerySchema, type ImportRowsQuerySchema } from '@attendsure/shared';
 import type { z } from 'zod';
@@ -12,11 +12,14 @@ import { auditEntry } from '../../common/audit-entry.js';
 import type { RequestContext } from '../../common/request-context.js';
 import { type UploadedBytes, unsupportedFile } from '../../common/upload.js';
 import { type ImportBatch, type ImportRowStatus, Prisma } from '../../generated/prisma/client.js';
+import { type JobContext, JobRegistry } from '../../infrastructure/jobs/job-registry.js';
+import { OutboxService } from '../../infrastructure/jobs/outbox.service.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AuditService } from '../audit-logs/audit.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { detectFileType } from '../files/file-type.js';
 import { FilesService } from '../files/files.service.js';
+import { StudentImportService } from '../students/student-import.service.js';
 import { type CheckedRow, checkHeaders, type ImportHandler, REPORT_COLUMNS } from './import-handler.js';
 import { readRows, type SheetFormat, SpreadsheetError, writeRows } from './spreadsheet.js';
 
@@ -36,16 +39,27 @@ const headersOf = (handler: ImportHandler) => handler.columns.map((c) => c.key);
  * operation is given the handler for the URL it came through, so one type can never act on another's batch.
  */
 @Injectable()
-export class ImportsService implements OnModuleDestroy {
+export class ImportsService implements OnModuleInit {
   private readonly logger = new Logger(ImportsService.name);
-  /** Batches whose activation emails this process is sending, so a retry cannot run alongside. */
-  private readonly sending = new Map<string, Promise<void>>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly files: FilesService,
+    private readonly outbox: OutboxService,
+    private readonly jobs: JobRegistry,
+    private readonly studentImport: StudentImportService,
   ) {}
+
+  /** Activation emails for imported students are background jobs: one per row, retried on failure. */
+  onModuleInit(): void {
+    this.jobs.define<{ importRowId: string }>({
+      queue: 'email',
+      name: 'student-activation',
+      attempts: 5,
+      handle: (data, context) => this.sendActivationForRow(data.importRowId, context),
+    });
+  }
 
   template(handler: ImportHandler, format: SheetFormat) {
     return writeRows(headersOf(handler), [], format);
@@ -227,7 +241,7 @@ export class ImportsService implements OnModuleDestroy {
           const createdByRow = new Map(created.map((c) => [c.rowNumber, c]));
           for (const row of checked) {
             const made = createdByRow.get(row.rowNumber);
-            await tx.importRow.update({
+            const saved = await tx.importRow.update({
               where: { batchId_rowNumber: { batchId: id, rowNumber: row.rowNumber } },
               data: made
                 ? {
@@ -238,6 +252,10 @@ export class ImportsService implements OnModuleDestroy {
                   }
                 : rowFields(row),
             });
+            // Queued with the import itself: if the import rolls back, no email is ever sent.
+            if (made?.needsActivationEmail) {
+              await this.outbox.add(tx, 'email', 'student-activation', { importRowId: saved.id });
+            }
           }
           const totals = counts(checked);
           await tx.importBatch.update({
@@ -265,7 +283,6 @@ export class ImportsService implements OnModuleDestroy {
       this.logger.error(`Import ${id} could not be confirmed: ${(error as Error).message}`);
       throw error;
     }
-    if (handler.sendActivation) this.startActivationEmails(handler, id);
     return this.get(handler, id);
   }
 
@@ -330,70 +347,52 @@ export class ImportsService implements OnModuleDestroy {
       });
     }
     if (batch.status !== 'COMPLETED') throw notPending('Only a completed import has activation emails.');
-    if (this.sending.has(id)) {
-      throw new ConflictException({
-        code: 'ALREADY_SENDING',
-        message: 'These emails are being sent right now.',
+    const retried = await this.prisma.$transaction(async (tx) => {
+      const failed = await tx.importRow.findMany({
+        where: { batchId: id, emailStatus: 'FAILED' },
+        select: { id: true },
       });
-    }
-    const reset = await this.prisma.importRow.updateMany({
-      where: { batchId: id, emailStatus: 'FAILED' },
-      data: { emailStatus: 'PENDING' },
+      for (const row of failed) {
+        const claimed = await tx.importRow.updateMany({
+          where: { id: row.id, emailStatus: 'FAILED' },
+          data: { emailStatus: 'PENDING' },
+        });
+        if (claimed.count === 1)
+          await this.outbox.add(tx, 'email', 'student-activation', { importRowId: row.id });
+      }
+      await this.audit.record(
+        auditEntry(
+          actor,
+          'imports.activation_emails_retried',
+          { type: 'import', id },
+          { after: { retried: failed.length } },
+          context,
+        ),
+        tx,
+      );
+      return failed.length;
     });
-    await this.audit.record(
-      auditEntry(
-        actor,
-        'imports.activation_emails_retried',
-        { type: 'import', id },
-        { after: { retried: reset.count } },
-        context,
-      ),
-    );
-    this.startActivationEmails(handler, id);
+    this.logger.log(`Re-queued ${retried} activation emails for import ${id}.`);
     return this.get(handler, id);
   }
 
   /**
-   * Activation emails go out after the response, one by one, each row recording SENT or FAILED, so a
-   * mail problem never undoes the import and every failure is visible and retryable.
-   * Limitation until Phase 3's job queue: if the API restarts mid-way, use the retry endpoint.
+   * The background job for one imported student. A row already SENT is left alone (a job may run
+   * twice after a crash). A failure is retried; after the last try the row is marked FAILED so staff
+   * see it and can send it again. A mail problem never undoes the import.
    */
-  private startActivationEmails(handler: ImportHandler, id: string) {
-    if (this.sending.has(id)) return;
-    const run = this.sendPending(handler, id)
-      .catch((error: unknown) =>
-        this.logger.error(`Activation emails for import ${id} stopped: ${(error as Error).message}`),
-      )
-      .finally(() => this.sending.delete(id));
-    this.sending.set(id, run);
-  }
-
-  /** Exposed for tests, which need to wait until sending has finished. */
-  async sendPending(handler: ImportHandler, id: string): Promise<void> {
-    if (!handler.sendActivation) return;
-    const pending = await this.prisma.importRow.findMany({
-      where: { batchId: id, emailStatus: 'PENDING', createdEntityId: { not: null } },
-      select: { id: true, createdEntityId: true },
-    });
-    for (const row of pending) {
-      let status: 'SENT' | 'FAILED' = 'SENT';
-      try {
-        await handler.sendActivation(row.createdEntityId!);
-      } catch (error) {
-        status = 'FAILED';
-        this.logger.error(`Activation email for import row ${row.id} failed: ${(error as Error).message}`);
+  private async sendActivationForRow(importRowId: string, context: JobContext): Promise<void> {
+    const row = await this.prisma.importRow.findUnique({ where: { id: importRowId } });
+    if (!row || row.emailStatus !== 'PENDING' || !row.createdEntityId) return;
+    try {
+      await this.studentImport.sendActivation(row.createdEntityId);
+    } catch (error) {
+      if (context.isFinalAttempt) {
+        await this.prisma.importRow.update({ where: { id: importRowId }, data: { emailStatus: 'FAILED' } });
       }
-      await this.prisma.importRow.update({ where: { id: row.id }, data: { emailStatus: status } });
+      throw error;
     }
-  }
-
-  /** On shutdown, lets emails already being sent finish, so none is left half-recorded. */
-  async onModuleDestroy(): Promise<void> {
-    await Promise.allSettled(this.sending.values());
-  }
-
-  isSending(id: string): boolean {
-    return this.sending.has(id);
+    await this.prisma.importRow.update({ where: { id: importRowId }, data: { emailStatus: 'SENT' } });
   }
 
   /** A batch of this handler's type; another type's batch is treated as not found. */

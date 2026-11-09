@@ -1140,6 +1140,8 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | An ended enrolment records when, by whom and why; an active one has none of these | `course_enrollments_end_complete` check |
 | One open (nominated or active) rep assignment per student and section | `course_rep_assignments_open_unique` partial unique index |
 | A nomination names its nominator; an appointment names who appointed and from when; an ended or rejected one records when, by whom and why | `course_rep_assignments_state_complete` check |
+| Background job attempts are never negative; an acknowledged system event says who and when | `background_job_records_attempts_valid`, `system_events_ack_complete` checks (Phase 3 step 1, migration `20261109090000_jobs_outbox_settings`, which adds `institution_settings`, `outbox_events`, `background_job_records`, `system_events`) |
+| The outbox relay finds unpublished rows quickly | `outbox_events_unpublished` partial index |
 | A section never takes more students than its capacity, even with simultaneous requests | Service: the section row is locked (`SELECT … FOR UPDATE`) while counting and inserting |
 
 `npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.

@@ -38,7 +38,7 @@ Fixtures and test accounts are never loaded into production.
 
 | Need | Requirement |
 | --- | --- |
-| Compute | Containers for `api` (at least 2 instances behind a load balancer with WebSocket support), `worker` (at least 1) and `web` |
+| Compute | Containers for `api` (at least 2 instances behind a load balancer with WebSocket support), `worker` (at least 1: `npm run start:worker -w @attendsure/api`, which runs the background jobs and the outbox relay) and `web`. In production leave `RUN_JOBS_IN_API` unset (false), so jobs run only in the worker; `JOB_RETRY_DELAY_MS` (default 5000) sets the first retry wait. |
 | PostgreSQL | Version 16 or newer, managed or self-run, with point-in-time recovery, encrypted storage and TLS |
 | Redis | Version 7 with append-only persistence, TLS and authentication |
 | Object storage | S3-compatible, private buckets, encryption at rest. Settings: `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, optional `S3_REGION` and `S3_PUBLIC_ENDPOINT` (the address browsers use for download links). In production the bucket must already exist; the API refuses to start otherwise, and refuses the local example key. |

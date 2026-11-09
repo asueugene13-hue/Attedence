@@ -49,7 +49,7 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 26. **The app identifiers are placeholders** (`app.attendsure.mobile`). Before publishing, they change to identifiers under the university's own Google Play and Apple developer accounts.
 27. **Two-step setup is web-only.** Staff who must set up an authenticator do it on the web dashboard, where recovery codes can be saved safely; the app then accepts codes.
 28. ~~Sign-in forms still ask for "Email".~~ **Resolved in Phase 2 step 7a:** web and mobile sign-in say "Email or Student ID" and send `identifier`.
-29. **Import activation emails are sent by the API process, not a job queue.** Each row records SENT or FAILED and failures can be re-sent (`POST /imports/:id/activation-emails`). If the API restarts mid-way, the rest stay PENDING until someone presses re-send. Phase 3 moves this to the worker queue.
+29. ~~Import activation emails are sent by the API process, not a job queue.~~ **Resolved in Phase 3 step 1:** each email is a background job, queued in the same transaction as the import, retried with growing waits, and marked FAILED (re-sendable) only after the last try. A restart no longer loses emails.
 30. **One import is at most 5,000 rows and 5 MB**, saved in a single transaction. Larger intakes are split into several files.
 31. **Uploaded files are not virus-scanned yet.** Only CSV, Excel, JPEG and PNG are accepted, checked from their bytes, and stored privately; a ClamAV scan is planned before production.
 32. **Import files and rows are not yet deleted after 90 days.** The retention job (DATABASE_SCHEMA §7) arrives with the other retention rules (D-18). Cancelled imports already delete their stored file.

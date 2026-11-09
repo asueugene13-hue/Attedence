@@ -53,6 +53,11 @@ const EnvSchema = z
     S3_REGION: z.string().min(1).default('us-east-1'),
     S3_ACCESS_KEY: z.string().min(1),
     S3_SECRET_KEY: z.string().min(1),
+    /** Run background jobs inside the API process too (development, tests, small installations). */
+    RUN_JOBS_IN_API: z.enum(['true', 'false']).default('false'),
+    /** First retry delay for a failed job; later retries wait longer (exponential). */
+    JOB_RETRY_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(5000),
+
     S3_BUCKET: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/, 'must be a valid bucket name'),
   })
   .superRefine((env, ctx) => {
@@ -119,6 +124,8 @@ export class AppConfig {
   readonly webAppOrigin: string;
   readonly smtp: SmtpConfig;
   readonly storage: StorageConfig;
+  readonly runJobsInApi: boolean;
+  readonly jobRetryDelayMs: number;
 
   private constructor(env: z.infer<typeof EnvSchema>) {
     this.nodeEnv = env.NODE_ENV;
@@ -140,6 +147,8 @@ export class AppConfig {
       password: env.SMTP_PASSWORD || undefined,
       from: env.SMTP_FROM,
     };
+    this.runJobsInApi = env.RUN_JOBS_IN_API === 'true';
+    this.jobRetryDelayMs = env.JOB_RETRY_DELAY_MS;
     this.storage = {
       endpoint: env.S3_ENDPOINT,
       publicEndpoint: env.S3_PUBLIC_ENDPOINT ?? env.S3_ENDPOINT,

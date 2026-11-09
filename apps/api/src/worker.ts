@@ -9,9 +9,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.createApplicationContext(WorkerModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
   app.enableShutdownHooks();
-  app
-    .get(Logger)
-    .log('AttendSure worker started. No job queues are registered yet (they arrive in Phase 3).');
+  app.get(Logger).log('AttendSure worker started: running background jobs and the outbox relay.');
 }
 
 bootstrap().catch((error: unknown) => {

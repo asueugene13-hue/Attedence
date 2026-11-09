@@ -52,6 +52,9 @@ export default defineConfig({
         SMTP_HOST: process.env.SMTP_HOST ?? 'localhost',
         SMTP_PORT: process.env.SMTP_PORT ?? '1025',
         SMTP_FROM: process.env.SMTP_FROM ?? 'AttendSure e2e <no-reply@localhost>',
+        // The e2e run starts only the API, so it also runs the background jobs (activation emails).
+        RUN_JOBS_IN_API: 'true',
+        JOB_RETRY_DELAY_MS: '200',
         S3_ENDPOINT: process.env.S3_ENDPOINT ?? 'http://localhost:8333',
         S3_ACCESS_KEY: process.env.S3_ACCESS_KEY ?? 'local-dev-access-key',
         S3_SECRET_KEY: process.env.S3_SECRET_KEY ?? 'local-dev-secret-key-not-for-production',

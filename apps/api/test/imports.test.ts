@@ -9,7 +9,6 @@ import { type MailMessage, MailService } from '../src/infrastructure/mail/mail.s
 import { PrismaService } from '../src/infrastructure/prisma/prisma.service.js';
 import { RedisService } from '../src/infrastructure/redis/redis.service.js';
 import { StorageService } from '../src/infrastructure/storage/storage.service.js';
-import { ImportsService } from '../src/modules/imports/imports.service.js';
 import { readRows } from '../src/modules/imports/spreadsheet.js';
 import { resetDatabase, resetRedis, signInAs } from './fixtures.js';
 
@@ -101,10 +100,11 @@ const upload = (bytes: Buffer, name = 'students.csv', auth = registrar) =>
 const get = (path: string) => http.get(`/api/v1${path}`).set(registrar);
 const post = (path: string, body: object = {}) => http.post(`/api/v1${path}`).set(registrar).send(body);
 
+/** Waits until the background jobs have sent (or given up on) every activation email of the batch. */
 async function emailsSettled(id: string) {
-  const imports = app.get(ImportsService);
-  for (let i = 0; i < 200 && imports.isSending(id); i++) await new Promise((r) => setTimeout(r, 25));
-  expect(imports.isSending(id)).toBe(false);
+  const pending = () => prisma.importRow.count({ where: { batchId: id, emailStatus: 'PENDING' } });
+  for (let i = 0; i < 300 && (await pending()) > 0; i++) await new Promise((r) => setTimeout(r, 50));
+  expect(await pending()).toBe(0);
 }
 
 describe('templates', () => {

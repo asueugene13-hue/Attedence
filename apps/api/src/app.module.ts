@@ -3,7 +3,9 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter.js';
 import { RateLimitGuard } from './common/rate-limit/rate-limit.js';
 import { ConfigModule } from './config/config.module.js';
+import { ClockModule } from './infrastructure/clock/clock.js';
 import { CryptoModule } from './infrastructure/crypto/crypto.module.js';
+import { JobRunnerModule, JobsModule } from './infrastructure/jobs/jobs.module.js';
 import { LoggingModule } from './infrastructure/logging/logging.module.js';
 import { MailModule } from './infrastructure/mail/mail.module.js';
 import { PrismaModule } from './infrastructure/prisma/prisma.module.js';
@@ -22,6 +24,7 @@ import { EnrollmentsModule } from './modules/enrollments/enrollments.module.js';
 import { ImportsModule } from './modules/imports/imports.module.js';
 import { PlacesModule } from './modules/places/places.module.js';
 import { RolesModule } from './modules/roles/roles.module.js';
+import { SettingsModule } from './modules/settings/settings.module.js';
 import { StudentsModule } from './modules/students/students.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
@@ -34,6 +37,8 @@ export const INFRASTRUCTURE_MODULES = [
   CryptoModule,
   MailModule,
   AuditModule,
+  ClockModule,
+  JobsModule,
 ];
 
 @Module({
@@ -53,6 +58,9 @@ export const INFRASTRUCTURE_MODULES = [
     StudentsModule,
     EnrollmentsModule,
     ImportsModule,
+    SettingsModule,
+    // Runs background jobs in this process only when RUN_JOBS_IN_API=true; the worker always runs them.
+    JobRunnerModule.forRoot('fromConfig'),
   ],
   providers: [
     { provide: APP_FILTER, useClass: ProblemDetailsFilter },

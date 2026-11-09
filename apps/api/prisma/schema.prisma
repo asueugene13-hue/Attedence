@@ -112,6 +112,8 @@ model User {
   repsNominated             CourseRepAssignment[] @relation("RepNominatedBy")
   repsAssigned              CourseRepAssignment[] @relation("RepAssignedBy")
   repsEnded                 CourseRepAssignment[] @relation("RepEndedBy")
+  settingsUpdated           InstitutionSetting[]  @relation("SettingUpdatedBy")
+  systemEventsAcknowledged  SystemEvent[]         @relation("SystemEventAcknowledgedBy")
 
   @@map("users")
 }
@@ -863,4 +865,89 @@ model CourseRepAssignment {
   @@index([sectionId, status])
   @@index([studentId, status])
   @@map("course_rep_assignments")
+}
+
+// ───────────────────────── Background jobs, outbox and settings (Phase 3) ─────────────────────────
+
+enum Severity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  /// Failed this attempt; will be retried.
+  FAILED
+  /// Failed its final attempt; a system event was raised.
+  DEAD
+}
+
+/// Versioned institution settings, e.g. "monitoring.unconfirmedAfterMinutes". A missing row means the
+/// catalogue default (packages/shared/src/settings.ts) applies.
+model InstitutionSetting {
+  key         String   @id
+  value       Json
+  version     Int      @default(0)
+  updatedById String   @map("updated_by_id") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  updatedBy User @relation("SettingUpdatedBy", fields: [updatedById], references: [id])
+
+  @@map("institution_settings")
+}
+
+/// Written in the same transaction as the change it follows; the relay turns each row into a job.
+model OutboxEvent {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  type        String
+  payload     Json
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(3)
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
+}
+
+/// One row per job, so every background task is visible and its failures are recorded.
+model BackgroundJobRecord {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  queue          String
+  name           String
+  jobId          String    @map("job_id")
+  idempotencyKey String?   @unique @map("idempotency_key")
+  status         JobStatus @default(QUEUED)
+  attempts       Int       @default(0)
+  lastError      String?   @map("last_error")
+  scheduledFor   DateTime? @map("scheduled_for") @db.Timestamptz(3)
+  startedAt      DateTime? @map("started_at") @db.Timestamptz(3)
+  finishedAt     DateTime? @map("finished_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([queue, status])
+  @@map("background_job_records")
+}
+
+/// Things the Super Admin's system-health view must see, such as a job that failed for good.
+model SystemEvent {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  type             String
+  severity         Severity
+  source           String
+  message          String
+  data             Json?
+  acknowledgedById String?   @map("acknowledged_by_id") @db.Uuid
+  acknowledgedAt   DateTime? @map("acknowledged_at") @db.Timestamptz(3)
+  occurredAt       DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  acknowledgedBy User? @relation("SystemEventAcknowledgedBy", fields: [acknowledgedById], references: [id], onDelete: Restrict)
+
+  @@index([severity, occurredAt])
+  @@map("system_events")
 }

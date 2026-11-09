@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; step 1 (background jobs and settings) in progress. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; step 1 (background jobs and settings) done; step 2 (timetables) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -981,3 +981,34 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - **Recurrence (decided):** weekly (default), every other week, selected weeks, and one-time classes, each with start and end dates; holidays and per-class exceptions skip dates.
 - **Push notifications:** they need a Firebase project owned by the university, created by the product owner with my step-by-step instructions. Until then: in-app and email only.
 - **D-17 (email and SMS provider for production):** not needed to build Phase 3. Development uses Mailpit.
+
+### 2026-11-09 — Phase 3, step 1: background jobs, outbox and settings
+
+- **Built:**
+  - **Background jobs (BullMQ on Redis):** three queues (email, monitoring, system). Each job is declared once in a registry, run with up to 5 tries by default with growing waits, and recorded in `background_job_records` (queued, running, succeeded, failed, dead). A job that fails its last try is marked DEAD and raises a **system event** for staff, so no failure is silent.
+  - **Outbox:** a change and the job that must follow it are written in the same database transaction. A relay (twice a second) moves committed rows onto their queues; each row is queued once (idempotency key). If the change rolls back, the job never exists.
+  - **Where jobs run:**
+    - in production, the separate **worker** process (`npm run start:worker -w @attendsure/api`);
+    - in local development and tests, the API can run them itself (`RUN_JOBS_IN_API=true`).
+    - The runner stops before the database connection closes, so running jobs finish cleanly.
+  - **Settings:** versioned institution settings with a catalogue of allowed values and defaults. The first are the D-13 monitoring values: 15 and 30 minutes, at least 3 students, at least 10%.
+    - Changing one needs a reason and the current version, and is audited.
+    - The review time must stay later than the unconfirmed time.
+  - **System events API:** list and acknowledge, for the coming system-health view.
+  - **Test clock:** a `Clock` service with a `FakeClock` for tests, ready for simulated teaching days.
+  - **Import activation emails are now background jobs** (KNOWN_LIMITATIONS 29 resolved): one per student, queued with the import, retried, and marked FAILED only after the last try.
+- **Checked by hand:** the real worker process started, picked up an outbox row from the development database and ran the job (status SUCCEEDED). It was then stopped by its own process ID, and the test rows were removed.
+- **Files:**
+  - New: `infrastructure/clock/clock.ts`, `infrastructure/jobs/*` (registry, jobs service, outbox, runner, system events, module), `modules/settings/*` (settings, system health, controller, module), `packages/shared/src/settings.ts`, `test/jobs-and-settings.test.ts`, migration `20261109090000_jobs_outbox_settings`.
+  - Changed: `config/app-config.ts` (`RUN_JOBS_IN_API`, `JOB_RETRY_DELAY_MS`), `app.module.ts`, `worker.module.ts`, `worker.ts`, `imports/imports.service.ts`, tests (`fixtures`, `setup-env`, `imports.test`), `apps/web/playwright.config.ts`, `.env.example`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA, DEPLOYMENT, KNOWN_LIMITATIONS.
+- **New library:** `bullmq` 6.4.2 (newest release at least two weeks old). Audit at "high": clean.
+- **Database changes:** tables `institution_settings`, `outbox_events`, `background_job_records`, `system_events`; enums `Severity` and `JobStatus`; two checks and one partial index. Drift check: no difference.
+- **Tests run:**
+  - `npm run check` exit 0: design-tokens 3, shared 10, API **189** (9 new), mobile 9, web 12, so **223 passed**.
+  - `npm run e2e -w @attendsure/web`: **4 passed** (activation emails now go through the job queue).
+- **Local setting added:** `RUN_JOBS_IN_API=true` was added to the local `.env` and to `.env.example`, so emails still go out during development without starting the worker.
+- **Known limitations:**
+  - No dashboard screens yet for settings or system events (step 7).
+  - Monitoring checkpoints use the queues from step 5.
+- **Next step:** Phase 3, step 2: timetables (entries with the decided recurrence options, conflict check, publish).
