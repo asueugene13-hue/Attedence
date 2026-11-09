@@ -895,3 +895,6 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
   - Lecturers reach their own sections from `/me/teaching`; their daily screens (Today, Live attendance) come with Phases 3–5.
   - Nominating a course rep works on the section page, but lecturers do not yet have a dashboard route to it.
 - **Next step:** Phase 2, step 7c: the Phase 2 exit check, set against the exit criteria, then a report for the product owner to approve Phase 2 as complete.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (API 180, web 12, e2e 4, audit clean).
+  - GitHub run 42542889814 on `aabac01`: **success**.
