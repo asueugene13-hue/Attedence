@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { EVIDENCE_ISSUE_TYPES, SYSTEM_TRANSITIONS } from '@attendsure/shared';
+import { EVIDENCE_ISSUE_TYPES, LIFECYCLE_TIMING, SYSTEM_TRANSITIONS } from '@attendsure/shared';
 import type { RequestContext } from '../../common/request-context.js';
 import type { ClassSession, ClassStatus, Prisma } from '../../generated/prisma/client.js';
 import { Clock } from '../../infrastructure/clock/clock.js';
@@ -57,8 +57,11 @@ export class ClassMonitorService implements OnModuleInit {
     this.jobs.every('monitoring', 'sweep', SWEEP_EVERY_MS);
   }
 
-  /** Checks every watched class whose first checkpoint has passed. */
-  async sweep(): Promise<{ checked: number; changed: number }> {
+  /**
+   * Checks every watched class whose first checkpoint has passed, and ends classes still running
+   * LIFECYCLE_TIMING.autoEndAfterMinutes after their scheduled end.
+   */
+  async sweep(): Promise<{ checked: number; changed: number; autoEnded: number }> {
     const now = this.clock.now();
     const t = await this.thresholds();
     const due = await this.prisma.classSession.findMany({
@@ -78,8 +81,33 @@ export class ClassMonitorService implements OnModuleInit {
       const result = await this.evaluateSession(id, t);
       if (result.applied) changed += 1;
     }
-    if (changed > 0) this.logger.log(`Monitoring sweep: ${due.length} checked, ${changed} changed.`);
-    return { checked: due.length, changed };
+    const autoEnded = await this.autoEnd(now);
+    if (changed + autoEnded > 0) {
+      this.logger.log(
+        `Monitoring sweep: ${due.length} checked, ${changed} changed, ${autoEnded} auto-ended.`,
+      );
+    }
+    return { checked: due.length, changed, autoEnded };
+  }
+
+  private async autoEnd(now: Date): Promise<number> {
+    const limit = LIFECYCLE_TIMING.autoEndAfterMinutes;
+    const running = await this.prisma.classSession.findMany({
+      where: {
+        status: 'ACTIVE',
+        scheduledEnd: {
+          lte: new Date(now.getTime() - limit * MINUTE),
+          gte: new Date(now.getTime() - SWEEP_LOOKBACK_MS),
+        },
+      },
+      take: 1000,
+    });
+    let ended = 0;
+    for (const session of running) {
+      const reason = `Still running ${limit} minutes after the scheduled end.`;
+      if (await this.events.applySystem(session, 'autoEnd', { reasons: [reason] })) ended += 1;
+    }
+    return ended;
   }
 
   /** Gathers the evidence for one class, asks the engine, and applies its recommendation. */

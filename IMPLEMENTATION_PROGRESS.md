@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–4 and 5a done; step 5b (review queue and decisions) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–5 done; step 6 (notifications) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1217,3 +1217,36 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
   - New enums `IssueType`, `ReporterRole`, `IssueReportStatus`, `ReviewTrigger`, `ReviewStatus`, `ReviewDecision`.
   - SQL rules: one open review per class; a decision is complete; report notes at most 500 characters.
   - Applied locally; drift check clean.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **263** (20 new: 7 engine unit tests, 13 monitoring integration tests), mobile 9, web 12, so **297 passed**.
+- **Known limitations:** KNOWN_LIMITATIONS 43–45. No messages are sent yet (step 6).
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (API 263, e2e 4, audit clean).
+  - GitHub run 42675131139 on `4172068`: **success**.
+
+### 2026-11-09 — Phase 3, step 5b: review queue, decisions, dismissing reports, auto-end
+
+- **Built:**
+  - **Review queue:** administrators see open reviews for classes within their scope, priority first, then the oldest. Each shows the class, why it was opened and how many reports of each type, and opens to the full timeline and every report.
+  - **Decisions** (each needs a note; each is a status change through the lifecycle service, with the review decided in the same transaction):
+    - "held": the class becomes COMPLETED (not before its start);
+    - "cancelled": with a reason code, including "absent without notice";
+    - "postponed": a new expected start in the future, and monitoring restarts from it;
+    - "no action needed": only before +15; it returns to CONFIRMED if the lecturer had confirmed;
+    - "rescheduled": through the reschedule flow and its conflict check.
+  - **A class changed by someone while under review** (cancelled, rescheduled or put on hold) has its review decided automatically, with a note saying how. A lecturer **starting** a class under review leaves the review open, as the lifecycle design says. The administrator then decides "held" and the class is left as it is.
+  - **Dismissing a report:** the report stays on record but stops counting as evidence.
+  - **Auto-end:** a class still running 30 minutes after its scheduled end is ended by the system.
+  - Stricter delay rule: a delay or postponement whose new start has already passed is refused (`DELAY_IN_PAST`).
+- **Proof the key test bites:** with the "decide the open review" step removed from the lifecycle service, 5 review tests failed. Restored.
+- **Files:**
+  - New: `modules/class-sessions/class-reviews.service.ts`, `class-reviews.controller.ts`.
+  - Changed:
+    - `class-event.service.ts` (review decisions, auto-end);
+    - `class-monitor.service.ts` (auto-end in the sweep), `issue-reports.service.ts` (dismiss), `reschedule.service.ts` (review note), `class-sessions.module.ts`;
+    - shared `class-lifecycle.ts` (review actions, auto-end timing), `monitoring.ts` (decision schemas);
+    - `test/class-monitoring.test.ts` (10 new tests).
+  - Docs: API_DOCUMENTATION, CLASS_MONITORING, KNOWN_LIMITATIONS (45 resolved; 46–47 new).
+- **Database changes:** none. The tables came with 5a.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **273** (10 new), mobile 9, web 12, so **307 passed**. (The first run stopped at the format check on one unformatted shared file; fixed and rerun.)
+- **Known limitations:** no messages are sent yet (step 6); repeatedly dismissed reporters are not flagged yet (46); a review cannot be reopened (47).
+- **Next step:** Phase 3, step 6: notifications (in-app and email; push designed in but switched off).

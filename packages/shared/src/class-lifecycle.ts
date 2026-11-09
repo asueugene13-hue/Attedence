@@ -127,6 +127,40 @@ export const CLASS_ACTIONS = {
     needsReason: true,
     label: 'Reschedule class',
   },
+  // Review decisions (CLASS_MONITORING.md §7). "Cancelled" and "rescheduled" use cancel and reschedule.
+  reviewHeld: {
+    to: 'COMPLETED',
+    lecturerFrom: [],
+    adminFrom: ['UNDER_REVIEW'],
+    adminPermission: 'class_reviews.decide',
+    needsReason: true,
+    label: 'Decide: the class was held',
+  },
+  reviewPostpone: {
+    to: 'POSTPONED',
+    lecturerFrom: [],
+    adminFrom: ['UNDER_REVIEW'],
+    adminPermission: 'class_reviews.decide',
+    needsReason: true,
+    label: 'Decide: postponed',
+  },
+  reviewNoAction: {
+    to: 'SCHEDULED',
+    lecturerFrom: [],
+    adminFrom: ['UNDER_REVIEW'],
+    adminPermission: 'class_reviews.decide',
+    needsReason: true,
+    label: 'Decide: no action needed',
+  },
+  /** "No action needed" for a class the lecturer had confirmed: it returns to CONFIRMED. */
+  reviewNoActionConfirmed: {
+    to: 'CONFIRMED',
+    lecturerFrom: [],
+    adminFrom: ['UNDER_REVIEW'],
+    adminPermission: 'class_reviews.decide',
+    needsReason: true,
+    label: 'Decide: no action needed',
+  },
   openReview: {
     to: 'UNDER_REVIEW',
     lecturerFrom: [],
@@ -160,6 +194,8 @@ export const LIFECYCLE_TIMING = {
   startOpensBeforeMinutes: 15,
   /** A delayed class must still leave at least this long before the scheduled end. */
   minimumRemainingAfterDelayMinutes: 30,
+  /** A class still running this long after its scheduled end is ended by the system (AUTO_ENDED). */
+  autoEndAfterMinutes: 30,
 } as const;
 
 const NoteSchema = z.string().trim().min(5, 'explain briefly (at least 5 characters)').max(500);

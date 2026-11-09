@@ -148,6 +148,45 @@ export class IssueReportsService {
     return { data: rows.filter((r) => r.reporterUserId === actor.userId).map((r) => this.view(r, true)) };
   }
 
+  /**
+   * An administrator within scope marks a report as wrong. It stays in the record but no longer counts
+   * as evidence. The class is re-checked, in case the report was holding it in a state.
+   */
+  async dismiss(actor: AccessClaims, reportId: string, note: string, context: RequestContext) {
+    const row = await this.prisma.classIssueReport.findUnique({ where: { id: reportId } });
+    if (!row) throw new NotFoundException({ code: 'NOT_FOUND', message: 'No such report.' });
+    const session = await this.session(row.classSessionId);
+    if (!(await this.isAdminInScope(actor, session))) {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'You do not have permission to do this.',
+      });
+    }
+    await this.prisma.$transaction(async (tx) => {
+      const done = await tx.classIssueReport.updateMany({
+        where: { id: row.id, status: { not: 'DISMISSED' } },
+        data: { status: 'DISMISSED' },
+      });
+      if (done.count !== 1) {
+        throw new ConflictException({
+          code: 'ALREADY_DISMISSED',
+          message: 'This report was already dismissed.',
+        });
+      }
+      await this.audit.record(
+        auditEntry(
+          actor,
+          'class_issue_reports.dismissed',
+          { type: 'class_issue_report', id: row.id },
+          { before: { status: row.status }, after: { status: 'DISMISSED' }, reason: note },
+          context,
+        ),
+        tx,
+      );
+    });
+    return this.view({ ...row, status: 'DISMISSED' }, true);
+  }
+
   /** The class's lecturer reports as LECTURER; an enrolled student as STUDENT, or COURSE_REP if they are its rep. */
   private async reporterRole(actor: AccessClaims, session: SessionWithSections): Promise<ReporterRole> {
     const sectionIds = session.sections.map((s) => s.sectionId);

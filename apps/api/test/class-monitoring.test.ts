@@ -181,7 +181,7 @@ const eventTypes = async () =>
 describe('the monitoring sweep (server time)', () => {
   it('marks a class unconfirmed at +15 and sends it to review at +30, once', async () => {
     at('10:14');
-    expect(await monitor.sweep()).toEqual({ checked: 0, changed: 0 });
+    expect(await monitor.sweep()).toEqual({ checked: 0, changed: 0, autoEnded: 0 });
     at('10:15');
     expect((await monitor.sweep()).changed).toBe(1);
     expect(await status()).toBe('UNCONFIRMED');
@@ -385,5 +385,207 @@ describe('an administrator opening a review', () => {
     const review = await prisma.classStatusReview.findFirstOrThrow({ where: { classSessionId: sessionId } });
     expect(review).toMatchObject({ trigger: 'ADMIN_OPENED', status: 'OPEN' });
     expect(review.reasons).toEqual(['Lecturer phoned in sick (test)']);
+  });
+});
+
+// ───────── Step 5b: the review queue, decisions, dismissing reports and auto-end ─────────
+
+/** Puts the class under review the way monitoring does: unconfirmed at +15, review at +30. */
+async function escalated() {
+  at('10:15');
+  await monitor.sweep();
+  at('10:30');
+  await monitor.sweep();
+  expect(await status()).toBe('UNDER_REVIEW');
+  return (await prisma.classStatusReview.findFirstOrThrow({ where: { classSessionId: sessionId } })).id;
+}
+const decide = (reviewId: string, body: object, auth = admin) =>
+  http.post(`/api/v1/class-reviews/${reviewId}/decide`).set(auth).send(body);
+const reviewRow = (id: string) => prisma.classStatusReview.findUniqueOrThrow({ where: { id } });
+
+describe('the review queue', () => {
+  it('lists open reviews within scope, with report counts, and shows one with its evidence', async () => {
+    at('10:16');
+    await report(students[2]!).expect(201);
+    const id = await escalated();
+    const list = (await http.get('/api/v1/class-reviews').set(admin).expect(200)).body.data;
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id, status: 'OPEN', reportCounts: { LECTURER_NOT_ARRIVED: 1 } });
+    expect(list[0].classSession.id).toBe(sessionId);
+    const one = (await http.get(`/api/v1/class-reviews/${id}`).set(admin).expect(200)).body;
+    expect(one.reports).toHaveLength(1);
+    expect(one.classSession.events.map((e: { type: string }) => e.type)).toEqual(
+      expect.arrayContaining(['MARKED_UNCONFIRMED', 'ESCALATED']),
+    );
+    const otherFaculty = await prisma.faculty.create({ data: { code: 'OF', name: 'Other Faculty' } });
+    const outside = (
+      await signInAs(app, prisma, 'other.admin@example.test', ['UNIVERSITY_ADMIN'], {
+        scope: { type: 'FACULTY', id: otherFaculty.id },
+      })
+    ).auth;
+    expect((await http.get('/api/v1/class-reviews').set(outside).expect(200)).body.data).toHaveLength(0);
+    await http.get(`/api/v1/class-reviews/${id}`).set(outside).expect(403);
+    await http.get('/api/v1/class-reviews').set(lecturer).expect(403);
+  });
+});
+
+describe('review decisions', () => {
+  it('"held" completes the class, records the note, and cannot be decided twice', async () => {
+    const id = await escalated();
+    await decide(id, { decision: 'CLASS_HELD' }).expect(400); // a note is required
+    const done = (
+      await decide(id, { decision: 'CLASS_HELD', note: 'Lecturer confirmed by phone (test)' }).expect(200)
+    ).body;
+    expect(done).toMatchObject({
+      status: 'DECIDED',
+      decision: 'CLASS_HELD',
+      decisionNote: 'Lecturer confirmed by phone (test)',
+    });
+    expect(await status()).toBe('COMPLETED');
+    expect((await eventTypes()).at(-1)).toBe('REVIEW_DECIDED');
+    const again = await decide(id, { decision: 'CLASS_HELD', note: 'Again (test)' }).expect(409);
+    expect(again.body.code).toBe('ALREADY_DECIDED');
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: 'class_sessions.reviewHeld' } });
+    expect(audit.reason).toBe('Lecturer confirmed by phone (test)');
+  });
+
+  it('"cancelled" records the reason code, including "absent without notice"', async () => {
+    const id = await escalated();
+    await decide(id, { decision: 'CANCELLED', note: 'No reason code (test)' }).expect(400);
+    await decide(id, {
+      decision: 'CANCELLED',
+      note: 'Lecturer did not come (test)',
+      reasonCode: 'LECTURER_ABSENT_NO_NOTICE',
+    }).expect(200);
+    expect(await prisma.classSession.findUniqueOrThrow({ where: { id: sessionId } })).toMatchObject({
+      status: 'CANCELLED',
+      cancelReason: 'LECTURER_ABSENT_NO_NOTICE',
+    });
+    expect(await reviewRow(id)).toMatchObject({
+      decision: 'CANCELLED',
+      decisionNote: 'Lecturer did not come (test)',
+    });
+  });
+
+  it('"postponed" sets a new expected start in the future, and monitoring restarts from it', async () => {
+    const id = await escalated();
+    const tooShort = await decide(id, {
+      decision: 'POSTPONED',
+      note: 'Too short (test)',
+      minutes: 20,
+    }).expect(409);
+    expect(tooShort.body.code).toBe('DELAY_IN_PAST');
+    await decide(id, { decision: 'POSTPONED', note: 'Lecturer on the way (test)', minutes: 45 }).expect(200);
+    const s = await prisma.classSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(s.status).toBe('POSTPONED');
+    expect(s.expectedStart?.toISOString()).toBe('2030-08-20T10:45:00.000Z');
+    at('10:59');
+    await monitor.sweep();
+    expect(await status()).toBe('POSTPONED');
+    at('11:00');
+    await monitor.sweep();
+    expect(await status()).toBe('UNCONFIRMED');
+  });
+
+  it('"no action" returns the class, to CONFIRMED if it was confirmed, only before +15', async () => {
+    at('09:00');
+    await http.post(`/api/v1/class-sessions/${sessionId}/confirm`).set(lecturer).expect(200);
+    at('10:05');
+    await http
+      .post(`/api/v1/class-sessions/${sessionId}/open-review`)
+      .set(admin)
+      .send({ reason: 'Timetable error reported (test)' })
+      .expect(200);
+    const id = (await prisma.classStatusReview.findFirstOrThrow({ where: { classSessionId: sessionId } })).id;
+    at('10:15');
+    const late = await decide(id, { decision: 'NO_ACTION', note: 'Report was wrong (test)' }).expect(409);
+    expect(late.body.code).toBe('TOO_LATE_FOR_NO_ACTION');
+    at('10:10');
+    await decide(id, { decision: 'NO_ACTION', note: 'Report was wrong (test)' }).expect(200);
+    expect(await status()).toBe('CONFIRMED');
+    expect((await reviewRow(id)).decision).toBe('NO_ACTION');
+  });
+
+  it('"rescheduled" moves the class through the reschedule flow and decides the review', async () => {
+    const id = await escalated();
+    const room = await prisma.classroom.findFirstOrThrow();
+    await decide(id, {
+      decision: 'RESCHEDULED',
+      note: 'Make-up agreed with the class (test)',
+      reschedule: { date: '2030-08-22', startTime: '14:00', endTime: '15:30', classroomId: room.id },
+    }).expect(200);
+    expect(await status()).toBe('RESCHEDULED');
+    expect(
+      await prisma.classSession.count({ where: { kind: 'REPLACEMENT', rescheduledFromId: sessionId } }),
+    ).toBe(1);
+    expect(await reviewRow(id)).toMatchObject({
+      decision: 'RESCHEDULED',
+      decisionNote: 'Make-up agreed with the class (test)',
+    });
+    expect(await prisma.rescheduleRequest.count({ where: { isDirect: true, status: 'APPROVED' } })).toBe(1);
+  });
+
+  it('a lecturer starting a class under review leaves the review open, to be decided "held"', async () => {
+    const id = await escalated();
+    at('10:35');
+    await http.post(`/api/v1/class-sessions/${sessionId}/start`).set(lecturer).expect(200);
+    expect((await reviewRow(id)).status).toBe('OPEN');
+    const wrong = await decide(id, {
+      decision: 'CANCELLED',
+      note: 'Too late (test)',
+      reasonCode: 'OTHER',
+    }).expect(409);
+    expect(wrong.body.code).toBe('CLASS_STARTED');
+    await decide(id, { decision: 'CLASS_HELD', note: 'Started 35 minutes late (test)' }).expect(200);
+    expect(await status()).toBe('ACTIVE');
+    expect(await reviewRow(id)).toMatchObject({ status: 'DECIDED', decision: 'CLASS_HELD' });
+  });
+
+  it('a lecturer cancelling a class under review decides the review as cancelled', async () => {
+    const id = await escalated();
+    await http
+      .post(`/api/v1/class-sessions/${sessionId}/cancel`)
+      .set(lecturer)
+      .send({ reasonCode: 'ILLNESS' })
+      .expect(200);
+    expect(await reviewRow(id)).toMatchObject({ status: 'DECIDED', decision: 'CANCELLED' });
+    expect((await reviewRow(id)).decisionNote).toContain('lecturer');
+  });
+});
+
+describe('dismissing reports', () => {
+  it('stops a wrong report counting as evidence; only administrators in scope may dismiss', async () => {
+    at('10:15');
+    await monitor.sweep();
+    at('10:16');
+    const first = (await report(students[1]!).expect(201)).body;
+    await report(students[2]!).expect(201);
+    const dismiss = (auth: Record<string, string>) =>
+      http
+        .post(`/api/v1/class-issue-reports/${first.id}/dismiss`)
+        .set(auth)
+        .send({ note: 'Was in the wrong room (test)' });
+    await dismiss(lecturer).expect(403);
+    expect((await dismiss(admin).expect(200)).body.status).toBe('DISMISSED');
+    expect((await dismiss(admin).expect(409)).body.code).toBe('ALREADY_DISMISSED');
+    await report(students[3]!).expect(201);
+    // Three reports, but one is dismissed: two do not meet the threshold.
+    expect((await monitor.evaluateSession(sessionId)).recommendation).toBe('NONE');
+    expect(await status()).toBe('UNCONFIRMED');
+  });
+});
+
+describe('auto-end', () => {
+  it('ends a class still running 30 minutes after its scheduled end', async () => {
+    at('10:00');
+    await http.post(`/api/v1/class-sessions/${sessionId}/start`).set(lecturer).expect(200);
+    at('11:59');
+    expect((await monitor.sweep()).autoEnded).toBe(0);
+    at('12:00');
+    expect((await monitor.sweep()).autoEnded).toBe(1);
+    const s = await prisma.classSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(s.status).toBe('COMPLETED');
+    expect(s.actualEnd?.toISOString()).toBe('2030-08-20T12:00:00.000Z');
+    expect((await eventTypes()).at(-1)).toBe('AUTO_ENDED');
   });
 });

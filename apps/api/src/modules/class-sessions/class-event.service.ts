@@ -10,7 +10,13 @@ import {
 import { auditEntry } from '../../common/audit-entry.js';
 import { rethrowAsConflict } from '../../common/db-errors.js';
 import type { RequestContext } from '../../common/request-context.js';
-import type { CancelReason, ClassEventType, ClassSession, Prisma } from '../../generated/prisma/client.js';
+import type {
+  CancelReason,
+  ClassEventType,
+  ClassSession,
+  Prisma,
+  ReviewDecision,
+} from '../../generated/prisma/client.js';
 import { Clock } from '../../infrastructure/clock/clock.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AcademicAccessService } from '../academic/academic-access.service.js';
@@ -35,6 +41,8 @@ export interface ActionInput {
   minutes?: number;
   reasonCode?: CancelReason;
   note?: string;
+  /** The administrator's note when this change decides an open review. */
+  reviewNote?: string;
 }
 
 const EVENT: Record<ClassActionName, ClassEventType> = {
@@ -51,6 +59,31 @@ const EVENT: Record<ClassActionName, ClassEventType> = {
   reschedule: 'RESCHEDULED',
   reinstate: 'REINSTATED',
   openReview: 'ESCALATED',
+  reviewHeld: 'REVIEW_DECIDED',
+  reviewPostpone: 'REVIEW_DECIDED',
+  reviewNoAction: 'REVIEW_DECIDED',
+  reviewNoActionConfirmed: 'REVIEW_DECIDED',
+};
+
+/**
+ * When a class under review changes this way, its open review is decided in the same transaction.
+ * Starting the class does not decide it (CLASS_LIFECYCLE.md §4): the start shows in the review's
+ * timeline and the administrator still decides.
+ */
+const REVIEW_DECISION: Partial<Record<ClassActionName, ReviewDecision>> = {
+  reviewHeld: 'CLASS_HELD',
+  reviewPostpone: 'POSTPONED',
+  reviewNoAction: 'NO_ACTION',
+  reviewNoActionConfirmed: 'NO_ACTION',
+  cancel: 'CANCELLED',
+  reschedule: 'RESCHEDULED',
+  suspend: 'NO_ACTION',
+};
+
+const SYSTEM_EVENT: Record<SystemTransition, ClassEventType> = {
+  markUnconfirmed: 'MARKED_UNCONFIRMED',
+  escalate: 'ESCALATED',
+  autoEnd: 'AUTO_ENDED',
 };
 
 const ADMIN_ROLES = ['SUPER_ADMIN', 'UNIVERSITY_ADMIN'];
@@ -130,6 +163,22 @@ export class ClassEventService {
             'Someone else changed this class a moment ago. Reload it and try again.',
           );
         }
+        const decision = session.status === 'UNDER_REVIEW' ? REVIEW_DECISION[action] : undefined;
+        if (decision) {
+          const closed = await tx.classStatusReview.updateMany({
+            where: { classSessionId: session.id, status: 'OPEN' },
+            data: {
+              status: 'DECIDED',
+              decision,
+              decisionNote:
+                input.reviewNote ??
+                `Decided by "${def.label}" (${capacity === 'LECTURER' ? 'lecturer' : 'administrator'}).`,
+              decidedById: actor.userId,
+              decidedAt: now,
+            },
+          });
+          if (closed.count > 0) extra = { ...extra, reviewDecision: decision };
+        }
         const payload = {
           as: capacity,
           ...(input.reason ? { reason: input.reason } : {}),
@@ -189,14 +238,19 @@ export class ClassEventService {
     return this.prisma.$transaction(async (tx) => {
       const claimed = await tx.classSession.updateMany({
         where: { id: session.id, status: session.status, version: session.version },
-        data: { status: def.to, statusChangedAt: now, version: { increment: 1 } },
+        data: {
+          status: def.to,
+          statusChangedAt: now,
+          version: { increment: 1 },
+          ...(transition === 'autoEnd' ? { actualEnd: now } : {}),
+        },
       });
       if (claimed.count !== 1) return false;
       const extra = inTransaction ? await inTransaction(tx, session, now) : {};
       await tx.classEvent.create({
         data: {
           classSessionId: session.id,
-          type: transition === 'markUnconfirmed' ? 'MARKED_UNCONFIRMED' : 'ESCALATED',
+          type: SYSTEM_EVENT[transition],
           fromStatus: session.status,
           toStatus: def.to,
           actorType: 'SYSTEM',
@@ -315,8 +369,17 @@ export class ClassEventService {
           );
         }
         return { actualStart: now };
+      case 'reviewHeld':
+        if (now.getTime() < start) {
+          throw conflict('TOO_EARLY', 'A class cannot be decided as held before its scheduled start.');
+        }
+        return {};
+      case 'reviewPostpone':
       case 'delay': {
         const expected = new Date(start + input.minutes! * MINUTE);
+        if (expected.getTime() <= now.getTime()) {
+          throw conflict('DELAY_IN_PAST', 'The new expected start must be in the future.');
+        }
         if (expected.getTime() > end - LIFECYCLE_TIMING.minimumRemainingAfterDelayMinutes * MINUTE) {
           throw conflict(
             'DELAY_TOO_LONG',

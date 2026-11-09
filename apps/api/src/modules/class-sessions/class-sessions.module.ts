@@ -8,6 +8,8 @@ import { StudentsModule } from '../students/students.module.js';
 import { TimetablesModule } from '../timetables/timetables.module.js';
 import { ClassEventService } from './class-event.service.js';
 import { ClassMonitorService } from './class-monitor.service.js';
+import { ClassReviewsController } from './class-reviews.controller.js';
+import { ClassReviewsService } from './class-reviews.service.js';
 import { ClassSessionsController } from './class-sessions.controller.js';
 import { ClassSessionsService } from './class-sessions.service.js';
 import { IssueReportsController } from './issue-reports.controller.js';
@@ -26,7 +28,12 @@ import { SessionGenerationService } from './session-generation.service.js';
     StudentsModule,
     SettingsModule,
   ],
-  controllers: [ClassSessionsController, RescheduleController, IssueReportsController],
+  controllers: [
+    ClassSessionsController,
+    RescheduleController,
+    IssueReportsController,
+    ClassReviewsController,
+  ],
   providers: [
     ClassSessionsService,
     SessionGenerationService,
@@ -34,6 +41,7 @@ import { SessionGenerationService } from './session-generation.service.js';
     RescheduleService,
     ClassMonitorService,
     IssueReportsService,
+    ClassReviewsService,
   ],
   exports: [ClassSessionsService, SessionGenerationService, ClassEventService, ClassMonitorService],
 })

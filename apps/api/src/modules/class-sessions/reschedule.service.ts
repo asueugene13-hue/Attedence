@@ -267,6 +267,7 @@ export class RescheduleService {
     sessionId: string,
     input: Proposal & { reason: string },
     context: RequestContext,
+    reviewNote?: string,
   ) {
     const session = await this.session(sessionId);
     await this.assertDecider(actor, session);
@@ -276,47 +277,54 @@ export class RescheduleService {
 
     let requestId = '';
     await this.events
-      .act(actor, session.id, 'reschedule', { reason: input.reason }, context, async (tx, original, now) => {
-        await this.closeWaiting(tx, actor, original.id, now, context);
-        const row = await tx.rescheduleRequest.create({
-          data: {
-            classSessionId: original.id,
-            requestedById: actor.userId,
-            proposedStart: start,
-            proposedEnd: end,
-            proposedClassroomId: input.classroomId,
-            reason: input.reason,
-            status: 'PENDING',
-            isDirect: true,
-            createdAt: now,
-          },
-        });
-        const replacement = await this.createReplacement(tx, actor, original, row, now);
-        await tx.rescheduleRequest.update({
-          where: { id: row.id },
-          data: {
-            status: 'APPROVED',
-            decidedById: actor.userId,
-            decidedAt: now,
-            replacementSessionId: replacement.id,
-          },
-        });
-        await this.audit.record(
-          auditEntry(
-            actor,
-            'reschedule_requests.direct',
-            { type: 'reschedule_request', id: row.id },
-            {
-              after: { ...this.auditView(row), status: 'APPROVED', replacementSessionId: replacement.id },
+      .act(
+        actor,
+        session.id,
+        'reschedule',
+        { reason: input.reason, reviewNote },
+        context,
+        async (tx, original, now) => {
+          await this.closeWaiting(tx, actor, original.id, now, context);
+          const row = await tx.rescheduleRequest.create({
+            data: {
+              classSessionId: original.id,
+              requestedById: actor.userId,
+              proposedStart: start,
+              proposedEnd: end,
+              proposedClassroomId: input.classroomId,
               reason: input.reason,
+              status: 'PENDING',
+              isDirect: true,
+              createdAt: now,
             },
-            context,
-          ),
-          tx,
-        );
-        requestId = row.id;
-        return this.eventDetails(row.id, replacement);
-      })
+          });
+          const replacement = await this.createReplacement(tx, actor, original, row, now);
+          await tx.rescheduleRequest.update({
+            where: { id: row.id },
+            data: {
+              status: 'APPROVED',
+              decidedById: actor.userId,
+              decidedAt: now,
+              replacementSessionId: replacement.id,
+            },
+          });
+          await this.audit.record(
+            auditEntry(
+              actor,
+              'reschedule_requests.direct',
+              { type: 'reschedule_request', id: row.id },
+              {
+                after: { ...this.auditView(row), status: 'APPROVED', replacementSessionId: replacement.id },
+                reason: input.reason,
+              },
+              context,
+            ),
+            tx,
+          );
+          requestId = row.id;
+          return this.eventDetails(row.id, replacement);
+        },
+      )
       .catch((e: unknown) => rethrowAsConflict(e, SLOT_TAKEN));
     return this.get(actor, requestId);
   }

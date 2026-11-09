@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { ReasonSchema } from './admin.js';
+import { CANCEL_REASONS } from './class-lifecycle.js';
+import { RescheduleProposalSchema } from './reschedules.js';
 import type { CLASS_STATUSES } from './timetables.js';
 
 /**
@@ -51,5 +54,40 @@ export const SYSTEM_TRANSITIONS = {
     from: ['SCHEDULED', 'CONFIRMED', 'POSTPONED', 'UNCONFIRMED'] as Status[],
     to: 'UNDER_REVIEW' as Status,
   },
+  /** A class still running at its scheduled end + LIFECYCLE_TIMING.autoEndAfterMinutes. */
+  autoEnd: { from: ['ACTIVE'] as Status[], to: 'COMPLETED' as Status },
 } as const;
 export type SystemTransition = keyof typeof SYSTEM_TRANSITIONS;
+
+export const REVIEW_DECISIONS = ['CLASS_HELD', 'CANCELLED', 'POSTPONED', 'RESCHEDULED', 'NO_ACTION'] as const;
+export const REVIEW_STATUSES = ['OPEN', 'DECIDED'] as const;
+
+/**
+ * An administrator's review decision. Every decision needs a note. "Cancelled" needs a reason code,
+ * "postponed" the delay in minutes from the scheduled start, "rescheduled" the new time and room.
+ */
+export const DecideReviewSchema = z.discriminatedUnion('decision', [
+  z.strictObject({ decision: z.literal('CLASS_HELD'), note: ReasonSchema }),
+  z.strictObject({ decision: z.literal('NO_ACTION'), note: ReasonSchema }),
+  z.strictObject({
+    decision: z.literal('CANCELLED'),
+    note: ReasonSchema,
+    reasonCode: z.enum(CANCEL_REASONS),
+  }),
+  z.strictObject({
+    decision: z.literal('POSTPONED'),
+    note: ReasonSchema,
+    minutes: z.number().int().min(5).max(240),
+  }),
+  z.strictObject({
+    decision: z.literal('RESCHEDULED'),
+    note: ReasonSchema,
+    reschedule: RescheduleProposalSchema,
+  }),
+]);
+
+export const ReviewListQuerySchema = z.strictObject({
+  status: z.enum(REVIEW_STATUSES).default('OPEN'),
+});
+
+export const DismissReportSchema = z.strictObject({ note: ReasonSchema });

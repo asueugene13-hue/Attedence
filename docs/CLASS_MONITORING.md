@@ -99,7 +99,15 @@ The responsible administrators are those whose scope covers the course's departm
 - **System changes** go through `ClassEventService.applySystem`. It changes the class only if its status and version are still what the check saw, records a SYSTEM class event and an audit entry, and otherwise does nothing (a person acting at the same moment wins).
 - **Escalation** opens a `class_status_reviews` row (trigger `SYSTEM_ESCALATION`, priority if a rep reported or a verbal cancellation was reported, with the engine's reasons) in the same transaction. An administrator's "open review" action opens one with trigger `ADMIN_OPENED`.
 - **Who sees reports:** administrators within scope see the reporter. The class's lecturer sees every report, but students only as "student" or "course rep", so nobody is discouraged from reporting. Students see their own reports.
-- Dismissed reports never count as evidence. Dismissing, the review queue and its decisions come in step 5b.
+- Dismissed reports never count as evidence.
+
+## 6b. As built (Phase 3 step 5b)
+
+- **Queue:** administrators with `class_reviews.decide` see open reviews for classes within their scope, priority first, then the oldest. Each comes with the class, the reasons it was opened and report counts by type, and opens to the full event timeline and every report.
+- **Decisions** (section 7) go through `ClassEventService` like any status change. The review is decided in the same transaction, with the administrator's note. "Cancelled" uses the cancel action with its reason code. "Rescheduled" runs the reschedule flow (D-11), including its conflict check.
+- **When a person changes a class under review** (cancels it, reschedules it or puts it on hold), its open review is decided in the same transaction with a note saying how. **Starting the class does not decide it** (CLASS_LIFECYCLE.md §4): the start shows in the timeline, and the administrator then decides "held", which leaves the class as it is.
+- **Dismissing a report** keeps it in the record but stops it counting as evidence.
+- **Auto-end:** the sweep ends a class still ACTIVE 30 minutes after its scheduled end (`AUTO_ENDED`, a SYSTEM event). The lecturer is told when notifications arrive (step 6).
 
 ## 7. Administrator review
 

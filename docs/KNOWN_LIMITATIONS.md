@@ -65,4 +65,6 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 42. **A reschedule request has no "edit".** The lecturer withdraws it and asks again.
 43. **Monitoring checks once a minute.** A class can become UNCONFIRMED or go to review up to a minute after its checkpoint. Reports are checked at once. Reminders before a class (24 h, 1 h, 15 min) come with notifications in step 6.
 44. **Each minute's sweep leaves a job record** (about 1,440 a day). They are small, and a clean-up rule comes with the data-retention decision (D-18).
-45. **Not yet in step 5a:** the review queue and decisions, dismissing reports, flagging students whose reports are repeatedly dismissed, and ending classes left running past their end. These come in step 5b.
+45. ~~Not yet in step 5a: the review queue and decisions, dismissing reports and auto-end.~~ **Built in step 5b.**
+46. **Students whose reports are repeatedly dismissed are not flagged yet.** Flags (and their review screen) come with the risk-flag work in a later phase. Dismissals are already recorded and audited, so the history will be there.
+47. **A review has no "reopen".** A wrong decision is corrected with the class actions (for example "reinstate"), which are audited.
