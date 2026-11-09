@@ -848,3 +848,6 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
   - Academic structure, courses, sections and lecturers still have no screens (step 7b). Until then, a new installation sets them up through the API, as the browser test does.
   - The display-join question above.
 - **Next step:** Phase 2, step 7b: Administrator and Super Admin screens for the academic structure, places, courses, offerings, sections, lecturers and course reps.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (API 179, web 11, e2e 2, audit clean).
+  - GitHub run 42539081813 on `baa6379`: **success**, including the Registrar journey against Mailpit on the runner.
