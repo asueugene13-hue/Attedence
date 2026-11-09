@@ -12,7 +12,11 @@ export default async function globalSetup(): Promise<void> {
   await db.connect();
   try {
     await db.query(
-      'TRUNCATE audit_logs, mfa_recovery_codes, refresh_tokens, auth_sessions, user_tokens, user_devices, user_roles, users CASCADE',
+      // Every table the journeys write to, including the academic data the Registrar journey sets up.
+      'TRUNCATE import_rows, import_batches, course_rep_assignments, course_enrollments, student_profiles, file_objects, ' +
+        'lecturer_assignments, lecturer_profiles, course_sections, course_offerings, courses, classrooms, buildings, ' +
+        'campuses, calendar_exceptions, semesters, academic_years, programmes, departments, faculties, academic_levels, ' +
+        'audit_logs, mfa_recovery_codes, refresh_tokens, auth_sessions, user_tokens, user_devices, user_roles, users CASCADE',
     );
   } finally {
     await db.end();

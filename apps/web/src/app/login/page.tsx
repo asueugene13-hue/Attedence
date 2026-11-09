@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth';
 export default function LoginPage() {
   const auth = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await auth.login(email, password);
+      const result = await auth.login(identifier.trim(), password);
       if ('mfaRequired' in result) {
         auth.setPendingMfa(result);
         router.push('/login/two-step');
@@ -45,18 +45,18 @@ export default function LoginPage() {
         <BrandMark />
         <div className="stack-sm">
           <h1>Sign in</h1>
-          <p className="secondary-text">Use the email address the university registered for you.</p>
+          <p className="secondary-text">
+            Use the email address the university registered for you. Students can also use their Student ID.
+          </p>
         </div>
         <form className="stack" onSubmit={submit}>
           <Field
-            label="Email"
-            name="email"
-            type="email"
+            label="Email or Student ID"
+            name="identifier"
             autoComplete="username"
-            inputMode="email"
             required
-            value={email}
-            onChange={setEmail}
+            value={identifier}
+            onChange={setIdentifier}
             autoFocus
           />
           <Field

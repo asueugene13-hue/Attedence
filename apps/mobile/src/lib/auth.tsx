@@ -19,8 +19,11 @@ interface AuthContextValue {
   status: Status;
   me: Me | null;
   pendingMfa: MfaChallenge | null;
-  /** Returns the two-step challenge when one is needed, otherwise signs in. */
-  login(email: string, password: string): Promise<MfaChallenge | null>;
+  /**
+   * `identifier` is an email or an 8-digit Student ID (staff numbers also work). Returns the two-step
+   * challenge when one is needed, otherwise signs in.
+   */
+  login(identifier: string, password: string): Promise<MfaChallenge | null>;
   verifyMfa(input: { code?: string; recoveryCode?: string }): Promise<void>;
   cancelMfa(): void;
   logout(): Promise<void>;
@@ -128,10 +131,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       status,
       me,
       pendingMfa,
-      async login(email, password) {
+      async login(identifier, password) {
         const result = await apiFetch<LoginResponse>('/auth/login', {
           method: 'POST',
-          body: { email, password, client: 'MOBILE' },
+          body: { identifier, password, client: 'MOBILE' },
         });
         if ('mfaRequired' in result) {
           setPendingMfa(result);

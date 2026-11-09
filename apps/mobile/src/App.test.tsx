@@ -57,7 +57,7 @@ beforeEach(() => {
 describe('starting the app', () => {
   it('shows sign-in when no session is stored', async () => {
     await render(<App />);
-    expect(await screen.findByLabelText('Email')).toBeTruthy();
+    expect(await screen.findByLabelText('Email or Student ID')).toBeTruthy();
     expect(calls).toHaveLength(0);
   });
 
@@ -82,7 +82,7 @@ describe('starting the app', () => {
     });
 
     await render(<App />);
-    expect(await screen.findByLabelText('Email')).toBeTruthy();
+    expect(await screen.findByLabelText('Email or Student ID')).toBeTruthy();
     expect(mockSecureStore.has(TOKEN_KEY)).toBe(false);
   });
 });
@@ -93,7 +93,10 @@ describe('signing in', () => {
     routes['GET /auth/me'] = () => ({ status: 200, body: me('STUDENT') });
 
     await render(<App />);
-    await fireEvent.changeText(await screen.findByLabelText('Email'), 'test.student@example.test');
+    await fireEvent.changeText(
+      await screen.findByLabelText('Email or Student ID'),
+      'test.student@example.test',
+    );
     await fireEvent.changeText(screen.getByLabelText('Password'), 'river-mango-lantern-42');
     await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
 
@@ -109,7 +112,7 @@ describe('signing in', () => {
       body: { code: 'INVALID_CREDENTIALS', detail: 'The email or password is incorrect.' },
     });
     await render(<App />);
-    await fireEvent.changeText(await screen.findByLabelText('Email'), 'x@example.test');
+    await fireEvent.changeText(await screen.findByLabelText('Email or Student ID'), 'x@example.test');
     await fireEvent.changeText(screen.getByLabelText('Password'), 'wrong-password-1');
     await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByText('The email or password is incorrect.')).toBeTruthy();
@@ -122,7 +125,7 @@ describe('signing in', () => {
       body: { mfaRequired: true, enrollmentRequired: true, mfaToken: 'challenge-token-0000000000' },
     });
     await render(<App />);
-    await fireEvent.changeText(await screen.findByLabelText('Email'), 'registrar@example.test');
+    await fireEvent.changeText(await screen.findByLabelText('Email or Student ID'), 'registrar@example.test');
     await fireEvent.changeText(screen.getByLabelText('Password'), 'river-mango-lantern-42');
     await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByText('Set up on the web first')).toBeTruthy();
@@ -138,7 +141,7 @@ describe('signing in', () => {
     routes['GET /auth/me'] = () => ({ status: 200, body: me('REGISTRAR') });
 
     await render(<App />);
-    await fireEvent.changeText(await screen.findByLabelText('Email'), 'registrar@example.test');
+    await fireEvent.changeText(await screen.findByLabelText('Email or Student ID'), 'registrar@example.test');
     await fireEvent.changeText(screen.getByLabelText('Password'), 'river-mango-lantern-42');
     await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
     await fireEvent.changeText(await screen.findByLabelText('6-digit code'), '123456');
@@ -159,7 +162,7 @@ describe('signing out', () => {
     await fireEvent.press(screen.getByText('Profile'));
     await fireEvent.press(await screen.findByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(mockSecureStore.has(TOKEN_KEY)).toBe(false));
-    expect(await screen.findByLabelText('Email')).toBeTruthy();
+    expect(await screen.findByLabelText('Email or Student ID')).toBeTruthy();
     expect(calls.some((c) => c.path === '/auth/logout')).toBe(true);
   });
 });

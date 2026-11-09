@@ -21,7 +21,8 @@ interface AuthContextValue {
   me: Me | null;
   /** The two-step challenge waiting for a code, between the password step and the code step. */
   pendingMfa: MfaChallenge | null;
-  login(email: string, password: string): Promise<LoginResponse>;
+  /** `identifier`: an email, an 8-digit Student ID or a staff number. */
+  login(identifier: string, password: string): Promise<LoginResponse>;
   completeSession(session: SessionResponse): Promise<void>;
   setPendingMfa(challenge: MfaChallenge | null): void;
   logout(): Promise<void>;
@@ -141,10 +142,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       me,
       pendingMfa,
       setPendingMfa,
-      async login(email, password) {
+      async login(identifier, password) {
         return apiFetch<LoginResponse>('/auth/login', {
           method: 'POST',
-          body: { email, password, client: 'WEB' },
+          body: { identifier, password, client: 'WEB' },
         });
       },
       async completeSession(session) {

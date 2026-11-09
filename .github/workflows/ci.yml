@@ -30,6 +30,10 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      # Catches outgoing email (port 1025) so the browser test can read real activation links (API on 8025).
+      mailpit:
+        image: axllent/mailpit:v1.33.1
+        ports: ['1025:1025', '8025:8025']
 
     env:
       DATABASE_URL: postgresql://attendsure:ci-only-password@localhost:5432/attendsure

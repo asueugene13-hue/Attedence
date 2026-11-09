@@ -2,8 +2,8 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 2, academic management. Steps 1–6 are done; step 7 (dashboard screens, e2e tests and the Phase 2 exit check) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
-**Last updated:** 2026-11-08
+**Current phase:** Phase 2, academic management. Steps 1–6 and 7a are done; step 7b (Administrator and Super Admin setup screens) is next, then the exit check (7c). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Last updated:** 2026-11-09
 
 ### Phase 1 steps
 
@@ -25,7 +25,7 @@ Read this first in every session, and update it after every implementation step.
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
 | 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Done; CI green 2026-11-08 (native mobile build still open) |
-| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | In progress (steps 1–3 of 7 done) |
+| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | In progress (steps 1–6 and 7a of 7 done) |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Not started |
@@ -563,7 +563,9 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 | 4 | Student registration (Registrar); faculty- and department-scoped administrator grants | Done (2026-11-08) |
 | 5 | Bulk student import (CSV/XLSX): templates, validation, preview, confirm, error report, history | Done (2026-11-08), with file storage and profile photos |
 | 6 | Enrolments and course-rep assignments | Done (2026-11-08) |
-| 7 | Dashboard screens, end-to-end tests, Phase 2 exit check | Not started |
+| 7a | Module-boundary fix; "Email or Student ID" sign-in; Registrar screens (students, bulk import, enrolments); Registrar browser journey | Done (2026-11-09) |
+| 7b | Administrator and Super Admin screens: academic structure, places, courses, offerings, sections, lecturers, course reps | Not started |
+| 7c | Phase 2 exit check | Not started |
 
 ### 2026-11-08 — Phase 2, step 1: academic structure
 
@@ -796,3 +798,53 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (API 179, e2e 1, audit clean).
   - GitHub run 42534431117 on `49e6b83`: **success**.
+
+### 2026-11-09 — Phase 2, step 7a: module boundaries, Student-ID sign-in screens, Registrar screens
+
+- **Why step 7 was split:** it covers every screen for steps 1–6. It is done in three parts, each reported separately: 7a (this), 7b (Administrator and Super Admin setup screens) and 7c (the exit check).
+- **Module boundaries (the problem found in step 6, fixed):**
+  - An audit listed which tables each module touches.
+  - Every write and every rule check now goes through the module that owns the table:
+    - `AccountsService` (users module) creates or extends accounts and role grants for student and lecturer registration;
+    - `AcademicLookupsService` (academic module) answers programme, level, department, semester and import look-ups, and checks the faculty or department of a scoped administrator role;
+    - sign-in by Student ID or staff number is answered by the students and courses modules, through a resolver they register with the sign-in service;
+    - the one-time Super Admin command writes its audit entry through the audit service.
+  - After the change the students module touches only `student_profiles`, and the courses module only course and lecturer tables. All 179 API tests passed unchanged.
+  - **Open question for the product owner:** some read-only screens still join other modules' tables to show names (KNOWN_LIMITATIONS 36).
+- **Sign-in:** web and mobile now say "Email or Student ID" and send `identifier`.
+- **Registrar screens (web dashboard):**
+  - **Students:** search and filter; register; a record page with details editing (version-checked), academic status with a reason, verification, photo upload, replace and remove, and the student's enrolments with enrol and drop.
+  - **Bulk import** (students and enrolments):
+    - template downloads (Excel or CSV);
+    - upload and check, then a preview with counts and a plain-language reason for each bad row;
+    - confirm or cancel;
+    - error report downloads;
+    - activation-email progress with re-send;
+    - history.
+  - **Enrolments:** choose a semester and section, see the roster and places left, enrol by Student ID, drop with a reason.
+  - Sidebar items appear only for roles holding the permission. Bulk import shows for either import permission.
+- **Browser test (Playwright), the new Registrar journey:**
+  - The Super Admin journey saves its recovery codes. The Registrar journey uses one to set up obviously fake academic data through the API, then creates a Registrar account.
+  - The Registrar activates from the **real activation email** (read from Mailpit) and sets up two-step sign-in.
+  - **Import:** downloads the template, then uploads a file with 2 good rows, a short Student ID, a repeated Student ID and an unknown programme. Checks the preview and the downloaded error report, confirms, and sees both activation emails sent.
+  - **Records and enrolment:** adds a photo, verifies one record, defers another, enrols a student, sees a deferred student refused, and drops the enrolment with a reason.
+  - Screenshots are in `apps/web/test-results/screens/` (4–7).
+- **CI** now runs Mailpit as a service, so the browser test reads real emails there too.
+- **Mistakes caught on the way:**
+  - My label rename first changed a staff form field in the Super Admin test; I restored it.
+  - A shell edit broke a test string again; I fixed it with direct edits.
+  - A lint comment named a rule that is not loaded; I removed it.
+- **Files:**
+  - API: `modules/users/accounts.service.ts` (new), `modules/academic/academic-lookups.service.ts` (new), `students/*`, `courses/{courses,lecturers}.service.ts`, `users/{users.service,users.module,bootstrap-super-admin}.ts`, `auth/auth.service.ts`, module files.
+  - Web: `app/(app)/students/{page,new/page,[id]/page}.tsx`, `app/(app)/imports/{page,[kind]/[id]/page}.tsx`, `app/(app)/enrollments/page.tsx`, `components/records.tsx`, `lib/{records,api,auth,navigation}.ts(x)`, `app/login/page.tsx`, `lib/web-units.test.tsx`, `e2e/{01-super-admin,02-registrar}.spec.ts`, `e2e/global-setup.ts`.
+  - Mobile: `screens/LoginScreen.tsx`, `lib/auth.tsx`, `App.test.tsx`.
+  - CI: `.github/workflows/ci.yml` (Mailpit service).
+  - Docs: KNOWN_LIMITATIONS (28 resolved, 36 narrowed), TESTING, README.
+- **Database changes:** none.
+- **Tests run:**
+  - `npm run check` exit 0: design-tokens 3, shared 10, API 179, mobile 9, web **11** (3 new), so **212 passed**.
+  - `npm run e2e -w @attendsure/web`: **2 passed**.
+- **Known limitations:**
+  - Academic structure, courses, sections and lecturers still have no screens (step 7b). Until then, a new installation sets them up through the API, as the browser test does.
+  - The display-join question above.
+- **Next step:** Phase 2, step 7b: Administrator and Super Admin screens for the academic structure, places, courses, offerings, sections, lecturers and course reps.

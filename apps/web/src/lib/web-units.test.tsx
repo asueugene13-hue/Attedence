@@ -28,6 +28,38 @@ function respond(status: number, body?: unknown) {
 }
 
 describe('apiFetch', () => {
+  it('sends FormData as it is, adds extra headers, and returns files as blobs', async () => {
+    const fetchMock = vi.fn(async () => new Response('a,b', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const form = new FormData();
+    form.append('file', new Blob(['x']), 'x.csv');
+    const blob = await apiFetch<Blob>('/imports/students', {
+      method: 'POST',
+      body: form,
+      headers: { 'If-Match': '3' },
+      responseType: 'blob',
+    });
+    expect(await blob.text()).toBe('a,b');
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.body).toBe(form);
+    const headers = init.headers as Record<string, string>;
+    expect(headers['If-Match']).toBe('3');
+    expect(headers['Content-Type']).toBeUndefined();
+  });
+
+  it('keeps non-list error details, such as missing import columns', async () => {
+    respond(400, {
+      status: 400,
+      code: 'COLUMNS_DO_NOT_MATCH',
+      detail: 'The columns do not match.',
+      errors: { missing: ['email'], unknown: [] },
+    });
+    const error = await apiFetch('/imports/students').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).details).toEqual({ missing: ['email'], unknown: [] });
+    expect((error as ApiError).fieldErrors).toEqual([]);
+  });
+
   it('returns JSON for success and undefined for 204', async () => {
     respond(200, { ok: true });
     expect(await apiFetch('/x')).toEqual({ ok: true });
@@ -82,6 +114,21 @@ describe('sidebar', () => {
       'Home',
       'Accounts',
       'Audit log',
+    ]);
+  });
+
+  it('shows Bulk import to anyone who may import either kind', () => {
+    const registrar = ['students.read_full', 'students.import', 'enrollments.manage'];
+    expect(visibleNavItems(registrar).map((i) => i.label)).toEqual([
+      'Home',
+      'Students',
+      'Bulk import',
+      'Enrolments',
+    ]);
+    expect(visibleNavItems(['enrollments.manage']).map((i) => i.label)).toEqual([
+      'Home',
+      'Bulk import',
+      'Enrolments',
     ]);
   });
 });

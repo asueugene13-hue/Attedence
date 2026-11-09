@@ -6,6 +6,8 @@ export class ApiError extends Error {
     message: string,
     readonly fieldErrors: { field: string | null; message: string }[] = [],
     readonly requestId?: string,
+    /** Extra detail the API sent that is not a list of field errors. */
+    readonly details?: unknown,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -13,16 +15,22 @@ export class ApiError extends Error {
 }
 
 export interface ApiRequest {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  /** JSON-encoded, unless it is FormData (file uploads), which the browser encodes itself. */
   body?: unknown;
   accessToken?: string | null;
   signal?: AbortSignal;
+  /** Extra headers, e.g. If-Match with the version of the record being changed. */
+  headers?: Record<string, string>;
+  /** 'blob' returns the raw file (downloads such as templates and error reports). */
+  responseType?: 'json' | 'blob';
 }
 
 /** Calls the API through the dashboard's own /api/v1 proxy. Throws ApiError for any non-2xx answer. */
 export async function apiFetch<T>(path: string, request: ApiRequest = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (request.body !== undefined) headers['Content-Type'] = 'application/json';
+  const isForm = typeof FormData !== 'undefined' && request.body instanceof FormData;
+  const headers: Record<string, string> = { Accept: 'application/json', ...request.headers };
+  if (request.body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   if (request.accessToken) headers.Authorization = `Bearer ${request.accessToken}`;
 
   let response: Response;
@@ -30,7 +38,12 @@ export async function apiFetch<T>(path: string, request: ApiRequest = {}): Promi
     response = await fetch(`/api/v1${path}`, {
       method: request.method ?? 'GET',
       headers,
-      body: request.body === undefined ? undefined : JSON.stringify(request.body),
+      body:
+        request.body === undefined
+          ? undefined
+          : isForm
+            ? (request.body as FormData)
+            : JSON.stringify(request.body),
       credentials: 'same-origin',
       signal: request.signal,
     });
@@ -44,6 +57,7 @@ export async function apiFetch<T>(path: string, request: ApiRequest = {}): Promi
   }
 
   if (response.status === 204) return undefined as T;
+  if (response.ok && request.responseType === 'blob') return (await response.blob()) as T;
   const text = await response.text();
   const data: unknown = text ? safeJson(text) : undefined;
   if (response.ok) return data as T;
@@ -61,6 +75,7 @@ export async function apiFetch<T>(path: string, request: ApiRequest = {}): Promi
     problem.detail ?? 'Something went wrong. Please try again.',
     fieldErrors,
     problem.requestId,
+    Array.isArray(problem.errors) ? undefined : problem.errors,
   );
 }
 
@@ -82,4 +97,16 @@ export function describeError(error: unknown): string {
     return error.status >= 500 && error.requestId ? `${base} (reference ${error.requestId})` : base;
   }
   return 'Something went wrong. Please try again.';
+}
+
+/** Offers a downloaded file to the person, under the given name. */
+export function saveBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

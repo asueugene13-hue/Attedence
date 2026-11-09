@@ -60,4 +60,5 @@ Rules:
 | --- | --- | --- | --- |
 | 2026-11-08 | 1 (step 9) | `npm run check` | design-tokens 3, shared 10, API 111, web 8, mobile 9: **141 passed, 0 failed** |
 | 2026-11-08 | 1 (step 9) | `npm run e2e -w @attendsure/web` | **1 passed** (first Super Admin journey in Chromium) |
+| 2026-11-09 | 2 (step 7a) | `npm run e2e -w @attendsure/web` | **2 passed** (Super Admin journey; Registrar journey: activation from a real email in Mailpit, template download, import preview with bad rows and duplicates, error report, confirm, activation emails, photo, verification, status change, enrolment and drop) |
 | 2026-11-08 | 1 (step 9) | Mutation check: permission guard forced to allow everything | Scenario 24 failed as it should (2 tests); passes again once restored |

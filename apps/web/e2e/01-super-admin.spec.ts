@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { generateSync } from 'otplib';
 
@@ -26,7 +27,7 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
 
   // 2. Sign in: a Super Admin must set up two-step sign-in first.
   await page.getByRole('link', { name: 'Go to sign in' }).click();
-  await page.getByLabel('Email').fill(ADMIN_EMAIL);
+  await page.getByLabel('Email or Student ID').fill(ADMIN_EMAIL);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Set up two-step sign-in' })).toBeVisible();
@@ -39,6 +40,15 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
   // 3. Recovery codes are shown once and must be acknowledged.
   await expect(page.getByRole('heading', { name: 'Save your recovery codes' })).toBeVisible();
   await expect(page.getByRole('list', { name: 'Recovery codes' }).getByRole('listitem')).toHaveCount(10);
+  // The next journey (02-registrar) signs in as this Super Admin with one of these single-use codes.
+  const recoveryCodes = (
+    await page.getByRole('list', { name: 'Recovery codes' }).getByRole('listitem').allTextContents()
+  ).map((c) => c.trim());
+  mkdirSync('test-results', { recursive: true });
+  writeFileSync(
+    'test-results/e2e-state.json',
+    JSON.stringify({ adminEmail: ADMIN_EMAIL, password: PASSWORD, recoveryCodes }),
+  );
   const continueButton = page.getByRole('button', { name: 'Continue to AttendSure' });
   await expect(continueButton).toBeDisabled();
   await page.getByLabel('I have saved these codes somewhere safe.').check();
@@ -47,7 +57,15 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
   // 4. The dashboard shows only the Super Admin's tools.
   await expect(page.getByRole('heading', { name: 'Welcome, E2E Admin (test)' })).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Main' });
-  await expect(nav.getByRole('link')).toHaveText(['Home', 'Accounts', 'Roles and permissions', 'Audit log']);
+  await expect(nav.getByRole('link')).toHaveText([
+    'Home',
+    'Students',
+    'Bulk import',
+    'Enrolments',
+    'Accounts',
+    'Roles and permissions',
+    'Audit log',
+  ]);
 
   // 5. A reload keeps the session (refresh cookie through the dashboard's own origin).
   await page.reload();

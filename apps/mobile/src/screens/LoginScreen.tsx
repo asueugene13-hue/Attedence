@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth';
 
 export function LoginScreen() {
   const auth = useAuth();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +14,7 @@ export function LoginScreen() {
     setBusy(true);
     setError(null);
     try {
-      await auth.login(email.trim(), password);
+      await auth.login(identifier.trim(), password);
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -25,14 +25,15 @@ export function LoginScreen() {
   return (
     <Screen>
       <Brand />
-      <Heading subtitle="Use the email address the university registered for you.">Sign in</Heading>
+      <Heading subtitle="Use your Student ID or the email address the university registered for you.">
+        Sign in
+      </Heading>
       <TextField
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
+        label="Email or Student ID"
+        value={identifier}
+        onChangeText={setIdentifier}
         autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
+        autoComplete="username"
         textContentType="username"
       />
       <TextField
@@ -45,7 +46,7 @@ export function LoginScreen() {
         onSubmitEditing={submit}
       />
       {error ? <Notice tone="error">{error}</Notice> : null}
-      <Button label="Sign in" onPress={submit} busy={busy} disabled={!email || !password} />
+      <Button label="Sign in" onPress={submit} busy={busy} disabled={!identifier || !password} />
       <BodyText muted>
         New account? Open the activation link from your email to choose a password first. Forgotten passwords
         are reset from the same email.
