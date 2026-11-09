@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–8 built (2026-11-09); waiting for the product owner's review before Phase 4. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification) plan proposed, waiting for approval. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -26,7 +26,7 @@ Read this first in every session, and update it after every implementation step.
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
 | 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Done; CI green 2026-11-08 (native mobile build still open) |
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Done; approved by the product owner 2026-11-09 |
-| 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
+| 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Done; approved by the product owner 2026-11-09 (CI run 42695433225) |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Not started |
 | 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Not started |
@@ -90,6 +90,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-09 | D-11 | Lecturer requests, authorised Administrator approves after a conflict check; Administrators may reschedule directly in exceptional cases with a reason and full audit | Product owner |
 | 2026-11-09 | D-13 | Thresholds as configurable settings (15 min, 30 min, ≥3 students AND ≥10% of enrolled). Course-rep reports: priority, verified, extra weight, never simply "two students" | Product owner |
 | 2026-11-09 | D-13 (rep rule) | Corroboration: rep + at least 1 other student escalates an UNCONFIRMED class early; a rep alone never does; a rep's report nudges the lecturer and marks the review priority | Product owner |
+| 2026-11-09 | Phase 3 approval | Phase 3 approved after a live review on the web dashboard and a phone (Samsung, Expo Go). Accepted as built, including the judgment call that student reports can send a confirmed but not-started class to review. | Product owner |
 | 2026-11-09 | Recurrence | Support weekly (default), every other week, selected weeks, one-time classes, recurrence start/end dates, holidays and per-class exceptions | Product owner |
 | 2026-11-09 | Notifications | Channels IN_APP, EMAIL and PUSH designed from the start; PUSH disabled until a university-owned Firebase project exists | Product owner |
 | 2026-11-09 | Rule 8 | Modules never write another module's tables or check its rules (they call its service); read-only joins for display are allowed. CLAUDE.md updated. | Product owner (option 1) |
@@ -1365,3 +1366,46 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - **CI (steps 6–8):**
   - Second clean-clone rehearsal of every CI step: all passed (API 279, mobile 11, web 13, e2e 5, audit clean).
   - GitHub run 42695433225 on `20ba560`: **success**.
+
+### 2026-11-09 — Phase 3 approved
+
+- The product owner reviewed Phase 3 live: the web dashboard as Super Admin and lecturer, and the phone app as a student, with a demo class moved to the current time. A lecturer started the class; the product owner asked why there was no attendance option. Answer: attendance arrives in Phase 5, after classroom verification (Phase 4); no placeholder button was added (CLAUDE.md rule 6).
+- **Approved.** Next: the Phase 4 plan, for approval before any Phase 4 work starts.
+
+## Phase 4: classroom verification (plan proposed 2026-11-09, waiting for approval)
+
+**Goal:** prove a student's phone is in the right classroom, using the layers in [PRESENCE_VERIFICATION.md](docs/PRESENCE_VERIFICATION.md): BLE beacon, GPS, trusted device and platform integrity. The decision table and its policy are built and tested here. Attendance itself (QR codes, check-in, rosters) is Phase 5, which uses this engine.
+
+**Exit criteria (unchanged):** a field test in two real Knutsford classrooms, with recorded signal measurements.
+
+### What needs the product owner (cannot be done in code)
+
+1. **Beacons (D-08).** Buy 2–3 candidate beacon types that broadcast a **rotating identifier** (Eddystone-EID or the vendor's secure rotating ID), two or three of each. The trial picks one. Until they arrive, steps 1–3 below go ahead without hardware.
+2. **Two classrooms** for the field test, with permission to place a beacon and walk the room with phones (back row, corners, doorway, corridor, rooms either side).
+3. **Phones for the trial:** at least three models students actually use, including an iPhone if possible.
+4. **A native app build.** Bluetooth scanning does not work in Expo Go, so the app must be built as a real app (D-01 already chose Expo development builds). Two ways:
+   - **Cloud build (recommended):** a free Expo account; Expo's servers build the Android app and you install it on your phone from a link. Nothing more to install here. iPhone builds later need an Apple Developer account (US$99 a year).
+   - **Local build:** install JDK 17 and Android Studio on this PC (about 10 GB), then build here.
+5. **Integrity checks (Play Integrity, App Attest)** need a Google Play Console account (US$25 once) and an Apple Developer account. Until they exist, the check reports "not available", which never counts against a student.
+
+### Steps
+
+| # | Step | Needs hardware? |
+| --- | --- | --- |
+| 1 | **Trusted devices (D-10).** The phone registers itself at sign-in with a secret kept in secure storage; the server keeps only a hash. Signed requests (HMAC, timestamp, single-use nonce) so a copied request cannot be replayed. First phone trusted; later phones wait for Registrar or Administrator approval; old phone becomes REPLACED. Shared-device and account-switch signals. **Risk flags** table and a review screen (flags never change anything by themselves). No-device exemption set by the Registrar. | No |
+| 2 | **Verification policy and engine.** Versioned policy (§9 defaults, never edited in place). A pure decision engine following §6 row by row: hard gates, BLE and GPS evidence, the decision table and its modifiers (integrity, shared device, degraded mode). GPS geofence evaluation (§4). Every outcome saved with its full rule trace. Unit tests for every row and every scenario in §7. | No |
+| 3 | **Beacon registry and calibration.** Beacons per classroom (protocol, identifier, encrypted rotating key, power, threshold, status, battery). Site-survey records (each measurement: phone model, position, signal strength) and a calibrated threshold per room, worked out as §3 describes. Screens for administrators. Rotating-ID support behind one interface, completed for the beacon type the trial picks. | No (rotating-ID details wait for D-08) |
+| 4 | **The native app.** Development build; permission explanation screens before the system prompts; a 6-second scan that only listens for registered beacons; one GPS reading; device registration. A **"Check this classroom"** screen that runs the real checks and shows the engine's decision without recording any attendance, and a **site-survey mode** for staff that records signal readings at each position. | Phone build; beacons to see real readings |
+| 5 | **Beacon health and degraded mode.** Five-minute health summaries from what phones heard; "suspected faulty" when on-campus phones hear nothing; alerts to the lecturer and administrator; degraded mode for that class; unexpected-beacon and location-conflict flags. Integrity verification behind one interface (switched on when the accounts exist). | No |
+| 6 | **Field test (exit check).** In two real classrooms, with you: survey each room, set thresholds, then run the check-in scenarios (right room, wrong room next door, corridor, outside, Bluetooth off, beacon removed). I write up the measurements and results as a report in `docs/`. | Yes |
+
+### Decisions to confirm with this plan
+
+- **D-10 device policy:** one trusted phone per student; the first phone is trusted automatically; a replacement needs Registrar or Administrator approval. (Recommended, as designed.)
+- **Native build route:** cloud build with a free Expo account (recommended), or local build.
+- **Integrity accounts:** create the Google Play Console account now, or later (before Phase 8). Recommended: later; the check is built now and switched on when the account exists.
+- **Beacons:** confirm you can buy candidate beacons now, so they arrive while steps 1–3 are built.
+
+### Order and timing
+
+Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved. Step 4 needs the native build route decided. Step 6 needs the beacons, the classrooms and you on site.
