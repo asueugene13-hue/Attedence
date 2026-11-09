@@ -1051,3 +1051,6 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
   - Class meetings are generated in step 3.
   - Timetable screens come in step 7.
 - **Next step:** Phase 3, step 3: generate every class meeting on publish (skipping holidays and exceptions, Accra time to UTC, safe to re-run), with database rules that stop a room or lecturer being booked twice.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (e2e 4, audit clean).
+  - GitHub run 42625413700 on `ac97182`: **success**.
