@@ -192,6 +192,15 @@ export class CourseRepsService {
     return { courseReps: views.filter((v) => v.semester.status !== 'CLOSED') };
   }
 
+  /** Students who are active course reps of any of these sections. */
+  async activeRepStudentIds(sectionIds: string[]): Promise<string[]> {
+    const rows = await this.prisma.courseRepAssignment.findMany({
+      where: { status: 'ACTIVE', sectionId: { in: sectionIds } },
+      select: { studentId: true },
+    });
+    return [...new Set(rows.map((r) => r.studentId))];
+  }
+
   /** Of these sections, the ones the student is the active course rep of (for class issue reports). */
   async activeRepSectionIds(studentId: string, sectionIds: string[]): Promise<string[]> {
     const rows = await this.prisma.courseRepAssignment.findMany({

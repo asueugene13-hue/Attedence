@@ -18,6 +18,7 @@ import type {
   ReviewDecision,
 } from '../../generated/prisma/client.js';
 import { Clock } from '../../infrastructure/clock/clock.js';
+import { OutboxService } from '../../infrastructure/jobs/outbox.service.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AcademicAccessService } from '../academic/academic-access.service.js';
 import { AuditService } from '../audit-logs/audit.service.js';
@@ -25,6 +26,7 @@ import type { AccessClaims } from '../auth/token.service.js';
 import { PermissionService } from '../authorization/permission.service.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { LecturersService } from '../courses/lecturers.service.js';
+import { writeClassEvent } from './class-event-log.js';
 
 /**
  * Extra work done in the same transaction as the status change, before it (a reschedule creates the
@@ -106,6 +108,7 @@ const SLOT_TAKEN = {
 @Injectable()
 export class ClassEventService {
   constructor(
+    private readonly outbox: OutboxService,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly permissions: PermissionService,
@@ -191,7 +194,7 @@ export class ClassEventService {
           ...(action === 'liftHold' ? { holdLifted: true } : {}),
           ...extra,
         };
-        await tx.classEvent.create({
+        await writeClassEvent(tx, this.outbox, {
           data: {
             classSessionId: session.id,
             type: EVENT[action],
@@ -247,7 +250,7 @@ export class ClassEventService {
       });
       if (claimed.count !== 1) return false;
       const extra = inTransaction ? await inTransaction(tx, session, now) : {};
-      await tx.classEvent.create({
+      await writeClassEvent(tx, this.outbox, {
         data: {
           classSessionId: session.id,
           type: SYSTEM_EVENT[transition],
@@ -284,7 +287,7 @@ export class ClassEventService {
         where: { classSessionId: sessionId, type: { in: ['LECTURER_PROMPTED', 'MARKED_UNCONFIRMED'] } },
       });
       if (already > 0) return false;
-      await tx.classEvent.create({
+      await writeClassEvent(tx, this.outbox, {
         data: {
           classSessionId: sessionId,
           type: 'LECTURER_PROMPTED',

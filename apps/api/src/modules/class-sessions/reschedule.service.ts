@@ -12,6 +12,7 @@ import type {
   RescheduleStatus,
 } from '../../generated/prisma/client.js';
 import { Clock } from '../../infrastructure/clock/clock.js';
+import { OutboxService } from '../../infrastructure/jobs/outbox.service.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AcademicAccessService } from '../academic/academic-access.service.js';
 import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
@@ -24,6 +25,7 @@ import { EnrollmentsService } from '../enrollments/enrollments.service.js';
 import { PlacesService } from '../places/places.service.js';
 import { ClassEventService } from './class-event.service.js';
 import { ClassSessionsService } from './class-sessions.service.js';
+import { writeClassEvent } from './class-event-log.js';
 
 export interface Proposal {
   date: string;
@@ -68,6 +70,7 @@ const alreadyDecided = () =>
 @Injectable()
 export class RescheduleService {
   constructor(
+    private readonly outbox: OutboxService,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly events: ClassEventService,
@@ -137,6 +140,7 @@ export class RescheduleService {
           ),
           tx,
         );
+        await this.outbox.add(tx, 'system', 'reschedule-alert', { requestId: row.id, kind: 'created' });
         return row;
       })
       .catch((e: unknown) =>
@@ -228,6 +232,7 @@ export class RescheduleService {
             ),
             tx,
           );
+          await this.outbox.add(tx, 'system', 'reschedule-alert', { requestId: row.id, kind: 'decided' });
           return this.eventDetails(row.id, replacement);
         },
       )
@@ -516,7 +521,7 @@ export class RescheduleService {
         sections: { create: sections.map((s) => ({ sectionId: s.sectionId })) },
       },
     });
-    await tx.classEvent.create({
+    await writeClassEvent(tx, this.outbox, {
       data: {
         classSessionId: replacement.id,
         type: 'GENERATED',
@@ -555,6 +560,9 @@ export class RescheduleService {
         data: { status, decidedById: actor.userId, decidedAt: now, decisionNote: note },
       });
       if (done.count !== 1) throw alreadyDecided();
+      if (status === 'REJECTED') {
+        await this.outbox.add(tx, 'system', 'reschedule-alert', { requestId: row.id, kind: 'decided' });
+      }
       await this.audit.record(
         auditEntry(
           actor,

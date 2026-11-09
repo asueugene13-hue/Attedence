@@ -68,3 +68,6 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 45. ~~Not yet in step 5a: the review queue and decisions, dismissing reports and auto-end.~~ **Built in step 5b.**
 46. **Students whose reports are repeatedly dismissed are not flagged yet.** Flags (and their review screen) come with the risk-flag work in a later phase. Dismissals are already recorded and audited, so the history will be there.
 47. **A review has no "reopen".** A wrong decision is corrected with the class actions (for example "reinstate"), which are audited.
+48. **Push notifications are off** until the university creates its own Firebase project. Everything reaches people in the app, and the important messages by email.
+49. **A large change sends many emails at once** (for example a holiday cancelling a day of classes: one email per student per class). There is no daily digest yet.
+50. **Changes of end time or lecturer made by a new timetable version are not announced** (the class history records them). Room changes, cancellations and restored classes are announced.

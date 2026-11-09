@@ -194,10 +194,11 @@ Class actions follow the shared transition table (`packages/shared/src/class-lif
 
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| GET | `/me/notifications?unread=` | Signed in | Notification centre |
-| POST | `/me/notifications/:id/read` · `/me/notifications/read-all` | Signed in | Mark as read (never counts as attendance) |
-| GET · PUT | `/me/notification-preferences` | Signed in | Mandatory categories cannot be switched off |
-| POST | `/me/push-token` | Mobile | Register or refresh the FCM token |
+| GET | `/me/notifications?unread=&limit=&cursor=` | Signed in | The caller's own notifications, newest first, with `nextCursor`. Each has `category`, `title`, `body`, `priority` and `data` (`path` to open, lecturer `actions`). **Built (Phase 3 step 6).** |
+| GET | `/me/notifications/unread-count` | Signed in | `{ unread }`. **Built.** |
+| POST | `/me/notifications/:id/read` · `/me/notifications/read-all` | Signed in | Mark as read (never counts as attendance). Another person's notification is `404`. **Built.** |
+| GET · PUT | `/me/notification-preferences` | Signed in | Every category with its EMAIL and PUSH switches (`available` is false for push until it is set up). PUT `{ category, channel, enabled }`; mandatory categories (cancelled, rescheduled, back on, room changed) cannot be switched off (`409 MANDATORY_CATEGORY`). **Built.** |
+| POST | `/me/push-token` | Mobile | Register or refresh the FCM token. Not built: push waits for a university-owned Firebase project. |
 | POST · GET | `/announcements` | LE, CR, UA, SA (scoped) | Send and list. Rep messages are rate-limited and labelled. |
 | GET | `/announcements/:id/stats` | Author, scoped admins | Delivery and read counts |
 | POST | `/announcements/:id/report` · `/announcements/:id/hide` | Recipients · moderators | Abuse reporting and moderation |

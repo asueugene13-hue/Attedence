@@ -19,6 +19,24 @@ export interface RoleScope {
 export class ScopeService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Active people holding `role` whose scope covers a department: those granted that department or
+   * its faculty; if there are none, those with institution-wide scope (CLASS_MONITORING.md §4).
+   */
+  async holdersCovering(role: RoleKey, department: { id: string; facultyId: string }): Promise<string[]> {
+    const grants = await this.prisma.userRole.findMany({
+      where: { revokedAt: null, role: { key: role }, user: { status: 'ACTIVE' } },
+      select: { userId: true, scopeType: true, scopeId: true },
+    });
+    const narrow = grants.filter(
+      (g) =>
+        (g.scopeType === 'DEPARTMENT' && g.scopeId === department.id) ||
+        (g.scopeType === 'FACULTY' && g.scopeId === department.facultyId),
+    );
+    const chosen = narrow.length > 0 ? narrow : grants.filter((g) => g.scopeType === 'INSTITUTION');
+    return [...new Set(chosen.map((g) => g.userId))];
+  }
+
   async scopeFor(userId: string, role: RoleKey): Promise<RoleScope> {
     const grants = await this.prisma.userRole.findMany({
       where: { userId, revokedAt: null, role: { key: role } },

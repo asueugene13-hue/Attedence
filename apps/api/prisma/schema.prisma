@@ -125,6 +125,8 @@ model User {
   rescheduleDecisions       RescheduleRequest[]       @relation("RescheduleDecidedBy")
   classIssueReports         ClassIssueReport[]        @relation("IssueReporter")
   classReviewDecisions      ClassStatusReview[]       @relation("ReviewDecidedBy")
+  notifications             Notification[]
+  notificationPreferences   NotificationPreference[]
 
   @@map("users")
 }
@@ -1368,4 +1370,87 @@ model ClassStatusReview {
   @@index([status, isPriority, openedAt])
   @@index([classSessionId])
   @@map("class_status_reviews")
+}
+
+// ───────────────────────── Notifications (Phase 3 step 6) ─────────────────────────
+// Decision 2026-11-09: in-app and email first; push is designed in but switched off until a
+// university-owned Firebase project exists. SMS waits for D-17.
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+}
+
+enum NotificationPriority {
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENT
+  FAILED
+  SUPPRESSED
+}
+
+/// One message to one person. It is always shown in the app; other channels get a delivery row each.
+model Notification {
+  id                String               @id @default(uuid(7)) @db.Uuid
+  userId            String               @map("user_id") @db.Uuid
+  category          String
+  title             String
+  body              String
+  /// Where it leads in the apps, and the action buttons to show.
+  data              Json?
+  priority          NotificationPriority @default(NORMAL)
+  relatedEntityType String?              @map("related_entity_type")
+  relatedEntityId   String?              @map("related_entity_id") @db.Uuid
+  /// The same message is never created twice for one person.
+  dedupeKey         String?              @map("dedupe_key")
+  /// If still unread at this time, it is also sent by email (then cleared).
+  emailIfUnreadAt   DateTime?            @map("email_if_unread_at") @db.Timestamptz(3)
+  readAt            DateTime?            @map("read_at") @db.Timestamptz(3)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  deliveries NotificationDelivery[]
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, createdAt])
+  @@index([emailIfUnreadAt])
+  @@map("notifications")
+}
+
+model NotificationDelivery {
+  id             String              @id @default(uuid(7)) @db.Uuid
+  notificationId String              @map("notification_id") @db.Uuid
+  channel        NotificationChannel
+  status         DeliveryStatus      @default(QUEUED)
+  attempts       Int                 @default(0)
+  lastError      String?             @map("last_error")
+  sentAt         DateTime?           @map("sent_at") @db.Timestamptz(3)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Restrict)
+
+  @@unique([notificationId, channel])
+  @@index([status, createdAt])
+  @@map("notification_deliveries")
+}
+
+/// A person's choice to turn a channel off for a category. Mandatory categories ignore it.
+model NotificationPreference {
+  userId    String              @map("user_id") @db.Uuid
+  category  String
+  channel   NotificationChannel
+  enabled   Boolean
+  updatedAt DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([userId, category, channel])
+  @@map("notification_preferences")
 }

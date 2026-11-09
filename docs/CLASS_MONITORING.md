@@ -73,6 +73,15 @@ The engine never recommends cancellation. `ClassSessionMonitorService` turns a r
 
 The responsible administrators are those whose scope covers the course's department. If none exists, administrators with institution-wide scope are alerted. The Super Admin is not part of day-to-day escalation.
 
+### 4a. As built (Phase 3 step 6)
+
+- **Every class event people must hear about** (prompt, unconfirmed, delay, review opened or decided, cancelled, rescheduled, back on, room changed, auto-ended) queues an alert job in the same transaction as the event (`writeClassEvent`). `ClassAlertService` decides who is told what, following the table above. The notifications module stores and delivers.
+- **Channels:** every message is in the app. Email goes to active accounts for cancellations, reschedules, restored classes and room changes, and for decided reschedule requests. An administrator's review alert is emailed only if still unread after 15 minutes. **Push** is built behind the same interface but switched off: no push deliveries are created until a university-owned Firebase project exists. SMS waits for D-17.
+- **No double messages:** each message carries a key made from its event, so a job that runs again sends nothing new.
+- **Failures:** an email is retried 5 times. It is then marked FAILED, and the job raises a system-health event. The in-app message is unaffected.
+- **Responsible administrators** are the active University Administrators whose faculty or department scope covers the course. If there are none, those with institution-wide scope are told. The Super Admin is not part of day-to-day alerts.
+- **Reschedule requests:** administrators in scope are told of a new request, and the lecturer of the decision.
+
 ## 5. Services
 
 | Service | Job |

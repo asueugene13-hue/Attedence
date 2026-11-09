@@ -8,13 +8,24 @@ import { Clock, FakeClock } from '../src/infrastructure/clock/clock.js';
 import { MailService } from '../src/infrastructure/mail/mail.service.js';
 import { PrismaService } from '../src/infrastructure/prisma/prisma.service.js';
 import { RedisService } from '../src/infrastructure/redis/redis.service.js';
+import { ClassAlertService } from '../src/modules/class-sessions/class-alert.service.js';
 import { ClassMonitorService } from '../src/modules/class-sessions/class-monitor.service.js';
+import { NotificationsService } from '../src/modules/notifications/notifications.service.js';
 import { createUser, resetDatabase, resetRedis, signInAs } from './fixtures.js';
 
 // Obviously fake data. One class, Tuesday 2030-08-20 10:00–11:30 (Africa/Accra = UTC), with ten
 // enrolled students; student 1 is the section's course rep. D-13 defaults: UNCONFIRMED at +15,
 // review at +30, early review at 3 students and 10%, or a rep plus 1 other student.
-const fakeMail = { send: async () => undefined, onModuleDestroy: () => undefined };
+// The mailer records what it would send, and can be made to fail like an SMTP outage.
+const sentMail: { to: string; subject: string; text: string }[] = [];
+let mailFails = false;
+const fakeMail = {
+  send: async (m: { to: string; subject: string; text: string }) => {
+    if (mailFails) throw new Error('SMTP server unreachable (test)');
+    sentMail.push(m);
+  },
+  onModuleDestroy: () => undefined,
+};
 const clock = new FakeClock('2030-08-19T08:00:00Z');
 const at = (hhmm: string) => clock.set(`2030-08-20T${hhmm}:00Z`);
 let app: INestApplication;
@@ -64,6 +75,8 @@ async function sessionFor(userId: string, role: 'LECTURER' | 'STUDENT') {
 
 beforeEach(async () => {
   clock.set('2030-08-19T08:00:00Z');
+  sentMail.length = 0;
+  mailFails = false;
   await resetDatabase(prisma);
   await resetRedis(app.get(RedisService));
   const signedIn = await signInAs(app, prisma, 'admin@example.test', ['UNIVERSITY_ADMIN']);
@@ -98,8 +111,16 @@ beforeEach(async () => {
     data: { courseId: course.id, semesterId: semester.id, status: 'OPEN' },
   });
   const section = await prisma.courseSection.create({ data: { offeringId: offering.id, code: 'A' } });
-  const lecturerUser = await createUser(prisma, { email: 'lecturer@example.test', roles: ['LECTURER'] });
-  const otherUser = await createUser(prisma, { email: 'other.lecturer@example.test', roles: ['LECTURER'] });
+  const lecturerUser = await createUser(prisma, {
+    email: 'lecturer@example.test',
+    roles: ['LECTURER'],
+    password: null,
+  });
+  const otherUser = await createUser(prisma, {
+    email: 'other.lecturer@example.test',
+    roles: ['LECTURER'],
+    password: null,
+  });
   const profile = await prisma.lecturerProfile.create({
     data: { userId: lecturerUser.id, staffNumber: 'TL1', departmentId: dept.id },
   });
@@ -107,7 +128,11 @@ beforeEach(async () => {
     data: { userId: otherUser.id, staffNumber: 'TL2', departmentId: dept.id },
   });
   const newStudent = async (n: number, enrol: boolean) => {
-    const user = await createUser(prisma, { email: `student${n}@example.test`, roles: ['STUDENT'] });
+    const user = await createUser(prisma, {
+      email: `student${n}@example.test`,
+      roles: ['STUDENT'],
+      password: null,
+    });
     const s = await prisma.studentProfile.create({
       data: {
         userId: user.id,
@@ -587,5 +612,152 @@ describe('auto-end', () => {
     expect(s.status).toBe('COMPLETED');
     expect(s.actualEnd?.toISOString()).toBe('2030-08-20T12:00:00.000Z');
     expect((await eventTypes()).at(-1)).toBe('AUTO_ENDED');
+  });
+});
+
+// ───────── Step 6: notifications ─────────
+
+async function waitFor(check: () => Promise<boolean>, what: string) {
+  for (let i = 0; i < 300; i++) {
+    if (await check()) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`Timed out waiting for ${what}`);
+}
+const notificationsOf = (userId: string, category?: string) =>
+  prisma.notification.findMany({ where: { userId, ...(category ? { category } : {}) } });
+const userIdOf = async (email: string) => (await prisma.user.findUniqueOrThrow({ where: { email } })).id;
+
+describe('notifications', () => {
+  it('a cancellation reaches every student, the rep, the lecturer and the administrator, in the app and by email', async () => {
+    at('09:00');
+    await http
+      .post(`/api/v1/class-sessions/${sessionId}/cancel`)
+      .set(lecturer)
+      .send({ reasonCode: 'ILLNESS' })
+      .expect(200);
+    const lecturerId = await userIdOf('lecturer@example.test');
+    const adminId = await userIdOf('admin@example.test');
+    // The alert job and the email jobs run in the background.
+    await waitFor(
+      async () => (await prisma.notification.count({ where: { category: 'CLASS_CANCELLED' } })) === 12,
+      'alerts',
+    );
+    for (const id of [...studentUserIds, lecturerId, adminId]) {
+      expect(await notificationsOf(id, 'CLASS_CANCELLED')).toHaveLength(1);
+    }
+    const toStudent = (await notificationsOf(studentUserIds[3]!, 'CLASS_CANCELLED'))[0]!;
+    expect(toStudent).toMatchObject({
+      priority: 'CRITICAL',
+      title: 'TST101 A at Tue 20 Aug, 10:00 is cancelled',
+    });
+    expect(toStudent.body).toContain('illness');
+    expect(toStudent.data).toMatchObject({ path: `/classes/${sessionId}` });
+    await waitFor(async () => sentMail.length === 12, 'emails');
+    expect(sentMail.find((m) => m.to === 'student4@example.test')?.text).toContain(`/classes/${sessionId}`);
+    // Push is switched off: no push deliveries exist at all.
+    expect(await prisma.notificationDelivery.count({ where: { channel: 'PUSH' } })).toBe(0);
+    expect(await prisma.notificationDelivery.count({ where: { channel: 'EMAIL', status: 'SENT' } })).toBe(12);
+  });
+
+  it('never sends the same alert twice when its job runs again', async () => {
+    at('10:15');
+    await monitor.sweep();
+    const event = await prisma.classEvent.findFirstOrThrow({ where: { type: 'MARKED_UNCONFIRMED' } });
+    const lecturerId = await userIdOf('lecturer@example.test');
+    await waitFor(
+      async () => (await notificationsOf(lecturerId, 'CLASS_UNCONFIRMED')).length === 1,
+      'prompt',
+    );
+    await app.get(ClassAlertService).alertFor(event.id);
+    expect(await notificationsOf(lecturerId, 'CLASS_UNCONFIRMED')).toHaveLength(1);
+    const prompt = (await notificationsOf(lecturerId, 'CLASS_UNCONFIRMED'))[0]!;
+    expect(prompt.priority).toBe('HIGH');
+    expect(prompt.data).toMatchObject({ actions: ['start', 'delay', 'cancel', 'reschedule', 'report'] });
+    // The rep is told the lecturer has been asked; ordinary students are not.
+    expect(await notificationsOf(studentUserIds[0]!, 'CLASS_UNCONFIRMED')).toHaveLength(1);
+    expect(await notificationsOf(studentUserIds[5]!, 'CLASS_UNCONFIRMED')).toHaveLength(0);
+  });
+
+  it('a review alert is emailed to the administrator only if still unread after 15 minutes', async () => {
+    const adminId = await userIdOf('admin@example.test');
+    await escalated();
+    await waitFor(async () => (await notificationsOf(adminId, 'REVIEW_OPENED')).length === 1, 'review alert');
+    const alert = (await notificationsOf(adminId, 'REVIEW_OPENED'))[0]!;
+    expect(alert.emailIfUnreadAt?.toISOString()).toBe('2030-08-20T10:45:00.000Z');
+    const notifications = app.get(NotificationsService);
+    at('10:44');
+    expect(await notifications.emailUnread()).toBe(0);
+    at('10:45');
+    expect(await notifications.emailUnread()).toBe(1);
+    expect(await notifications.emailUnread()).toBe(0); // only once
+    await waitFor(async () => sentMail.some((m) => m.to === 'admin@example.test'), 'review email');
+  });
+
+  it('lets people read their notifications and choose channels, except for mandatory ones', async () => {
+    at('09:00');
+    await http
+      .post(`/api/v1/class-sessions/${sessionId}/cancel`)
+      .set(lecturer)
+      .send({ reasonCode: 'ILLNESS' })
+      .expect(200);
+    const me = students[4]!;
+    await waitFor(
+      async () => (await http.get('/api/v1/me/notifications/unread-count').set(me)).body.unread === 1,
+      'unread',
+    );
+    const list = (await http.get('/api/v1/me/notifications?unread=true').set(me).expect(200)).body;
+    expect(list.data).toHaveLength(1);
+    expect(list.data[0].category).toBe('CLASS_CANCELLED');
+    // Someone else's notification is not found.
+    await http.post(`/api/v1/me/notifications/${list.data[0].id}/read`).set(students[5]!).expect(404);
+    expect(
+      (await http.post(`/api/v1/me/notifications/${list.data[0].id}/read`).set(me).expect(200)).body.unread,
+    ).toBe(0);
+    await http.post('/api/v1/me/notifications/read-all').set(me).expect(200);
+
+    const prefs = (await http.get('/api/v1/me/notification-preferences').set(me).expect(200)).body.data;
+    const cancelled = prefs.find((p: { category: string }) => p.category === 'CLASS_CANCELLED');
+    expect(cancelled.mandatory).toBe(true);
+    expect(cancelled.channels).toEqual([
+      { channel: 'EMAIL', available: true, enabled: true },
+      { channel: 'PUSH', available: false, enabled: true },
+    ]);
+    const refused = await http
+      .put('/api/v1/me/notification-preferences')
+      .set(me)
+      .send({ category: 'CLASS_CANCELLED', channel: 'EMAIL', enabled: false })
+      .expect(409);
+    expect(refused.body.code).toBe('MANDATORY_CATEGORY');
+    await http
+      .put('/api/v1/me/notification-preferences')
+      .set(lecturer)
+      .send({ category: 'RESCHEDULE_DECIDED', channel: 'EMAIL', enabled: false })
+      .expect(200);
+  });
+
+  it('a failed email is retried, then recorded as failed and reported to system health (scenario 23)', async () => {
+    mailFails = true;
+    at('09:00');
+    await http
+      .post(`/api/v1/class-sessions/${sessionId}/cancel`)
+      .set(lecturer)
+      .send({ reasonCode: 'ILLNESS' })
+      .expect(200);
+    await waitFor(
+      async () => (await prisma.notificationDelivery.count({ where: { status: 'FAILED' } })) === 12,
+      'failed deliveries',
+    );
+    const failed = await prisma.notificationDelivery.findFirstOrThrow({ where: { status: 'FAILED' } });
+    expect(failed.attempts).toBe(5);
+    expect(failed.lastError).toContain('SMTP server unreachable');
+    await waitFor(
+      async () =>
+        (await prisma.systemEvent.count({ where: { type: 'job.dead', source: 'email/notification' } })) ===
+        12,
+      'system events',
+    );
+    // The in-app notifications were not affected.
+    expect(await prisma.notification.count({ where: { category: 'CLASS_CANCELLED' } })).toBe(12);
   });
 });

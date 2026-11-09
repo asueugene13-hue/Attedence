@@ -13,3 +13,4 @@ export * from './timetables.js';
 export * from './class-lifecycle.js';
 export * from './reschedules.js';
 export * from './monitoring.js';
+export * from './notifications.js';

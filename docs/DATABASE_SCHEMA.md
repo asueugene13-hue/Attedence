@@ -70,9 +70,9 @@ enum RequestStatus       { SUBMITTED NEEDS_INFO APPROVED REJECTED WITHDRAWN }
 enum ExcuseCategory      { MEDICAL BEREAVEMENT OFFICIAL_UNIVERSITY_DUTY OTHER }
 enum PolicyScope         { INSTITUTION FACULTY DEPARTMENT OFFERING }
 
-enum NotificationChannel { IN_APP EMAIL PUSH SMS }   // IN_APP and EMAIL first; PUSH built but disabled until a university Firebase project exists; SMS waits for D-17
+enum NotificationChannel { IN_APP EMAIL PUSH }   // IN_APP and EMAIL first; PUSH built but disabled until a university Firebase project exists; SMS waits for D-17
 enum NotificationPriority { NORMAL HIGH CRITICAL }
-enum DeliveryStatus      { QUEUED SENT DELIVERED FAILED SUPPRESSED }
+enum DeliveryStatus      { QUEUED SENT FAILED SUPPRESSED }
 enum AnnouncementScope   { SECTION OFFERING DEPARTMENT FACULTY INSTITUTION }
 enum AnnouncementStatus  { PUBLISHED HIDDEN REMOVED }
 enum ReportStatus        { OPEN ACTIONED DISMISSED }
@@ -826,44 +826,45 @@ model ExcuseAttachment  { excuseRequestId String @db.Uuid  fileId String @db.Uui
 ### 3.5 Communication
 
 ```prisma
-model Notification {
+model Notification {                 // Phase 3 step 6; table notifications
   id
   userId            String               @db.Uuid
-  category          String               // CLASS_REMINDER | CLASS_CANCELLED | VENUE_CHANGED | ATTENDANCE_OPEN …
+  category          String               // NOTIFICATION_CATEGORIES in packages/shared (CLASS_CANCELLED, VENUE_CHANGED …)
   title             String
   body              String
-  data              Json?                // deep-link target and action buttons
+  data              Json?                // deep-link path and lecturer action buttons
   priority          NotificationPriority @default(NORMAL)
   relatedEntityType String?
-  relatedEntityId   String?
-  dedupeKey         String?              // stops the same reminder being sent twice
+  relatedEntityId   String?              @db.Uuid
+  dedupeKey         String?              // stops the same message being sent twice
+  emailIfUnreadAt   DateTime?            // also emailed if still unread then (review alerts)
   readAt            DateTime?
   createdAt
   @@unique([userId, dedupeKey])
   @@index([userId, createdAt])
+  @@index([emailIfUnreadAt])
 }
 
-model NotificationPreference {       // mandatory categories (cancellations, venue changes) ignore opt-outs
-  userId   String              @db.Uuid
-  category String
-  channel  NotificationChannel
-  enabled  Boolean
+model NotificationPreference {       // mandatory categories (cancellations, moves, room changes) ignore opt-outs
+  userId    String              @db.Uuid
+  category  String
+  channel   NotificationChannel        // EMAIL or PUSH; IN_APP is always on
+  enabled   Boolean
+  updatedAt
   @@id([userId, category, channel])
 }
 
 model NotificationDelivery {
   id
-  notificationId    String              @db.Uuid
-  channel           NotificationChannel
-  status            DeliveryStatus      @default(QUEUED)
-  provider          String?
-  providerMessageId String?
-  attempts          Int                 @default(0)
-  lastError         String?
-  sentAt            DateTime?
+  notificationId String              @db.Uuid
+  channel        NotificationChannel
+  status         DeliveryStatus      @default(QUEUED)   // QUEUED | SENT | FAILED | SUPPRESSED (account not active)
+  attempts       Int                 @default(0)
+  lastError      String?
+  sentAt         DateTime?                               // set exactly when SENT (SQL check)
   createdAt
   updatedAt
-  @@index([notificationId])
+  @@unique([notificationId, channel])
   @@index([status, createdAt])
 }
 

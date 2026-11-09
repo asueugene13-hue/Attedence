@@ -23,6 +23,7 @@ import { LecturersService } from '../courses/lecturers.service.js';
 import { CourseRepsService } from '../enrollments/course-reps.service.js';
 import { EnrollmentsService } from '../enrollments/enrollments.service.js';
 import { StudentsService } from '../students/students.service.js';
+import { writeClassEvent } from './class-event-log.js';
 
 const MINUTE = 60_000;
 /** Reports are taken until the class is over: not for completed, cancelled or rescheduled classes. */
@@ -94,7 +95,7 @@ export class IssueReportsService {
             createdAt: now,
           },
         });
-        await tx.classEvent.create({
+        await writeClassEvent(tx, this.outbox, {
           data: {
             classSessionId: session.id,
             type: 'ISSUE_REPORTED',

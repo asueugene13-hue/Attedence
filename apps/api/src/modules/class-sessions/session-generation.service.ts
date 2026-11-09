@@ -4,9 +4,11 @@ import { AppConfig } from '../../config/app-config.js';
 import type { ClassStatus, Prisma } from '../../generated/prisma/client.js';
 import { Clock } from '../../infrastructure/clock/clock.js';
 import { JobRegistry } from '../../infrastructure/jobs/job-registry.js';
+import { OutboxService } from '../../infrastructure/jobs/outbox.service.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
 import { TimetablesService } from '../timetables/timetables.service.js';
+import { writeClassEvent } from './class-event-log.js';
 
 /** Statuses of a class that has not started yet: the only sessions a timetable change may alter. */
 export const NOT_STARTED: ClassStatus[] = [
@@ -51,6 +53,7 @@ export class SessionGenerationService implements OnModuleInit {
   private readonly logger = new Logger(SessionGenerationService.name);
 
   constructor(
+    private readonly outbox: OutboxService,
     private readonly prisma: PrismaService,
     private readonly jobs: JobRegistry,
     private readonly timetables: TimetablesService,
@@ -170,7 +173,7 @@ export class SessionGenerationService implements OnModuleInit {
               version: { increment: 1 },
             },
           });
-          await tx.classEvent.create({
+          await writeClassEvent(tx, this.outbox, {
             data: {
               classSessionId: s.id,
               type: 'CANCELLED',
@@ -206,7 +209,7 @@ export class SessionGenerationService implements OnModuleInit {
         sections: { create: d.entry.sectionIds.map((sectionId) => ({ sectionId })) },
       },
     });
-    await tx.classEvent.create({
+    await writeClassEvent(tx, this.outbox, {
       data: {
         classSessionId: session.id,
         type: 'GENERATED',
@@ -280,7 +283,7 @@ export class SessionGenerationService implements OnModuleInit {
         data: sectionIds.map((sectionId) => ({ classSessionId: session.id, sectionId })),
       });
     }
-    await tx.classEvent.create({
+    await writeClassEvent(tx, this.outbox, {
       data: {
         classSessionId: session.id,
         type: 'REINSTATED',
@@ -355,7 +358,7 @@ export class SessionGenerationService implements OnModuleInit {
         before.lecturerId === after.lecturerId &&
         before.scheduledEnd === after.scheduledEnd &&
         before.sectionIds.join() === after.sectionIds.join();
-      await tx.classEvent.create({
+      await writeClassEvent(tx, this.outbox, {
         data: {
           classSessionId: session.id,
           type: onlyRoom ? 'VENUE_CHANGED' : 'UPDATED',

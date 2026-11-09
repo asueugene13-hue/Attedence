@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common';
 import { AcademicModule } from '../academic/academic.module.js';
 import { CoursesModule } from '../courses/courses.module.js';
 import { EnrollmentsModule } from '../enrollments/enrollments.module.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 import { PlacesModule } from '../places/places.module.js';
 import { SettingsModule } from '../settings/settings.module.js';
 import { StudentsModule } from '../students/students.module.js';
 import { TimetablesModule } from '../timetables/timetables.module.js';
+import { ClassAlertService } from './class-alert.service.js';
 import { ClassEventService } from './class-event.service.js';
 import { ClassMonitorService } from './class-monitor.service.js';
 import { ClassReviewsController } from './class-reviews.controller.js';
@@ -27,6 +29,7 @@ import { SessionGenerationService } from './session-generation.service.js';
     EnrollmentsModule,
     StudentsModule,
     SettingsModule,
+    NotificationsModule,
   ],
   controllers: [
     ClassSessionsController,
@@ -42,6 +45,7 @@ import { SessionGenerationService } from './session-generation.service.js';
     ClassMonitorService,
     IssueReportsService,
     ClassReviewsService,
+    ClassAlertService,
   ],
   exports: [ClassSessionsService, SessionGenerationService, ClassEventService, ClassMonitorService],
 })

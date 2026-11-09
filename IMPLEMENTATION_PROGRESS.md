@@ -1253,3 +1253,40 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (API 273, e2e 4, audit clean).
   - GitHub run 42678482531 on `de02cb8`: **success**.
+
+### 2026-11-09 — Phase 3, step 6: notifications
+
+- **Product owner's instruction (2026-11-09):** "build all steps at once"; steps 6, 7 and 8 are built back to back and reviewed together at the end.
+- **Built:**
+  - **A notifications module** that stores and delivers, and nothing else:
+    - every message appears in the app;
+    - email goes out from background jobs, with 5 retries and a delivery record each;
+    - push is built behind the same interface but switched off (no push deliveries) until the university has its own Firebase project.
+  - **Who is told what**, following CLASS_MONITORING §4:
+    - every class event people must hear about queues an alert job in the same transaction as the event;
+    - cancellations, reschedules, restored classes and room changes reach students, course reps, the lecturer (and administrators in the app), by email as well;
+    - the lecturer's "what is happening?" prompts carry the action buttons;
+    - students see "the university is checking" during a review;
+    - an administrator's review alert is emailed if still unread after 15 minutes;
+    - reschedule requests go to administrators in scope, and decisions to the lecturer.
+  - **The person's own notifications:** list, unread count, mark read, mark all read. Email and push switches per category; mandatory categories cannot be switched off.
+  - **Safety:**
+    - each message has a key made from its event, so a re-run job never sends twice;
+    - an account that is not active is not emailed (recorded as SUPPRESSED);
+    - after the last failed try a delivery is FAILED and a system-health event is raised (scenario 23).
+  - **Faster tests:** monitoring-test accounts that never sign in with a password skip the deliberately slow password hashing.
+- **Proof the key test bites:** with the message key removed, the "never sends twice" test failed. Restored.
+- **Files:**
+  - New: `packages/shared/src/notifications.ts`, `modules/notifications/` (`channels.ts`, `notifications.service.ts`, `notifications.controller.ts`, `notifications.module.ts`), `modules/class-sessions/class-alert.service.ts`, `class-event-log.ts`, migration `20261110090000_notifications`.
+  - Changed:
+    - every class-event writer now uses `writeClassEvent` (`class-event.service.ts`, `issue-reports.service.ts`, `reschedule.service.ts`, `session-generation.service.ts`);
+    - `reschedule.service.ts` (request alerts), `class-sessions.module.ts`;
+    - `authorization/scope.service.ts` (`holdersCovering`), `enrollments/course-reps.service.ts` (`activeRepStudentIds`);
+    - `test/class-monitoring.test.ts` (5 notification tests; recording mailer), `test/fixtures.ts`.
+  - Docs: API_DOCUMENTATION, CLASS_MONITORING §4a, DATABASE_SCHEMA, KNOWN_LIMITATIONS (48–50).
+- **Database changes:**
+  - New tables `notifications`, `notification_deliveries`, `notification_preferences`.
+  - New enums `NotificationChannel`, `NotificationPriority`, `DeliveryStatus`.
+  - SQL rule: a delivery is SENT exactly when it has a sent time.
+  - Applied locally; drift check clean.
+- **Tests run:** `test/class-monitoring.test.ts` 28 passed (5 new). The full check runs once at the end of step 8.
