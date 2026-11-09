@@ -1250,3 +1250,6 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **273** (10 new), mobile 9, web 12, so **307 passed**. (The first run stopped at the format check on one unformatted shared file; fixed and rerun.)
 - **Known limitations:** no messages are sent yet (step 6); repeatedly dismissed reporters are not flagged yet (46); a review cannot be reopened (47).
 - **Next step:** Phase 3, step 6: notifications (in-app and email; push designed in but switched off).
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (API 273, e2e 4, audit clean).
+  - GitHub run 42678482531 on `de02cb8`: **success**.
