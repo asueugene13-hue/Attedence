@@ -127,11 +127,17 @@ Imports have one address per type, `/imports/<type>` with `<type>` = `students` 
 | GET | `/me/timetable?from=&to=` | Signed in | The caller's own sessions in the active role: a lecturer's classes, or a student's (and course rep's) enrolled sections. Local dates, at most 62 days; cancelled classes included and marked. `{ as: LECTURER\|STUDENT\|NONE, data }`. **Built.** |
 | GET | `/class-sessions?from=&to=&sectionId=&lecturerId=&classroomId=&status=` | `timetables.read` | Sessions between two local dates (inclusive, at most 62 days, `400` otherwise), with sections, lecturer, room, status and cancellation reason. **Built.** Scoped monitoring views come with step 5. |
 | GET | `/class-sessions/:id` | `timetables.read` | One session with its full, append-only event history. **Built.** |
-| POST | `/class-sessions/:id/confirm` · `/start` · `/end` · `/interrupt` · `/resume` | LE | Lecturer actions |
-| POST | `/class-sessions/:id/delay` | LE, UA | `{ minutes, reason }` |
-| POST | `/class-sessions/:id/cancel` | LE (before attendance), UA, SA | `{ reasonCode, note }` |
-| POST | `/class-sessions/:id/void` | UA, SA | `{ reason }`; voids attendance and keeps history |
-| POST | `/class-sessions/:id/suspend` · `/reinstate` | UA, SA | Administrative hold or reinstatement |
+Class actions follow the shared transition table (`packages/shared/src/class-lifecycle.ts`, CLASS_LIFECYCLE.md §4). Each returns the session with its history. A lecturer may act only on classes they teach (`403 NOT_YOUR_CLASS`); administrators only within their faculty or department scope. An action not allowed from the current status gets `409 TRANSITION_NOT_ALLOWED`; if someone else changed the class a moment earlier, `409 STATUS_CHANGED`. Every action writes a class event and an audit entry. **Built (Phase 3 step 4a).**
+
+| Method | Path | Who | Purpose |
+| --- | --- | --- | --- |
+| POST | `/class-sessions/:id/confirm` · `/start` · `/resume` | The class's lecturer (`class_sessions.start`) | Confirm (from SCHEDULED). Start (from any not-started status, from 15 min before the start until the scheduled end; `409 OUTSIDE_START_WINDOW`). Resume an interrupted class before its scheduled end. **Built.** |
+| POST | `/class-sessions/:id/end` · `/interrupt` | The class's lecturer; an administrator for interrupting, or ending an interrupted class | Interrupt needs `{ reason }`. **Built.** |
+| POST | `/class-sessions/:id/delay` | Lecturer of the class, or administrator (`class_sessions.delay`) | `{ minutes (5–240), reason }`. The new expected start must leave 30 min before the scheduled end (`409 DELAY_TOO_LONG`: cancel or reschedule instead). **Built.** |
+| POST | `/class-sessions/:id/cancel` | Lecturer of the class (before it starts), administrator (also from on hold) (`class_sessions.cancel`) | `{ reasonCode, note? }`. `OTHER` needs a note; `LECTURER_ABSENT_NO_NOTICE` is for administrators only (`403 ADMIN_ONLY_REASON`). **Built.** |
+| POST | `/class-sessions/:id/suspend` · `/lift-hold` | Administrator (`class_sessions.suspend`) | `{ reason }`. Put a class that has not started on hold; lift it before the scheduled end. **Built.** |
+| POST | `/class-sessions/:id/void` · `/reinstate` | Administrator (`class_sessions.void`) | Void `{ reason, reasonCode? }` a class that started (nothing is deleted; attendance voiding comes in Phase 5). Reinstate `{ reason }` a mistaken cancellation before the scheduled end; never a voided class (`409 CANNOT_REINSTATE_VOIDED`); refused if the room or lecturer has since been booked (`409 SLOT_TAKEN`). **Built.** |
+| POST | `/class-sessions/:id/open-review` | Administrator (`class_reviews.decide`) | `{ reason }`: refer a class that has not started to review. Review decisions come with monitoring (step 5). **Built.** |
 | POST | `/class-sessions/:id/reschedule-requests` | LE, UA | Proposed time and room; returns a conflict check |
 | POST | `/reschedule-requests/:id/approve` · `/reject` | UA, SA | Creates the replacement session on approval |
 | POST | `/class-sessions/:id/issue-reports` | ST, CR, LE | `{ type, note? }` |

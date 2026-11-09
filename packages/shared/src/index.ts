@@ -10,3 +10,4 @@ export * from './imports.js';
 export * from './enrollments.js';
 export * from './settings.js';
 export * from './timetables.js';
+export * from './class-lifecycle.js';

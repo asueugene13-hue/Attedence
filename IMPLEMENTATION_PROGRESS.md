@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–3 done; step 4 (class lifecycle) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–3 and 4a done; step 4b (reschedules and changes to published timetables) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1093,3 +1093,39 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (e2e 4, audit clean).
   - GitHub run 42632129070 on `9446282`: **success**.
+
+### 2026-11-09 — Phase 3, step 4a: class lifecycle actions
+
+- **Why step 4 was split:** it holds the status rules, reschedules and changes to published timetables. 4a (this) is the status rules and actions; 4b is reschedules (D-11), direct changes to published timetables, and holidays added after publishing.
+- **Built:**
+  - **One transition table** (`packages/shared/src/class-lifecycle.ts`) shared by the API and, later, the apps. For each action it lists the statuses the class's lecturer and an administrator may act from, the target status, the permission, and whether a reason is needed.
+  - **`ClassEventService`**, the only code that changes a class's status. It checks the table, who is acting and the timing rules. In one transaction it then updates the session only if nobody changed it first, and writes the class event and the audit entry.
+  - **Lecturer actions** (their own classes only):
+    - confirm;
+    - delay (minutes and reason; must still leave 30 minutes);
+    - start (from 15 minutes before until the scheduled end);
+    - interrupt (with reason), resume, end;
+    - cancel with a reason code ("Other" needs a note).
+  - **Administrator actions** (within their faculty or department scope):
+    - delay and cancel, including "absent without notice", which only administrators may record;
+    - put on hold and lift a hold;
+    - end an interrupted class;
+    - void a class that started (kept, never deleted);
+    - reinstate a mistaken cancellation (never a voided class; refused if the room or lecturer has since been booked);
+    - open a review.
+  - Students and course reps can change nothing.
+- **Proof the key test bites:** with the "only if nobody changed it first" condition removed, the two-at-once test failed 3 times out of 3. Restored.
+- **Files:**
+  - New: `packages/shared/src/class-lifecycle.ts`, `modules/class-sessions/class-event.service.ts`, `test/class-lifecycle.test.ts`.
+  - Changed: `class-sessions.controller.ts` (12 action routes), `class-sessions.module.ts`, `packages/shared/src/index.ts`.
+  - Docs: API_DOCUMENTATION.
+- **Database changes:** none.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **231** (10 new), mobile 9, web 12, so **265 passed**.
+- **Known limitations:**
+  - No notifications yet (step 6).
+  - Automatic changes (UNCONFIRMED, review, auto-end) and review decisions come with monitoring (step 5).
+  - Voiding does not yet touch attendance, which arrives in Phase 5.
+- **Next step:** Phase 3, step 4b:
+  - reschedule requests with a conflict check, approval and direct reschedules (D-11);
+  - changes to published timetables;
+  - holidays added after publishing.
