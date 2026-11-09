@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 2, academic management. All steps are built and the exit check passed; waiting for the product owner to approve closing Phase 2 before Phase 3 starts. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan proposed 2026-11-09, waiting for approval. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -25,7 +25,7 @@ Read this first in every session, and update it after every implementation step.
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
 | 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Done; CI green 2026-11-08 (native mobile build still open) |
-| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Built; exit check passed 2026-11-09; awaiting approval to close |
+| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Done; approved by the product owner 2026-11-09 |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Not started |
@@ -85,6 +85,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-08 | D-07 | Ask Knutsford IT about Microsoft 365 / Google accounts; design leaves room for SSO | Product owner |
 | 2026-11-08 | D-14 (part) | Student IDs are 8 digits; staff-number format still open | Product owner |
 | 2026-11-08 | D-12 | Course reps: an Administrator appoints (within scope); a lecturer of the section may nominate for approval | Product owner (accepted the proposed default) |
+| 2026-11-09 | Phase 2 | Phase 2 approved as complete after the exit check | Product owner |
 | 2026-11-09 | Rule 8 | Modules never write another module's tables or check its rules (they call its service); read-only joins for display are allowed. CLAUDE.md updated. | Product owner (option 1) |
 | 2026-11-08 | D-16 (part) | Development and CI file storage: SeaweedFS (S3-compatible, already in Docker). Production storage host still open; switching needs settings only. | Product owner |
 
@@ -566,7 +567,7 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 | 6 | Enrolments and course-rep assignments | Done (2026-11-08) |
 | 7a | Module-boundary fix; "Email or Student ID" sign-in; Registrar screens (students, bulk import, enrolments); Registrar browser journey | Done (2026-11-09) |
 | 7b | Administrator and Super Admin screens: academic structure, places, courses, offerings, sections, lecturers, course reps | Done (2026-11-09) |
-| 7c | Phase 2 exit check | Done (2026-11-09); waiting for the product owner to approve closing Phase 2 |
+| 7c | Phase 2 exit check | Done (2026-11-09); Phase 2 approved as complete |
 
 ### 2026-11-08 — Phase 2, step 1: academic structure
 
@@ -946,3 +947,30 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 **Next:** the product owner approves closing Phase 2. Phase 3 (timetables, class sessions, class monitoring) then starts with its own plan for approval.
 
 **CI:** clean-clone rehearsal of every CI step passed (e2e 4). GitHub run 42546247324 on `13b8ea8`: **success**.
+
+## Phase 3: timetable and class monitoring (proposed plan, not yet approved)
+
+**Goal:** a published timetable becomes real class sessions, and the server watches every class. When a lecturer has not started, they are asked what is happening; unresolved classes go to an administrator for review. Nothing cancels a class automatically. Designs: [CLASS_LIFECYCLE.md](docs/CLASS_LIFECYCLE.md), [CLASS_MONITORING.md](docs/CLASS_MONITORING.md).
+
+**Exit criterion (from the phase table):** scenarios 13–18 and 23 pass in a simulated teaching day.
+
+| Step | Scope |
+| --- | --- |
+| 1 | **Background jobs and settings.** BullMQ queues in the worker process, an outbox relay, job records with retries, and a system-health alert after final failure. Versioned institution settings, starting with the monitoring timings and thresholds (D-13). A test clock, so tests can fast-forward a teaching day. Import activation emails move onto the queue (closes KNOWN_LIMITATIONS 29). |
+| 2 | **Timetables.** Draft timetable per semester; entries (sections, lecturer, room, weekday, start and end time, effective dates); conflict check (room, lecturer, section: blocking; student clashes: warning); publish; only one published per semester; change history. |
+| 3 | **Class sessions.** Generation of every meeting for the semester on publish, skipping holidays and closures, Accra time to UTC, idempotent re-runs. Database no-overlap rules for rooms and lecturers. |
+| 4 | **Class lifecycle.** `ClassEventService` as the only place a status changes: the 11 statuses and the allowed-transition table; lecturer actions (confirm, delay, start, end, interrupt, resume, cancel with reason); administrator actions (hold, lift, void, reinstate, open review); reschedule requests and approval (D-11); timetable edits after publishing. |
+| 5 | **Monitoring.** The detection engine (pure rules, tested with fixed examples); checkpoint jobs (T − 24 h … T + 30 min) plus a once-a-minute sweeper; student, course-rep and lecturer issue reports with spam limits; administrator review with decisions. |
+| 6 | **Notifications.** In-app notifications and email for every alert in CLASS_MONITORING §4, with lecturer action links. Push notifications are built behind one interface but switched on only when a Firebase project exists. SMS waits for D-17. |
+| 7 | **Screens.** Web: timetable editor with conflicts and publish; class monitor for administrators; review screen; lecturer "Today" with the action buttons; notifications. Mobile: student schedule and issue report; lecturer today and actions. |
+| 8 | **Exit check.** Scenarios 13–18 and 23 as tests over a simulated teaching day, plus browser journeys. |
+
+**Decisions needed before or during Phase 3:**
+- **D-11 (who may reschedule):** proposed: the lecturer requests, an Administrator approves.
+- **D-13 (monitoring timings):** proposed defaults:
+  - UNCONFIRMED at start + 15 min;
+  - review at start + 30 min, or earlier once at least 3 students and 10% of the class report a problem (a course rep counts double).
+  - These are stored as settings and can be changed later without code.
+- **Week patterns:** do any Knutsford classes meet only on alternate weeks, or only in some weeks of the semester? If yes, entries need a week pattern; if not, every entry is weekly between its effective dates.
+- **Push notifications:** they need a Firebase project owned by the university, created by the product owner with my step-by-step instructions. Until then: in-app and email only.
+- **D-17 (email and SMS provider for production):** not needed to build Phase 3. Development uses Mailpit.
