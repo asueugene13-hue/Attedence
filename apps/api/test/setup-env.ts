@@ -13,3 +13,5 @@ process.env.S3_BUCKET = `${process.env.S3_BUCKET ?? 'attendsure'}-test`;
 // Background jobs run inside the test app, and retries wait milliseconds instead of seconds.
 process.env.RUN_JOBS_IN_API = 'true';
 process.env.JOB_RETRY_DELAY_MS = '20';
+// Tests run the monitoring sweep themselves, at the fake clock's time.
+process.env.RUN_SCHEDULED_JOBS = 'false';

@@ -8,6 +8,7 @@ import {
 import { type Job, Worker } from 'bullmq';
 import { AppConfig } from '../../config/app-config.js';
 import { Clock } from '../clock/clock.js';
+import { PG, dbErrorInfo } from '../../common/db-errors.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { JobRegistry, QUEUES } from './job-registry.js';
 import { bullConnection, JobsService } from './jobs.service.js';
@@ -23,6 +24,8 @@ interface Envelope {
 
 /** How often unpublished outbox rows are looked for. */
 const RELAY_INTERVAL_MS = 500;
+/** How often scheduled (repeating) jobs are checked for a new period. */
+const SCHEDULE_CHECK_MS = 5_000;
 /** An outbox row that keeps failing to queue is reported once, then left for an operator. */
 const MAX_RELAY_ATTEMPTS = 10;
 
@@ -36,6 +39,7 @@ export class JobRunner implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(JobRunner.name);
   private workers: Worker[] = [];
   private relayTimer: NodeJS.Timeout | null = null;
+  private scheduleTimer: NodeJS.Timeout | null = null;
   private relaying: Promise<void> | null = null;
   private stopping = false;
 
@@ -66,6 +70,10 @@ export class JobRunner implements OnApplicationBootstrap, OnModuleDestroy {
       worker.on('error', (error) => this.logger.error(`Queue worker error: ${error.message}`));
     }
     this.relayTimer = setInterval(() => void this.relayOnce(), RELAY_INTERVAL_MS);
+    if (this.config.runScheduledJobs && this.registry.scheduled().length > 0) {
+      void this.queueScheduled();
+      this.scheduleTimer = setInterval(() => void this.queueScheduled(), SCHEDULE_CHECK_MS);
+    }
     this.logger.log(`Running jobs on queues: ${QUEUES.join(', ')}.`);
   }
 
@@ -103,6 +111,28 @@ export class JobRunner implements OnApplicationBootstrap, OnModuleDestroy {
         message: `A background job failed ${job.attemptsMade} times and was given up: ${error.message}`,
         data: { jobRecordId: job.data.recordId },
       });
+    }
+  }
+
+  /**
+   * Queues each repeating job once per period. The period number is part of the idempotency key, so
+   * several processes doing this at once still queue it once; the loser of that race is expected.
+   */
+  async queueScheduled(): Promise<void> {
+    if (this.stopping) return;
+    for (const s of this.registry.scheduled()) {
+      const period = Math.floor(Date.now() / s.everyMs);
+      try {
+        await this.jobs.enqueue(
+          s.queue,
+          s.name,
+          {},
+          { idempotencyKey: `every:${s.queue}/${s.name}:${period}` },
+        );
+      } catch (error) {
+        if (dbErrorInfo(error)?.pgCode === PG.uniqueViolation) continue;
+        this.logger.error(`Could not queue ${s.queue}/${s.name}: ${(error as Error).message}`);
+      }
     }
   }
 
@@ -158,6 +188,7 @@ export class JobRunner implements OnApplicationBootstrap, OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     this.stopping = true;
     if (this.relayTimer) clearInterval(this.relayTimer);
+    if (this.scheduleTimer) clearInterval(this.scheduleTimer);
     await this.relaying;
     await Promise.all(this.workers.map((w) => w.close()));
   }

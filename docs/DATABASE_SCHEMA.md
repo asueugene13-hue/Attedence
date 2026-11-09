@@ -50,7 +50,9 @@ enum CancelReason        { LECTURER_UNAVAILABLE ILLNESS OFFICIAL_DUTY VENUE_UNAV
 enum IssueType           { LECTURER_NOT_ARRIVED VERBAL_CANCELLATION CLASS_DELAYED WRONG_CLASSROOM
                            VENUE_PROBLEM TIMETABLE_ERROR TECHNICAL_PROBLEM OTHER }
 enum ReporterRole        { STUDENT COURSE_REP LECTURER }
-enum ReviewTrigger       { SYSTEM_ESCALATION ADMIN_OPENED LECTURER_REQUEST }
+enum ReviewTrigger       { SYSTEM_ESCALATION ADMIN_OPENED }
+enum ReviewStatus        { OPEN DECIDED }
+enum IssueReportStatus   { OPEN ACKNOWLEDGED RESOLVED DISMISSED }
 enum ReviewDecision      { CLASS_HELD CANCELLED POSTPONED RESCHEDULED NO_ACTION }
 enum RescheduleStatus    { PENDING APPROVED REJECTED WITHDRAWN }
 
@@ -576,30 +578,34 @@ model ClassEvent {                   // append-only history of a session
   @@index([classSessionId, occurredAt])
 }
 
-model ClassIssueReport {
+model ClassIssueReport {             // Phase 3 step 5a; table class_issue_reports
   id
-  classSessionId String       @db.Uuid
-  reporterId     String       @db.Uuid   // User
-  reporterRole   ReporterRole
+  classSessionId String            @db.Uuid
+  reporterUserId String            @db.Uuid
+  reporterRole   ReporterRole               // decided by the server: STUDENT, COURSE_REP or LECTURER
   type           IssueType
-  note           String?                  // max 500 characters, plain text
-  status         String       @default("OPEN")   // OPEN | ACKNOWLEDGED | RESOLVED | DISMISSED
+  note           String?                    // at most 500 characters (SQL check), plain text
+  status         IssueReportStatus @default(OPEN)   // OPEN | ACKNOWLEDGED | RESOLVED | DISMISSED
   createdAt
-  @@unique([classSessionId, reporterId, type])   // no duplicate reports
+  @@unique([classSessionId, reporterUserId, type])  // no duplicate reports
   @@index([classSessionId, createdAt])
+  @@index([reporterUserId, createdAt])              // daily report limit
 }
 
-model ClassStatusReview {
+model ClassStatusReview {            // Phase 3 step 5a; table class_status_reviews
   id
   classSessionId String          @db.Uuid
-  trigger        ReviewTrigger
-  openedAt       DateTime        @default(now())
-  assignedToId   String?         @db.Uuid
-  status         String          @default("OPEN")   // OPEN | DECIDED
+  trigger        ReviewTrigger              // SYSTEM_ESCALATION | ADMIN_OPENED
+  isPriority     Boolean         @default(false)   // a rep reported, or a verbal cancellation was reported
+  reasons        Json                       // the engine's reasons, or the administrator's reason
+  openedAt       DateTime
+  status         ReviewStatus    @default(OPEN)    // OPEN | DECIDED
   decision       ReviewDecision?
   decisionNote   String?
   decidedById    String?         @db.Uuid
   decidedAt      DateTime?
+  @@index([status, isPriority, openedAt])
+  @@index([classSessionId])
   // partial unique index (SQL): one OPEN review per session
 }
 
@@ -1158,6 +1164,8 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | Class history cannot be edited or deleted | `class_events_append_only` trigger |
 | At most one waiting reschedule request per class | `reschedule_requests_one_pending` partial unique index (Phase 3 step 4b, migration `20261109180000_reschedules`) |
 | A decided request says who decided and when; an approved one names its replacement; the new time ends after it starts | `reschedule_requests_decision_complete`, `reschedule_requests_time_order` checks |
+| At most one open review per class; a decided review has its decision, time and note, an open one none | `class_status_reviews_one_open` partial unique index, `class_status_reviews_decision_complete` check (Phase 3 step 5a, migration `20261109200000_class_monitoring`) |
+| One report per person, type and class; notes at most 500 characters | `@@unique([classSessionId, reporterUserId, type])`, `class_issue_reports_note_length` check |
 | Only a replacement session points to the session it replaces, and a session is replaced at most once | `class_sessions_replacement_link` check, unique `rescheduled_from_id` |
 | A section never takes more students than its capacity, even with simultaneous requests | Service: the section row is locked (`SELECT … FOR UPDATE`) while counting and inserting |
 

@@ -16,6 +16,7 @@ import { CurrentAuth } from '../auth/access-token.guard.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { Authenticated, RequirePermissions } from '../authorization/access.decorators.js';
 import { type ActionInput, ClassEventService } from './class-event.service.js';
+import { ClassMonitorService } from './class-monitor.service.js';
 import { ClassSessionsService } from './class-sessions.service.js';
 
 @Controller()
@@ -23,6 +24,7 @@ export class ClassSessionsController {
   constructor(
     private readonly sessions: ClassSessionsService,
     private readonly events: ClassEventService,
+    private readonly monitor: ClassMonitorService,
   ) {}
 
   /** `?from=&to=` (local dates, at most 62 days) and optional section, lecturer, room or status. */
@@ -169,13 +171,16 @@ export class ClassSessionsController {
   @Post('class-sessions/:id/open-review')
   @RequirePermissions('class_reviews.decide')
   @HttpCode(200)
-  openReview(
+  async openReview(
     @CurrentAuth() auth: AccessClaims,
     @Param('id') param: string,
     @Body() body: unknown,
     @Req() req: Request,
   ) {
-    return this.run(auth, param, 'openReview', parseInput(ClassReasonSchema, body), req);
+    const sessionId = parseInput(IdSchema, param);
+    const { reason } = parseInput(ClassReasonSchema, body);
+    await this.monitor.adminOpenReview(auth, sessionId, reason, requestContextOf(req));
+    return this.sessions.get(sessionId);
   }
 
   private async run(

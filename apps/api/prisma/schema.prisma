@@ -123,6 +123,8 @@ model User {
   classEvents               ClassEvent[]              @relation("ClassEventActor")
   rescheduleRequests        RescheduleRequest[]       @relation("RescheduleRequestedBy")
   rescheduleDecisions       RescheduleRequest[]       @relation("RescheduleDecidedBy")
+  classIssueReports         ClassIssueReport[]        @relation("IssueReporter")
+  classReviewDecisions      ClassStatusReview[]       @relation("ReviewDecidedBy")
 
   @@map("users")
 }
@@ -1197,6 +1199,8 @@ model ClassSession {
   replacedBy         ClassSession?         @relation("SessionReplacement")
   rescheduleRequests RescheduleRequest[]   @relation("RescheduleOriginal")
   replacementFor     RescheduleRequest?    @relation("RescheduleReplacement")
+  issueReports       ClassIssueReport[]
+  reviews            ClassStatusReview[]
 
   @@unique([timetableEntryId, scheduledStart])
   @@index([status, scheduledStart])
@@ -1273,4 +1277,95 @@ model RescheduleRequest {
   @@index([status, createdAt])
   @@index([classSessionId])
   @@map("reschedule_requests")
+}
+
+// ───────────────────────── Class monitoring (Phase 3 step 5) ─────────────────────────
+
+enum IssueType {
+  LECTURER_NOT_ARRIVED
+  VERBAL_CANCELLATION
+  CLASS_DELAYED
+  WRONG_CLASSROOM
+  VENUE_PROBLEM
+  TIMETABLE_ERROR
+  TECHNICAL_PROBLEM
+  OTHER
+}
+
+enum ReporterRole {
+  STUDENT
+  COURSE_REP
+  LECTURER
+}
+
+enum IssueReportStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum ReviewTrigger {
+  SYSTEM_ESCALATION
+  ADMIN_OPENED
+}
+
+enum ReviewStatus {
+  OPEN
+  DECIDED
+}
+
+enum ReviewDecision {
+  CLASS_HELD
+  CANCELLED
+  POSTPONED
+  RESCHEDULED
+  NO_ACTION
+}
+
+/// A problem with a class reported by an enrolled student, a course rep or the class's lecturer.
+/// One report per person, type and class. Reports are evidence for the detection engine; they never
+/// change a class's status by themselves.
+model ClassIssueReport {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  classSessionId String            @map("class_session_id") @db.Uuid
+  reporterUserId String            @map("reporter_user_id") @db.Uuid
+  reporterRole   ReporterRole      @map("reporter_role")
+  type           IssueType
+  note           String?
+  status         IssueReportStatus @default(OPEN)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  classSession ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
+  reporter     User         @relation("IssueReporter", fields: [reporterUserId], references: [id], onDelete: Restrict)
+
+  @@unique([classSessionId, reporterUserId, type])
+  @@index([classSessionId, createdAt])
+  @@index([reporterUserId, createdAt])
+  @@map("class_issue_reports")
+}
+
+/// A class referred to an administrator: by the detection engine, or by an administrator.
+/// At most one open review per class (partial unique index in SQL).
+model ClassStatusReview {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  classSessionId String          @map("class_session_id") @db.Uuid
+  trigger        ReviewTrigger
+  /// A course rep reported, or a student reported a verbal cancellation: look at this one first.
+  isPriority     Boolean         @default(false) @map("is_priority")
+  /// Why it was opened: the detection engine's reasons, or the administrator's reason.
+  reasons        Json
+  openedAt       DateTime        @map("opened_at") @db.Timestamptz(3)
+  status         ReviewStatus    @default(OPEN)
+  decision       ReviewDecision?
+  decisionNote   String?         @map("decision_note")
+  decidedById    String?         @map("decided_by_id") @db.Uuid
+  decidedAt      DateTime?       @map("decided_at") @db.Timestamptz(3)
+
+  classSession ClassSession @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
+  decidedBy    User?        @relation("ReviewDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@index([status, isPriority, openedAt])
+  @@index([classSessionId])
+  @@map("class_status_reviews")
 }

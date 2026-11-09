@@ -25,11 +25,25 @@ export interface JobDefinition<T = unknown> {
 @Injectable()
 export class JobRegistry {
   private readonly definitions = new Map<string, JobDefinition>();
+  private readonly schedules: { queue: QueueName; name: string; everyMs: number }[] = [];
 
   define<T>(definition: JobDefinition<T>): void {
     const key = `${definition.queue}/${definition.name}`;
     if (this.definitions.has(key)) throw new Error(`Job ${key} is defined twice.`);
     this.definitions.set(key, definition as JobDefinition);
+  }
+
+  /**
+   * Runs an already defined job (with no data) every `everyMs`. Each period is queued once, even with
+   * several processes running jobs, and is recorded like any other job.
+   */
+  every(queue: QueueName, name: string, everyMs: number): void {
+    if (!this.get(queue, name)) throw new Error(`Define job ${queue}/${name} before scheduling it.`);
+    this.schedules.push({ queue, name, everyMs });
+  }
+
+  scheduled(): readonly { queue: QueueName; name: string; everyMs: number }[] {
+    return this.schedules;
   }
 
   get(queue: string, name: string): JobDefinition | undefined {

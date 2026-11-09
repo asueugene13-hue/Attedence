@@ -33,6 +33,13 @@ export const SETTINGS = {
     schema: z.number().min(1).max(100),
     default: 10,
   },
+  'monitoring.repCorroboratingStudents': {
+    label: 'Early review with a course rep: other students needed',
+    description:
+      'A course rep’s report plus at least this many other students reporting a problem sends an unconfirmed class to review early. A rep alone never does (D-13).',
+    schema: z.number().int().min(1).max(20),
+    default: 1,
+  },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

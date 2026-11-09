@@ -55,6 +55,11 @@ const EnvSchema = z
     S3_SECRET_KEY: z.string().min(1),
     /** Run background jobs inside the API process too (development, tests, small installations). */
     RUN_JOBS_IN_API: z.enum(['true', 'false']).default('false'),
+    /**
+     * Repeating jobs (the class-monitoring sweep). On wherever jobs run; the API's automated tests
+     * switch it off and run the sweep themselves, so a sweep never lands in the middle of a test.
+     */
+    RUN_SCHEDULED_JOBS: z.enum(['true', 'false']).default('true'),
     /** First retry delay for a failed job; later retries wait longer (exponential). */
     JOB_RETRY_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(5000),
 
@@ -126,6 +131,7 @@ export class AppConfig {
   readonly storage: StorageConfig;
   readonly runJobsInApi: boolean;
   readonly jobRetryDelayMs: number;
+  readonly runScheduledJobs: boolean;
 
   private constructor(env: z.infer<typeof EnvSchema>) {
     this.nodeEnv = env.NODE_ENV;
@@ -149,6 +155,7 @@ export class AppConfig {
     };
     this.runJobsInApi = env.RUN_JOBS_IN_API === 'true';
     this.jobRetryDelayMs = env.JOB_RETRY_DELAY_MS;
+    this.runScheduledJobs = env.RUN_SCHEDULED_JOBS === 'true';
     this.storage = {
       endpoint: env.S3_ENDPOINT,
       publicEndpoint: env.S3_PUBLIC_ENDPOINT ?? env.S3_ENDPOINT,

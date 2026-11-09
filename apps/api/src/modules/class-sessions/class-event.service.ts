@@ -4,6 +4,8 @@ import {
   CLASS_ACTIONS,
   type ClassActionName,
   LIFECYCLE_TIMING,
+  SYSTEM_TRANSITIONS,
+  type SystemTransition,
 } from '@attendsure/shared';
 import { auditEntry } from '../../common/audit-entry.js';
 import { rethrowAsConflict } from '../../common/db-errors.js';
@@ -168,6 +170,79 @@ export class ClassEventService {
         );
       })
       .catch((e: unknown) => rethrowAsConflict(e, SLOT_TAKEN));
+  }
+
+  /**
+   * A change the server makes by itself (monitoring), on server time. Applied only if the class is
+   * still exactly as the caller saw it (same status and version); otherwise nothing happens and this
+   * returns false, because a person acting at the same moment wins. Recorded as a SYSTEM event.
+   */
+  async applySystem(
+    session: ClassSession,
+    transition: SystemTransition,
+    payload: Record<string, Prisma.InputJsonValue>,
+    inTransaction?: InTransaction,
+  ): Promise<boolean> {
+    const def = SYSTEM_TRANSITIONS[transition];
+    if (!def.from.includes(session.status)) return false;
+    const now = this.clock.now();
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.classSession.updateMany({
+        where: { id: session.id, status: session.status, version: session.version },
+        data: { status: def.to, statusChangedAt: now, version: { increment: 1 } },
+      });
+      if (claimed.count !== 1) return false;
+      const extra = inTransaction ? await inTransaction(tx, session, now) : {};
+      await tx.classEvent.create({
+        data: {
+          classSessionId: session.id,
+          type: transition === 'markUnconfirmed' ? 'MARKED_UNCONFIRMED' : 'ESCALATED',
+          fromStatus: session.status,
+          toStatus: def.to,
+          actorType: 'SYSTEM',
+          payload: { ...payload, ...extra },
+          occurredAt: now,
+        },
+      });
+      await this.audit.record(
+        {
+          action: `class_sessions.system.${transition}`,
+          entityType: 'class_session',
+          entityId: session.id,
+          before: { status: session.status },
+          after: { status: def.to, ...payload, ...extra },
+        },
+        tx,
+      );
+      return true;
+    });
+  }
+
+  /**
+   * Records that the lecturer was nudged about a class (no status change). Returns false if they
+   * already had been, so two checks at the same moment nudge once.
+   */
+  async recordPrompt(sessionId: string, reasons: string[]): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'prompt:' + sessionId}))`;
+      const session = await tx.classSession.findUniqueOrThrow({ where: { id: sessionId } });
+      const already = await tx.classEvent.count({
+        where: { classSessionId: sessionId, type: { in: ['LECTURER_PROMPTED', 'MARKED_UNCONFIRMED'] } },
+      });
+      if (already > 0) return false;
+      await tx.classEvent.create({
+        data: {
+          classSessionId: sessionId,
+          type: 'LECTURER_PROMPTED',
+          fromStatus: session.status,
+          toStatus: session.status,
+          actorType: 'SYSTEM',
+          payload: { reasons },
+          occurredAt: this.clock.now(),
+        },
+      });
+      return true;
+    });
   }
 
   /**

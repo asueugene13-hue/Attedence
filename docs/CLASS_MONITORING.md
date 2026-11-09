@@ -51,7 +51,14 @@ Every report is stored with its type and time, linked to the session, and shown 
 | `ESCALATE_TO_REVIEW` | Status is UNCONFIRMED, and either T + 30 has passed or the report threshold is met |
 | `ESCALATE_TO_REVIEW` (priority) | Any "lecturer verbally cancelled" report while the class is unconfirmed. The administrator is also asked to get the lecturer to record the cancellation formally. |
 
-**Report threshold (D-13, decided 2026-11-09):** at least 3 distinct reporting students **and** at least 10% of the enrolled class. Both numbers matter: 3 alone is noise in a class of 300, and 10% alone is a single student in a class of 8. Both are settings. **Course reps:** a course rep's report is treated as a priority, verified report. It adds weight to the evidence and marks the escalation as priority, but it is never simply counted as extra students, so the threshold still needs real reports from the class. The exact weighting rule will be proposed in Phase 3 step 5 for the product owner to confirm.
+**Report threshold (D-13, decided 2026-11-09):** at least 3 distinct reporting students **and** at least 10% of the enrolled class. Both numbers matter: 3 alone is noise in a class of 300, and 10% alone is a single student in a class of 8. Both are settings. **Course reps (rule confirmed by the product owner 2026-11-09, "corroboration"):**
+
+- The rep always counts as one reporter, never as two.
+- A rep's report opens a second, shorter path to an early review: the rep plus at least 1 other enrolled student (setting `monitoring.repCorroboratingStudents`) reporting a problem escalates an UNCONFIRMED class.
+- A rep alone never escalates; the class then goes to review at T + 30 as usual.
+- A rep's report nudges the lecturer at once and marks the review as priority.
+
+**Which reports count as evidence:** "lecturer has not arrived", "lecturer verbally cancelled" and "class delayed". The other types are shown to the reviewer but never move a class.
 
 The engine never recommends cancellation. `ClassSessionMonitorService` turns a recommendation into a status change through `ClassEventService`, the only place status changes happen (CLASS_LIFECYCLE.md §6).
 
@@ -81,6 +88,18 @@ The responsible administrators are those whose scope covers the course's departm
 - **Conditional updates.** Every automatic transition says "only if the status is still X". A lecturer pressing Start at the same moment the T + 15 job fires produces exactly one outcome: ACTIVE wins if it commits first, and if the job wins, the lecturer's later Start is still allowed from UNCONFIRMED.
 - **Job records.** Every run writes a `BackgroundJobRecord`. Failed jobs retry with backoff. After the final failure, a `SystemEvent` alert reaches the Super Admin's system-health view. Test scenario 23 covers this.
 - **Changes move checkpoints.** A delay, a timetable edit or a reschedule cancels and re-creates that session's jobs.
+
+## 6a. As built (Phase 3 step 5a)
+
+- **One sweep, every minute,** finds every watched class (SCHEDULED, CONFIRMED, POSTPONED, UNCONFIRMED) whose first checkpoint has passed, looking back 7 days, and evaluates it. Each issue report also queues an immediate evaluation of its class, in the same transaction as the report. Per-session delayed checkpoint jobs (section 6) are not used: the sweep alone is simpler and at most one minute late. Reminders (T − 24 h, T − 1 h, T − 15) come with notifications in step 6.
+- The sweep is a repeating job (`JobRegistry.every`), queued once per minute even with several processes, and recorded like any other job. `RUN_SCHEDULED_JOBS=false` switches repeating jobs off; the API's automated tests do this and run the sweep themselves at the test clock's time.
+- **Confirmation (D-13 wording "no lecturer activity or confirmation"):** a class the lecturer confirmed does not become UNCONFIRMED. So that a confirmed class nobody starts cannot slip through, the report threshold and the course-rep rule still send a confirmed-but-not-started class to review after the +15 checkpoint. The time-based review at +30 applies only to UNCONFIRMED classes.
+- **Lecturer activity** that prevents UNCONFIRMED: confirming, starting, delaying (which moves the clock), cancelling, a waiting reschedule request, or a report by the lecturer about this class.
+- **Nudges:** before the checkpoint (or for a confirmed class), the first evidence report records a `LECTURER_PROMPTED` event, once per class. Becoming UNCONFIRMED counts as the nudge. Sending the actual message comes with notifications in step 6.
+- **System changes** go through `ClassEventService.applySystem`. It changes the class only if its status and version are still what the check saw, records a SYSTEM class event and an audit entry, and otherwise does nothing (a person acting at the same moment wins).
+- **Escalation** opens a `class_status_reviews` row (trigger `SYSTEM_ESCALATION`, priority if a rep reported or a verbal cancellation was reported, with the engine's reasons) in the same transaction. An administrator's "open review" action opens one with trigger `ADMIN_OPENED`.
+- **Who sees reports:** administrators within scope see the reporter. The class's lecturer sees every report, but students only as "student" or "course rep", so nobody is discouraged from reporting. Students see their own reports.
+- Dismissed reports never count as evidence. Dismissing, the review queue and its decisions come in step 5b.
 
 ## 7. Administrator review
 

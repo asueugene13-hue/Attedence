@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–4 done; step 5 (monitoring) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–4 and 5a done; step 5b (review queue and decisions) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -62,7 +62,7 @@ Read this first in every session, and update it after every implementation step.
 | D-10 | Student device policy | One trusted phone per student. The first phone is trusted at activation; a replacement needs Registrar or Administrator approval. | Phase 4 |
 | D-11 | Who can reschedule a class | **Decided 2026-11-09:** the lecturer requests; an authorised Administrator approves after a conflict check; Administrators may reschedule directly in exceptional cases, with a reason and full audit | Phase 3 |
 | D-12 | Who appoints course reps | An Administrator appoints; the lecturer may nominate | Phase 2 |
-| D-13 | Monitoring thresholds | **Decided 2026-11-09:** configurable settings. UNCONFIRMED at start + 15 min without lecturer activity; UNDER_REVIEW at + 30 min, or earlier once at least 3 students AND 10% of the enrolled class report a problem. A course rep's report is a priority, verified report that adds weight but never counts as extra students on its own (exact rule proposed in Phase 3 step 5 for confirmation). | Phase 3 |
+| D-13 | Monitoring thresholds | **Decided 2026-11-09:** configurable settings. UNCONFIRMED at start + 15 min without lecturer activity; UNDER_REVIEW at + 30 min, or earlier once at least 3 students AND 10% of the enrolled class report a problem. A course rep's report is a priority, verified report that adds weight but never counts as extra students on its own. Course-rep rule (confirmed 2026-11-09, "corroboration"): the normal path stays at least 3 students AND 10% of the enrolled class. A course rep's report opens a second path: the rep plus at least 1 other enrolled student (a setting) reporting a problem escalates an UNCONFIRMED class early. A rep alone never escalates. A rep's report also nudges the lecturer at once and marks the review as priority. The rep always counts as one reporter. | Phase 3 |
 | D-14 | Real academic data and ID formats | The Registrar and Administrators supply the structure. Student ID: 8 digits (decided). Staff ID format still needed. | Phase 2 |
 | D-15 | Brand colours and crest | Knutsford supplies them; the design tokens are ready to swap | Phase 6 |
 | D-16 | Hosting, data location, Data Protection Commission registration | University IT and the university's data protection lead decide | File storage by Phase 2; hosting before Phase 8 |
@@ -89,6 +89,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-09 | Phase 3 | Phase 3 plan approved | Product owner |
 | 2026-11-09 | D-11 | Lecturer requests, authorised Administrator approves after a conflict check; Administrators may reschedule directly in exceptional cases with a reason and full audit | Product owner |
 | 2026-11-09 | D-13 | Thresholds as configurable settings (15 min, 30 min, ≥3 students AND ≥10% of enrolled). Course-rep reports: priority, verified, extra weight, never simply "two students" | Product owner |
+| 2026-11-09 | D-13 (rep rule) | Corroboration: rep + at least 1 other student escalates an UNCONFIRMED class early; a rep alone never does; a rep's report nudges the lecturer and marks the review priority | Product owner |
 | 2026-11-09 | Recurrence | Support weekly (default), every other week, selected weeks, one-time classes, recurrence start/end dates, holidays and per-class exceptions | Product owner |
 | 2026-11-09 | Notifications | Channels IN_APP, EMAIL and PUSH designed from the start; PUSH disabled until a university-owned Firebase project exists | Product owner |
 | 2026-11-09 | Rule 8 | Modules never write another module's tables or check its rules (they call its service); read-only joins for display are allowed. CLAUDE.md updated. | Product owner (option 1) |
@@ -1180,3 +1181,39 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (e2e 4, audit clean).
   - GitHub run 42648881232 on `ab021bf`: **success**.
+
+### 2026-11-09 — Phase 3, step 5a: issue reports and automatic monitoring
+
+- **Decision recorded:** the course-rep rule (D-13), confirmed by the product owner as "corroboration". The rep counts as one reporter. The rep plus at least 1 other student escalates an UNCONFIRMED class early. A rep alone never escalates, but nudges the lecturer and makes the review a priority.
+- **Why step 5 was split:** 5a is reports, the detection engine and the automatic status changes. 5b is the administrator review queue and its decisions.
+- **Built:**
+  - **Issue reports.**
+    - Who can report: enrolled students, the section's course rep and the class's lecturer. The server decides the reporter's role.
+    - Eight report types. Reports open 30 minutes before the start; "lecturer has not arrived" opens 5 minutes after it. They close at the scheduled end.
+    - Limits: one report per person, type and class; students at most 3 per class and 10 a day.
+    - Each report is saved together with a job that re-checks the class at once.
+    - Who sees what: administrators see who reported; the lecturer sees the reports without student names; students see their own.
+  - **Detection engine:** a pure function with the D-13 rules and the course-rep rule. Only "not arrived", "verbal cancellation" and "delayed" reports count as evidence.
+  - **Monitoring sweep:** every minute, as a new kind of repeating background job that is queued once per minute even with several workers. It finds classes past their checkpoints and applies the engine's answer:
+    - nudge the lecturer (recorded once; the message itself comes in step 6);
+    - mark the class UNCONFIRMED at +15;
+    - send it to review at +30, or earlier on enough reports, opening a review record.
+    - System changes apply only if the class has not changed since it was checked, so a lecturer pressing Start at the same moment wins cleanly.
+  - **A delay moves the checkpoints;** a confirmed class is not marked unconfirmed (your D-13 wording). **My judgment call, for your review:** enough student reports (or the rep rule) can still send a confirmed class that nobody started to review after +15, so a confirmed no-show cannot slip through.
+  - An administrator's "open review" now also opens a review record.
+- **Proof the key test bites:** with the engine changed so a rep counts as their own corroborating student (the behaviour you ruled out), both the unit test and the integration test for the rep rule failed. Restored.
+- **Files:**
+  - New: `packages/shared/src/monitoring.ts`, `modules/class-sessions/detection-engine.ts` (+ unit test), `class-monitor.service.ts`, `issue-reports.service.ts`, `issue-reports.controller.ts`, `test/class-monitoring.test.ts`, migration `20261109200000_class_monitoring`.
+  - Changed:
+    - `class-event.service.ts` (system changes, lecturer nudges);
+    - `class-sessions.controller.ts`, `class-sessions.module.ts`;
+    - `infrastructure/jobs/job-registry.ts` and `job-runner.service.ts` (repeating jobs), `config/app-config.ts` (`RUN_SCHEDULED_JOBS`);
+    - `enrollments/course-reps.service.ts` and `enrollments.module.ts`;
+    - shared `settings.ts` (new setting `monitoring.repCorroboratingStudents`, default 1);
+    - `test/setup-env.ts`, `test/fixtures.ts`, `.env.example`.
+  - Docs: API_DOCUMENTATION, CLASS_MONITORING (decision and "as built"), DATABASE_SCHEMA, KNOWN_LIMITATIONS (43–45).
+- **Database changes:**
+  - New tables `class_issue_reports` and `class_status_reviews`.
+  - New enums `IssueType`, `ReporterRole`, `IssueReportStatus`, `ReviewTrigger`, `ReviewStatus`, `ReviewDecision`.
+  - SQL rules: one open review per class; a decision is complete; report notes at most 500 characters.
+  - Applied locally; drift check clean.

@@ -63,3 +63,6 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 40. **A waiting reschedule request is not closed automatically when its class is cancelled or started.** Approving it is refused (`409 TRANSITION_NOT_ALLOWED`), and an administrator rejects it. A direct reschedule does close a waiting request.
 41. **A class restored after a holiday is removed stays cancelled if its room or lecturer was booked meanwhile.** The job leaves it cancelled rather than fail the whole timetable; it is counted in the job summary but not yet shown on a screen (screens come in step 7).
 42. **A reschedule request has no "edit".** The lecturer withdraws it and asks again.
+43. **Monitoring checks once a minute.** A class can become UNCONFIRMED or go to review up to a minute after its checkpoint. Reports are checked at once. Reminders before a class (24 h, 1 h, 15 min) come with notifications in step 6.
+44. **Each minute's sweep leaves a job record** (about 1,440 a day). They are small, and a clean-up rule comes with the data-retention decision (D-18).
+45. **Not yet in step 5a:** the review queue and decisions, dismissing reports, flagging students whose reports are repeatedly dismissed, and ending classes left running past their end. These come in step 5b.
