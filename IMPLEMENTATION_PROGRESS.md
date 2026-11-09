@@ -1090,3 +1090,6 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
   - Administrator actions (hold, lift, void, reinstate, open review).
   - Reschedule requests with a conflict check, and direct reschedules (D-11).
   - Changes to published timetables.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (e2e 4, audit clean).
+  - GitHub run 42632129070 on `9446282`: **success**.
