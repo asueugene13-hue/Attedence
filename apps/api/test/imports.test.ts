@@ -66,9 +66,10 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  sentMail.length = 0;
   mailFails = false;
   await resetDatabase(prisma);
+  // Cleared after the reset, which waits for the previous test's emails to finish.
+  sentMail.length = 0;
   await resetRedis(app.get(RedisService));
   const signedIn = await signInAs(app, prisma, 'registrar@example.test', ['REGISTRAR']);
   registrar = signedIn.auth;

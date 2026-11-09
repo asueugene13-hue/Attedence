@@ -59,7 +59,24 @@ const TABLES = [
   'users',
 ];
 
+/**
+ * Waits (up to 15 s) until the previous test's background work is done: no outbox row waiting to be
+ * queued and no job queued, running or waiting to retry. Emptying the tables while a job still holds
+ * row locks can deadlock (seen in CI after alerts started following every class change).
+ */
+async function waitForIdleJobs(prisma: PrismaClient): Promise<void> {
+  for (let i = 0; i < 300; i++) {
+    const [outbox, jobs] = await Promise.all([
+      prisma.outboxEvent.count({ where: { publishedAt: null, attempts: { lt: 10 } } }),
+      prisma.backgroundJobRecord.count({ where: { status: { in: ['QUEUED', 'RUNNING', 'FAILED'] } } }),
+    ]);
+    if (outbox === 0 && jobs === 0) return;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
+  await waitForIdleJobs(prisma);
   await prisma.$executeRawUnsafe(`TRUNCATE ${TABLES.map((t) => `"${t}"`).join(', ')} CASCADE`);
   await seedSystemRoles(prisma);
 }

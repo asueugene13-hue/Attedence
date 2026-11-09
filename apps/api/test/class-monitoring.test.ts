@@ -80,10 +80,11 @@ async function sessionFor(userId: string, role: 'LECTURER' | 'STUDENT') {
 
 beforeEach(async () => {
   clock.set('2030-08-19T08:00:00Z');
-  sentMail.length = 0;
   mailFails = false;
   failNextSends = 0;
   await resetDatabase(prisma);
+  // Cleared after the reset, which waits for the previous test's emails to finish.
+  sentMail.length = 0;
   await resetRedis(app.get(RedisService));
   const signedIn = await signInAs(app, prisma, 'admin@example.test', ['UNIVERSITY_ADMIN']);
   admin = signedIn.auth;

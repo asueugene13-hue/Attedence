@@ -41,8 +41,9 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  sentMail.length = 0;
   await resetDatabase(prisma);
+  // Cleared after the reset, which waits for the previous test's emails to finish.
+  sentMail.length = 0;
   await resetRedis(app.get(RedisService));
   admin = (await signInAs(app, prisma, 'super@example.test', ['SUPER_ADMIN'])).auth;
   const faculty = await prisma.faculty.create({ data: { code: 'TF', name: 'Test Faculty' } });
