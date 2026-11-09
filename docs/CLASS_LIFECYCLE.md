@@ -25,9 +25,9 @@ Publishing raises a warning, but is not blocked, when individual students enroll
 
 ## 2. Session generation
 
-When a timetable is published, a background job runs over every active entry. For each date between the entry's `effectiveFrom` and `effectiveTo` that matches its weekday and week pattern, it creates a class session:
+When a timetable is published, a background job runs over every active entry. For each date between the entry's `effectiveFrom` and `effectiveTo` that matches its weekday and recurrence, it creates a class session. Recurrence (decided 2026-11-09): `WEEKLY` (default), `EVERY_OTHER_WEEK` (counted from `effectiveFrom`), `SELECTED_WEEKS` (listed teaching weeks, week 1 = the semester's first week) or `ONCE` (a single date):
 
-- The date is skipped when a calendar exception (public holiday, closure, exam period) covers it.
+- The date is skipped when a calendar exception (public holiday, closure, exam period) covers it, or when the entry has its own exception for that date.
 - Start and end times are converted from Africa/Accra wall-clock time to UTC.
 - Each session copies the entry's lecturer, room and sections.
 - The unique key `(timetableEntryId, scheduledStart)` means a re-run never creates duplicates.
@@ -97,7 +97,7 @@ flowchart LR
 | Any not-started status | UNDER_REVIEW | Opened manually | Administrator | — |
 | Any not-started status | ACTIVE | Start class | Assigned lecturer | Allowed from 15 min before the scheduled start until the scheduled end. Starting from UNDER_REVIEW automatically adds a note to the open review. |
 | Any not-started status, SUSPENDED | CANCELLED | Cancel with reason code and note | Lecturer (not from SUSPENDED); Administrator; Super Admin | Excluded from attendance. Students and course reps are notified immediately. `LECTURER_ABSENT_NO_NOTICE` may only be set by an administrator. |
-| Any not-started status | RESCHEDULED | Reschedule request approved | Administrator (D-11) | Original kept; replacement session created; conflicts checked by the database; everyone notified |
+| Any not-started status | RESCHEDULED | Reschedule request approved, or a direct reschedule | Administrator (D-11): approves a lecturer's request, or reschedules directly in exceptional cases with a reason | Conflicts are checked and shown before approval; original kept; replacement session created; the database rejects a clash even if two approvals race; everyone notified; fully audited |
 | Any not-started status | SUSPENDED | Administrative hold | Administrator, Super Admin | Students told the class is on hold |
 | SUSPENDED | SCHEDULED | Hold lifted | Administrator | Only before the scheduled end |
 | UNDER_REVIEW | COMPLETED | Administrator decides the class was held | Administrator | No attendance was taken, so the session does not count for anyone (ATTENDANCE_FLOW.md §9) |
@@ -118,7 +118,7 @@ Every other transition is refused. COMPLETED, CANCELLED and RESCHEDULED are fina
 
 1. The lecturer requests a new time and room, with a reason. A course rep's make-up suggestion can be accepted as the starting point.
 2. The service checks for conflicts in the room, the lecturer's timetable and the students' sessions. It shows the result before the request is sent.
-3. An administrator approves or rejects it (D-11). On approval, one transaction:
+3. An authorised administrator approves or rejects it (D-11), after seeing the conflict check. In exceptional cases an administrator may reschedule directly, without a request; a reason is then required and the action is fully audited. On approval (or a direct reschedule), one transaction:
    - creates the replacement session (`kind = REPLACEMENT`),
    - links the original and the replacement,
    - sets the original to `RESCHEDULED`.

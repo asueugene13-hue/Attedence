@@ -37,7 +37,7 @@ enum BeaconProtocol      { EDDYSTONE_EID EDDYSTONE_UID IBEACON VENDOR_SECURE }
 enum BeaconStatus        { ACTIVE INACTIVE FAULTY RETIRED }
 
 enum TimetableStatus     { DRAFT PUBLISHED SUPERSEDED ARCHIVED }
-enum WeekPattern         { WEEKLY ODD_WEEKS EVEN_WEEKS }
+enum Recurrence          { WEEKLY EVERY_OTHER_WEEK SELECTED_WEEKS ONCE }   // decided 2026-11-09; WEEKLY is the default
 enum SessionKind         { REGULAR MAKEUP REPLACEMENT }
 enum ClassStatus         { SCHEDULED CONFIRMED ACTIVE COMPLETED CANCELLED POSTPONED RESCHEDULED
                            UNCONFIRMED UNDER_REVIEW SUSPENDED INTERRUPTED }
@@ -68,7 +68,7 @@ enum RequestStatus       { SUBMITTED NEEDS_INFO APPROVED REJECTED WITHDRAWN }
 enum ExcuseCategory      { MEDICAL BEREAVEMENT OFFICIAL_UNIVERSITY_DUTY OTHER }
 enum PolicyScope         { INSTITUTION FACULTY DEPARTMENT OFFERING }
 
-enum NotificationChannel { IN_APP PUSH EMAIL SMS }
+enum NotificationChannel { IN_APP EMAIL PUSH SMS }   // IN_APP and EMAIL first; PUSH built but disabled until a university Firebase project exists; SMS waits for D-17
 enum NotificationPriority { NORMAL HIGH CRITICAL }
 enum DeliveryStatus      { QUEUED SENT DELIVERED FAILED SUPPRESSED }
 enum AnnouncementScope   { SECTION OFFERING DEPARTMENT FACULTY INSTITUTION }
@@ -482,7 +482,10 @@ model TimetableEntry {               // a repeating slot, e.g. Tuesdays 10:00-11
   dayOfWeek     Int                     // 1 = Monday ... 7 = Sunday
   startMinute   Int                     // minutes after midnight, Africa/Accra
   endMinute     Int
-  weekPattern   WeekPattern @default(WEEKLY)
+  recurrence    Recurrence  @default(WEEKLY)
+  // EVERY_OTHER_WEEK counts weeks from effectiveFrom. SELECTED_WEEKS lists teaching-week numbers, where week 1
+  // is the semester's first week. ONCE: effectiveFrom = effectiveTo = the date of the single class.
+  selectedWeeks Int[]
   effectiveFrom DateTime    @db.Date
   effectiveTo   DateTime    @db.Date
   isCancelled   Boolean     @default(false)
@@ -492,6 +495,16 @@ model TimetableEntry {               // a repeating slot, e.g. Tuesdays 10:00-11
   updatedAt
   sections      TimetableEntrySection[]
   @@index([timetableId])
+}
+
+model TimetableEntryException {      // one date this entry does not meet (besides institution-wide holidays)
+  id
+  entryId     String   @db.Uuid
+  date        DateTime @db.Date
+  reason      String
+  createdById String   @db.Uuid
+  createdAt
+  @@unique([entryId, date])
 }
 
 model TimetableEntrySection {        // several sections can share one meeting (combined class, D-20)

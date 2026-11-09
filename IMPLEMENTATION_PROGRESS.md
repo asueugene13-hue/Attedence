@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan proposed 2026-11-09, waiting for approval. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; step 1 (background jobs and settings) in progress. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -60,9 +60,9 @@ Read this first in every session, and update it after every implementation step.
 | D-08 | Beacon hardware and protocol | Rotating-ID beacons (Eddystone-EID or a vendor's secure rotating ID), chosen after the classroom trial | Phase 4 |
 | D-09 | Attendance rules: minimum percentage, late cut-off, whether late counts as attended, how excused absences count, when attendance closes | Take these from Knutsford's academic regulations. Interim defaults are in [ATTENDANCE_FLOW.md](docs/ATTENDANCE_FLOW.md) §9. | Phase 5 |
 | D-10 | Student device policy | One trusted phone per student. The first phone is trusted at activation; a replacement needs Registrar or Administrator approval. | Phase 4 |
-| D-11 | Who can reschedule a class | The lecturer requests; an Administrator approves | Phase 3 |
+| D-11 | Who can reschedule a class | **Decided 2026-11-09:** the lecturer requests; an authorised Administrator approves after a conflict check; Administrators may reschedule directly in exceptional cases, with a reason and full audit | Phase 3 |
 | D-12 | Who appoints course reps | An Administrator appoints; the lecturer may nominate | Phase 2 |
-| D-13 | Monitoring thresholds | Unconfirmed at 15 min; escalate at 30 min, or earlier once at least 3 students and at least 10% of the class report a problem | Phase 3 |
+| D-13 | Monitoring thresholds | **Decided 2026-11-09:** configurable settings. UNCONFIRMED at start + 15 min without lecturer activity; UNDER_REVIEW at + 30 min, or earlier once at least 3 students AND 10% of the enrolled class report a problem. A course rep's report is a priority, verified report that adds weight but never counts as extra students on its own (exact rule proposed in Phase 3 step 5 for confirmation). | Phase 3 |
 | D-14 | Real academic data and ID formats | The Registrar and Administrators supply the structure. Student ID: 8 digits (decided). Staff ID format still needed. | Phase 2 |
 | D-15 | Brand colours and crest | Knutsford supplies them; the design tokens are ready to swap | Phase 6 |
 | D-16 | Hosting, data location, Data Protection Commission registration | University IT and the university's data protection lead decide | File storage by Phase 2; hosting before Phase 8 |
@@ -86,6 +86,11 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-08 | D-14 (part) | Student IDs are 8 digits; staff-number format still open | Product owner |
 | 2026-11-08 | D-12 | Course reps: an Administrator appoints (within scope); a lecturer of the section may nominate for approval | Product owner (accepted the proposed default) |
 | 2026-11-09 | Phase 2 | Phase 2 approved as complete after the exit check | Product owner |
+| 2026-11-09 | Phase 3 | Phase 3 plan approved | Product owner |
+| 2026-11-09 | D-11 | Lecturer requests, authorised Administrator approves after a conflict check; Administrators may reschedule directly in exceptional cases with a reason and full audit | Product owner |
+| 2026-11-09 | D-13 | Thresholds as configurable settings (15 min, 30 min, ≥3 students AND ≥10% of enrolled). Course-rep reports: priority, verified, extra weight, never simply "two students" | Product owner |
+| 2026-11-09 | Recurrence | Support weekly (default), every other week, selected weeks, one-time classes, recurrence start/end dates, holidays and per-class exceptions | Product owner |
+| 2026-11-09 | Notifications | Channels IN_APP, EMAIL and PUSH designed from the start; PUSH disabled until a university-owned Firebase project exists | Product owner |
 | 2026-11-09 | Rule 8 | Modules never write another module's tables or check its rules (they call its service); read-only joins for display are allowed. CLAUDE.md updated. | Product owner (option 1) |
 | 2026-11-08 | D-16 (part) | Development and CI file storage: SeaweedFS (S3-compatible, already in Docker). Production storage host still open; switching needs settings only. | Product owner |
 
@@ -948,7 +953,9 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 
 **CI:** clean-clone rehearsal of every CI step passed (e2e 4). GitHub run 42546247324 on `13b8ea8`: **success**.
 
-## Phase 3: timetable and class monitoring (proposed plan, not yet approved)
+## Phase 3: timetable and class monitoring
+
+Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence and notification channels (see the decisions log).
 
 **Goal:** a published timetable becomes real class sessions, and the server watches every class. When a lecturer has not started, they are asked what is happening; unresolved classes go to an administrator for review. Nothing cancels a class automatically. Designs: [CLASS_LIFECYCLE.md](docs/CLASS_LIFECYCLE.md), [CLASS_MONITORING.md](docs/CLASS_MONITORING.md).
 
@@ -971,6 +978,6 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
   - UNCONFIRMED at start + 15 min;
   - review at start + 30 min, or earlier once at least 3 students and 10% of the class report a problem (a course rep counts double).
   - These are stored as settings and can be changed later without code.
-- **Week patterns:** do any Knutsford classes meet only on alternate weeks, or only in some weeks of the semester? If yes, entries need a week pattern; if not, every entry is weekly between its effective dates.
+- **Recurrence (decided):** weekly (default), every other week, selected weeks, and one-time classes, each with start and end dates; holidays and per-class exceptions skip dates.
 - **Push notifications:** they need a Firebase project owned by the university, created by the product owner with my step-by-step instructions. Until then: in-app and email only.
 - **D-17 (email and SMS provider for production):** not needed to build Phase 3. Development uses Mailpit.

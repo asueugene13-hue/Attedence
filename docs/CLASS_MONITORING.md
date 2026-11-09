@@ -51,7 +51,7 @@ Every report is stored with its type and time, linked to the session, and shown 
 | `ESCALATE_TO_REVIEW` | Status is UNCONFIRMED, and either T + 30 has passed or the report threshold is met |
 | `ESCALATE_TO_REVIEW` (priority) | Any "lecturer verbally cancelled" report while the class is unconfirmed. The administrator is also asked to get the lecturer to record the cancellation formally. |
 
-**Report threshold:** weighted reporters ≥ 3 **and** weighted reporters ≥ 10% of eligible students. A student counts 1 and the course rep counts 2. Both numbers matter: 3 alone is noise in a class of 300, and 10% alone is a single student in a class of 8.
+**Report threshold (D-13, decided 2026-11-09):** at least 3 distinct reporting students **and** at least 10% of the enrolled class. Both numbers matter: 3 alone is noise in a class of 300, and 10% alone is a single student in a class of 8. Both are settings. **Course reps:** a course rep's report is treated as a priority, verified report. It adds weight to the evidence and marks the escalation as priority, but it is never simply counted as extra students, so the threshold still needs real reports from the class. The exact weighting rule will be proposed in Phase 3 step 5 for the product owner to confirm.
 
 The engine never recommends cancellation. `ClassSessionMonitorService` turns a recommendation into a status change through `ClassEventService`, the only place status changes happen (CLASS_LIFECYCLE.md §6).
 
