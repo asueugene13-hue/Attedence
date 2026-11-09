@@ -85,6 +85,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-08 | D-07 | Ask Knutsford IT about Microsoft 365 / Google accounts; design leaves room for SSO | Product owner |
 | 2026-11-08 | D-14 (part) | Student IDs are 8 digits; staff-number format still open | Product owner |
 | 2026-11-08 | D-12 | Course reps: an Administrator appoints (within scope); a lecturer of the section may nominate for approval | Product owner (accepted the proposed default) |
+| 2026-11-09 | Rule 8 | Modules never write another module's tables or check its rules (they call its service); read-only joins for display are allowed. CLAUDE.md updated. | Product owner (option 1) |
 | 2026-11-08 | D-16 (part) | Development and CI file storage: SeaweedFS (S3-compatible, already in Docker). Production storage host still open; switching needs settings only. | Product owner |
 
 ## Session log
@@ -810,7 +811,7 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
     - sign-in by Student ID or staff number is answered by the students and courses modules, through a resolver they register with the sign-in service;
     - the one-time Super Admin command writes its audit entry through the audit service.
   - After the change the students module touches only `student_profiles`, and the courses module only course and lecturer tables. All 179 API tests passed unchanged.
-  - **Open question for the product owner:** some read-only screens still join other modules' tables to show names (KNOWN_LIMITATIONS 36).
+  - **Decided afterwards (2026-11-09, option 1):** read-only joins for display are allowed; writes and rule checks stay with the owning module. CLAUDE.md rule 8 updated.
 - **Sign-in:** web and mobile now say "Email or Student ID" and send `identifier`.
 - **Registrar screens (web dashboard):**
   - **Students:** search and filter; register; a record page with details editing (version-checked), academic status with a reason, verification, photo upload, replace and remove, and the student's enrolments with enrol and drop.
