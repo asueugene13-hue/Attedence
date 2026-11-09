@@ -944,3 +944,5 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 - **Docs corrected:** SYSTEM_ARCHITECTURE now names the libraries actually used. PRESENCE_VERIFICATION no longer implies the beacon trial happened.
 
 **Next:** the product owner approves closing Phase 2. Phase 3 (timetables, class sessions, class monitoring) then starts with its own plan for approval.
+
+**CI:** clean-clone rehearsal of every CI step passed (e2e 4). GitHub run 42546247324 on `13b8ea8`: **success**.
