@@ -25,6 +25,12 @@ function SignedInTabs() {
         tabBarActiveTintColor: palette.primary,
         tabBarInactiveTintColor: palette.textMuted,
         tabBarStyle: { backgroundColor: palette.surface, borderTopColor: palette.border },
+        // No icon set yet: without this the library draws a "missing icon" box. Labels only until the
+        // design system's icons are added with the full mobile screens (Phase 3 step 7).
+        tabBarIcon: () => null,
+        tabBarIconStyle: { display: 'none' },
+        tabBarLabelStyle: { fontSize: 15, fontWeight: '600' },
+        tabBarItemStyle: { justifyContent: 'center' },
       }}
     >
       {tabs.map((name) => (
