@@ -59,6 +59,11 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
   const nav = page.getByRole('navigation', { name: 'Main' });
   await expect(nav.getByRole('link')).toHaveText([
     'Home',
+    'Notifications',
+    'Class monitor',
+    'Class reviews',
+    'Reschedule requests',
+    'Timetables',
     'Students',
     'Bulk import',
     'Enrolments',
@@ -70,6 +75,8 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
     'Accounts',
     'Roles and permissions',
     'Audit log',
+    'Settings',
+    'System health',
   ]);
 
   // 5. A reload keeps the session (refresh cookie through the dashboard's own origin).

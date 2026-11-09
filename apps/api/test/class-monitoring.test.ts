@@ -19,9 +19,14 @@ import { createUser, resetDatabase, resetRedis, signInAs } from './fixtures.js';
 // The mailer records what it would send, and can be made to fail like an SMTP outage.
 const sentMail: { to: string; subject: string; text: string }[] = [];
 let mailFails = false;
+/** The next this-many sends fail, then sending works again (an outage that recovers). */
+let failNextSends = 0;
 const fakeMail = {
   send: async (m: { to: string; subject: string; text: string }) => {
-    if (mailFails) throw new Error('SMTP server unreachable (test)');
+    if (mailFails || failNextSends > 0) {
+      failNextSends = Math.max(0, failNextSends - 1);
+      throw new Error('SMTP server unreachable (test)');
+    }
     sentMail.push(m);
   },
   onModuleDestroy: () => undefined,
@@ -77,6 +82,7 @@ beforeEach(async () => {
   clock.set('2030-08-19T08:00:00Z');
   sentMail.length = 0;
   mailFails = false;
+  failNextSends = 0;
   await resetDatabase(prisma);
   await resetRedis(app.get(RedisService));
   const signedIn = await signInAs(app, prisma, 'admin@example.test', ['UNIVERSITY_ADMIN']);
@@ -759,5 +765,172 @@ describe('notifications', () => {
     );
     // The in-app notifications were not affected.
     expect(await prisma.notification.count({ where: { category: 'CLASS_CANCELLED' } })).toBe(12);
+  });
+});
+
+// ───────── Step 8: Phase 3 exit check — one simulated teaching day ─────────
+// TESTING.md scenarios 13–18 and 23, in the order they happen on Tuesday 2030-08-20. The server's
+// clock is moved through the day; every change goes through the real API, jobs and database.
+
+describe('Phase 3 exit check: a simulated teaching day', () => {
+  it('handles delays, cancellations, absent lecturers, rep reports, reviews, reschedules and an email outage', async () => {
+    const sectionId = (await prisma.classSessionSection.findFirstOrThrow()).sectionId;
+    const base = await prisma.classSession.findUniqueOrThrow({ where: { id: sessionId } });
+    const room = await prisma.classroom.findFirstOrThrow();
+    const otherRoom = await prisma.classroom.create({
+      data: { buildingId: room.buildingId, code: 'R2', name: 'Room 2 (test)' },
+    });
+    const classAt = async (start: string, end: string) =>
+      (
+        await prisma.classSession.create({
+          data: {
+            kind: 'MAKEUP',
+            lecturerId: base.lecturerId,
+            classroomId: room.id,
+            scheduledStart: new Date(`2030-08-20T${start}:00Z`),
+            scheduledEnd: new Date(`2030-08-20T${end}:00Z`),
+            sections: { create: [{ sectionId }] },
+          },
+        })
+      ).id;
+    const at10 = sessionId; // 10:00–11:30
+    const at12 = await classAt('12:00', '13:30');
+    const at14 = await classAt('14:00', '15:30');
+    const at16 = await classAt('16:00', '17:30');
+    const statusOf = async (id: string) =>
+      (await prisma.classSession.findUniqueOrThrow({ where: { id } })).status;
+    const post = (path: string, auth: Record<string, string>, body: object = {}) =>
+      http.post(`/api/v1${path}`).set(auth).send(body);
+    const studentNotes = (category: string) =>
+      prisma.notification.count({ where: { category, userId: { in: studentUserIds } } });
+
+    // Scenario 23: the email server is down for the first sends of the morning, then recovers.
+    failNextSends = 3;
+
+    // 09:00 — scenario 14: the lecturer reports the 10:00 class will start 20 minutes late.
+    at('09:00');
+    await post(`/class-sessions/${at10}/delay`, lecturer, {
+      minutes: 20,
+      reason: 'Stuck in traffic (test)',
+    }).expect(200);
+    await waitFor(async () => (await studentNotes('CLASS_DELAYED')) === 10, 'delay notices');
+
+    // 09:30 — scenario 13: the lecturer cancels the 12:00 class; students hear at once, by email too.
+    at('09:30');
+    await post(`/class-sessions/${at12}/cancel`, lecturer, { reasonCode: 'OFFICIAL_DUTY' }).expect(200);
+    await waitFor(async () => (await studentNotes('CLASS_CANCELLED')) === 10, 'cancellation notices');
+
+    // 10:20 — the delayed class starts on time for its new start, so monitoring leaves it alone.
+    at('10:20');
+    await post(`/class-sessions/${at10}/start`, lecturer).expect(200);
+    at('10:40');
+    await monitor.sweep();
+    expect(await statusOf(at10)).toBe('ACTIVE');
+
+    // 14:15 — scenario 16: nobody started the 14:00 class. It becomes unconfirmed and the lecturer is asked.
+    at('14:15');
+    await monitor.sweep();
+    expect(await statusOf(at14)).toBe('UNCONFIRMED');
+    // 14:16 — three students report the lecturer has not arrived: the class goes to review early.
+    at('14:16');
+    for (const s of students.slice(2, 5)) {
+      await post(`/class-sessions/${at14}/issue-reports`, s, { type: 'LECTURER_NOT_ARRIVED' }).expect(201);
+    }
+    await waitFor(async () => (await statusOf(at14)) === 'UNDER_REVIEW', 'early review');
+
+    // 16:06 — scenario 17: the course rep reports a problem alone. The status does not change,
+    // but the lecturer is nudged (and a review, if it comes, would be a priority).
+    at('16:06');
+    await post(`/class-sessions/${at16}/issue-reports`, students[0]!, {
+      type: 'LECTURER_NOT_ARRIVED',
+    }).expect(201);
+    await waitFor(
+      async () =>
+        (await prisma.classEvent.count({ where: { classSessionId: at16, type: 'LECTURER_PROMPTED' } })) === 1,
+      'rep nudge',
+    );
+    expect(await statusOf(at16)).toBe('SCHEDULED');
+
+    // 16:30 — scenario 18: the administrator decides the 14:00 review: the lecturer was absent.
+    at('16:30');
+    const review = await prisma.classStatusReview.findFirstOrThrow({ where: { classSessionId: at14 } });
+    await post(`/class-reviews/${review.id}/decide`, admin, {
+      decision: 'CANCELLED',
+      note: 'No word from the lecturer (test)',
+      reasonCode: 'LECTURER_ABSENT_NO_NOTICE',
+    }).expect(200);
+    expect(await prisma.classSession.findUniqueOrThrow({ where: { id: at14 } })).toMatchObject({
+      status: 'CANCELLED',
+      cancelReason: 'LECTURER_ABSENT_NO_NOTICE',
+    });
+
+    // 17:00 — scenario 15: the lecturer asks to move the 16:00 class to Thursday. The first proposal
+    // clashes with another class in that room and is refused; the second is approved.
+    at('17:00');
+    const thursday = { date: '2030-08-22', startTime: '10:00', endTime: '11:30' };
+    await prisma.classSession.create({
+      data: {
+        kind: 'MAKEUP',
+        lecturerId: (await prisma.lecturerProfile.findFirstOrThrow({ where: { staffNumber: 'TL2' } })).id,
+        classroomId: room.id,
+        scheduledStart: new Date('2030-08-22T10:30:00Z'),
+        scheduledEnd: new Date('2030-08-22T11:30:00Z'),
+      },
+    });
+    const refused = await post(`/class-sessions/${at16}/reschedule-requests`, lecturer, {
+      ...thursday,
+      classroomId: room.id,
+      reason: 'Department meeting (test)',
+    }).expect(409);
+    expect(refused.body.code).toBe('RESCHEDULE_BLOCKED');
+    const asked = (
+      await post(`/class-sessions/${at16}/reschedule-requests`, lecturer, {
+        ...thursday,
+        classroomId: otherRoom.id,
+        reason: 'Department meeting (test)',
+      }).expect(201)
+    ).body;
+    await post(`/reschedule-requests/${asked.id}/approve`, admin, { note: 'Room 2 is free (test)' }).expect(
+      200,
+    );
+    expect(await statusOf(at16)).toBe('RESCHEDULED');
+    await waitFor(async () => (await studentNotes('CLASS_RESCHEDULED')) === 10, 'reschedule notices');
+
+    // 18:00 — the 10:00 class, never ended by the lecturer, was ended automatically at 12:00.
+    at('18:00');
+    await monitor.sweep();
+    expect(await statusOf(at10)).toBe('COMPLETED');
+
+    // Scenario 23, the end of the outage: every email went out in the end; three needed a second try,
+    // and nothing was given up.
+    await waitFor(
+      async () => (await prisma.notificationDelivery.count({ where: { status: 'QUEUED' } })) === 0,
+      'all emails sent',
+    );
+    expect(
+      await prisma.notificationDelivery.count({ where: { status: { in: ['FAILED', 'SUPPRESSED'] } } }),
+    ).toBe(0);
+    // Emails are sent in parallel, so the same email may meet the outage more than once; in total,
+    // exactly three tries failed, and every email then went out.
+    const emails = await prisma.notificationDelivery.findMany({ where: { channel: 'EMAIL' } });
+    expect(emails.every((e) => e.status === 'SENT')).toBe(true);
+    expect(emails.reduce((failed, e) => failed + e.attempts - 1, 0)).toBe(3);
+    expect(await prisma.systemEvent.count({ where: { type: 'job.dead' } })).toBe(0);
+
+    // The whole day is in each class's history, in order.
+    const history = async (id: string) =>
+      (
+        await prisma.classEvent.findMany({ where: { classSessionId: id }, orderBy: { occurredAt: 'asc' } })
+      ).map((e) => e.type);
+    expect(await history(at10)).toEqual(['DELAY_REPORTED', 'STARTED', 'AUTO_ENDED']);
+    expect(await history(at14)).toEqual([
+      'MARKED_UNCONFIRMED',
+      'ISSUE_REPORTED',
+      'ISSUE_REPORTED',
+      'ISSUE_REPORTED',
+      'ESCALATED',
+      'CANCELLED',
+    ]);
+    expect(await history(at16)).toEqual(['ISSUE_REPORTED', 'LECTURER_PROMPTED', 'RESCHEDULED']);
   });
 });

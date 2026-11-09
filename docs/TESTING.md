@@ -40,17 +40,17 @@ Rules:
 | 10 | GPS inaccuracy | Unit | 4 | Not written |
 | 11 | Student changes devices | Integration | 4 | Not written |
 | 12 | Internet connection failure (offline grace) | Mobile + integration | 5 | Not written |
-| 13 | Lecturer cancels a class | Integration | 3 | Not written |
-| 14 | Lecturer delays a class | Integration + jobs | 3 | Not written |
-| 15 | Lecturer reschedules a class | Integration (including a conflicting replacement) | 3 | Not written |
-| 16 | Students report a missing lecturer | Unit (engine) + jobs | 3 | Not written |
-| 17 | Course rep reports a class problem, and status does not change | Integration | 3 | Not written |
-| 18 | Administrator reviews a class | Integration + web end-to-end | 3 | Not written |
+| 13 | Lecturer cancels a class | Integration | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day" (students told in the app and by email); `test/class-lifecycle.test.ts` (reasons, who may cancel). |
+| 14 | Lecturer delays a class | Integration + jobs | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day" (students told; monitoring waits for the new start); "a delay moves the checkpoints". |
+| 15 | Lecturer reschedules a class | Integration (including a conflicting replacement) | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day"; `test/reschedules.test.ts` (blockers, warnings, re-check at approval, two approvals racing). |
+| 16 | Students report a missing lecturer | Unit (engine) + jobs | 3 | **Done.** `detection-engine.test.ts` (thresholds); `test/class-monitoring.test.ts` → "a simulated teaching day" and "3 students (and 10%)…" (through the report job). |
+| 17 | Course rep reports a class problem, and status does not change | Integration | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day"; "course rep rule" (unit and integration; D-13 corroboration). |
+| 18 | Administrator reviews a class | Integration + web end-to-end | 3 | **Done.** "review decisions" tests; `test/class-monitoring.test.ts` → "a simulated teaching day"; `apps/web/e2e/05-classes.spec.ts` (publish a timetable, open a review, decide it in the browser). |
 | 19 | Student disputes attendance | Integration + mobile | 6 | Not written |
 | 20 | Lecturer makes an authorised correction | Integration | 5–6 | Not written |
 | 21 | Cancelled class excluded from absence calculation | Unit (calculation) + integration | 5 | Not written |
 | 22 | Lecturer's device crashes during attendance | Integration + realtime | 5 | Not written |
-| 23 | Background job fails and recovers | Jobs | 3 | Not written |
+| 23 | Background job fails and recovers | Jobs | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day" (an email outage recovers on retry); "a failed email is retried, then recorded as failed and reported to system health"; `test/jobs-and-settings.test.ts`. |
 | 24 | Unauthorised user tries another role's dashboard or API | Integration: every discovered endpoint × every role (`test/scenario-24-unauthorised-access.test.ts`) + web end-to-end (sign-out redirect) | 1 onward | **Done.** New endpoints are covered automatically. |
 | 25 | Many students check in at once | Integration (parallel) + load | 5 | Not written |
 

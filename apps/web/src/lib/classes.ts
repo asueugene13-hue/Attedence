@@ -198,3 +198,22 @@ export const TIMETABLE_STATUS = {
   SUPERSEDED: { label: 'Replaced', tone: 'neutral' },
   ARCHIVED: { label: 'Archived', tone: 'neutral' },
 } as const;
+
+/** Every cached view a class change can affect. After any change to a class, refresh them all. */
+const CLASS_QUERY_KEYS = [
+  'class-session',
+  'class-sessions',
+  'my-timetable',
+  'class-review',
+  'class-reviews',
+  'reschedule-requests',
+  'reschedule-request',
+  'notifications',
+  'unread-count',
+];
+
+export function refreshClassData(queryClient: {
+  invalidateQueries: (filters: { queryKey: string[] }) => Promise<unknown>;
+}) {
+  return Promise.all(CLASS_QUERY_KEYS.map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+}

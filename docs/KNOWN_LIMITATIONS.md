@@ -71,3 +71,6 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 48. **Push notifications are off** until the university creates its own Firebase project. Everything reaches people in the app, and the important messages by email.
 49. **A large change sends many emails at once** (for example a holiday cancelling a day of classes: one email per student per class). There is no daily digest yet.
 50. **Changes of end time or lecturer made by a new timetable version are not announced** (the class history records them). Room changes, cancellations and restored classes are announced.
+51. **On the phone, lecturers confirm, start, delay, interrupt, resume, end and cancel.** Reschedule requests, holds, voids and review decisions are on the web dashboard. The phone has no "edit preferences" screen yet (the web has one).
+52. **Screens refresh every 30–60 seconds**, not instantly; live updates arrive with the attendance work (Phase 5).
+53. **The class monitor shows every class in the university, one day at a time.** It is not yet narrowed to the administrator's faculty or department; the review queue, reschedule requests and every action already are. A scoped monitor comes with reports.

@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–5 done; step 6 (notifications) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–8 built (2026-11-09); waiting for the product owner's review before Phase 4. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1290,3 +1290,72 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
   - SQL rule: a delivery is SENT exactly when it has a sent time.
   - Applied locally; drift check clean.
 - **Tests run:** `test/class-monitoring.test.ts` 28 passed (5 new). The full check runs once at the end of step 8.
+
+### 2026-11-09 — Phase 3, step 7: class screens on the web and the phone
+
+- **Built (web dashboard):**
+  - **Timetables:** versions per semester; a draft editor (add a class with recurrence, skip a date, remove a class); the live clash check; publishing with a reason.
+  - **Class monitor:** every class on a chosen day, with counts by status, refreshed every 30 seconds.
+  - **Class page:** details, status, reported problems, full history, and only the buttons the person may use (from the shared transition table). Lecturers ask to reschedule with a conflict check; administrators reschedule directly.
+  - **Today** (lecturers): today's classes with their action buttons, and the next 7 days.
+  - **Class reviews:** the queue (priority first) and the decision screen (held, cancelled, postponed, rescheduled, no action), with report dismissal.
+  - **Reschedule requests:** administrators approve after a fresh conflict check, or reject with a note; lecturers withdraw their own.
+  - **Notifications:** list, mark read, email choices (mandatory ones locked); an unread count in the sidebar.
+  - **Settings** (the monitoring values, with reason and version check) and **System health** (problems to acknowledge).
+- **Built (phone):**
+  - Tabs with icons: Home (today's classes), Schedule (next 14 days), Alerts (with an unread badge), Profile.
+  - A class screen: lecturers confirm, start, delay, interrupt, resume, end and cancel; students and lecturers report a problem.
+  - New dependency: `@expo/vector-icons` 15.1.1, the version Expo SDK 58 accepts.
+- **Fixed on the way:**
+  - The mobile tests used to keep Jest running for about five minutes after finishing, because of the query cache's clean-up timers. Tests now pass their own cache, and the run takes about 7 seconds.
+  - The class view now includes the lecturer's account id, so the apps can tell whose class it is (display only; the API still checks).
+- **Files:**
+  - Web: `lib/classes.ts`, `components/form-dialog.tsx`, `class-actions.tsx`, `class-list.tsx`, pages under `app/(app)/`:
+    - `timetables`, `timetables/[id]`;
+    - `classes`, `classes/[id]`, `today`;
+    - `class-reviews`, `class-reviews/[id]`, `reschedule-requests`;
+    - `notifications`, `admin/settings`, `admin/system-health`;
+    - plus `navigation.ts`, `layout.tsx`, `globals.css` and the sidebar unit tests.
+  - Mobile:
+    - new: `lib/classes.ts`, `components/class-card.tsx`, `navigation/types.ts`, `screens/ScheduleScreen.tsx`, `AlertsScreen.tsx`, `ClassScreen.tsx`;
+    - changed: `HomeScreen.tsx`, `tabs.ts`, `RootNavigator.tsx`, `App.tsx`, `App.test.tsx` (2 new journeys), `package.json`.
+- **Database changes:** none.
+
+### 2026-11-09 — Phase 3, step 8: exit check
+
+- **Built:**
+  - **One test over a simulated teaching day**, covering TESTING.md scenarios 13–18 and 23. Through the real API, jobs and database:
+    - a class is delayed, and students are told;
+    - another is cancelled, and students are told in the app and by email;
+    - a lecturer does not come: the class becomes unconfirmed, three students report it, and it goes to review early; the administrator decides "absent without notice";
+    - a course rep reports alone: the status does not change, and the lecturer is nudged;
+    - a reschedule into a booked room is refused, then one into a free room is approved;
+    - the running class is ended automatically;
+    - an email outage at the start of the day recovers on retry, and nothing is lost.
+  - **A browser journey** (`apps/web/e2e/05-classes.spec.ts`): publish a timetable, find the class in the monitor, open a review and decide it.
+  - TESTING.md now lists where each scenario is tested.
+- **Bug found by the browser journey:** after deciding a review, the class page showed its old status from the browser's cache. Fixed: every screen that changes a class now refreshes all class-related data through one shared helper (`refreshClassData`).
+- **Test stability:**
+  - The simulated day first passed, then failed once in five repeats: the test assumed exactly three different emails would each fail once, but emails are sent in parallel and one can fail twice. The test now checks what is guaranteed: three failed tries in total, every email sent in the end. Five repeats then passed.
+  - One full browser-suite run failed 4 of 5 journeys with timeouts and a missing activation email; the next runs passed with no change. I did not find the cause. I am recording it here rather than calling the suite fully stable.
+- **Proof the key test bites:** with escalation switched off in the monitor, the simulated-day test failed. Restored.
+- **Files:** `apps/api/test/class-monitoring.test.ts` (the day, and a mailer that can fail a set number of sends), `apps/web/e2e/05-classes.spec.ts`, `apps/web/e2e/01-super-admin.spec.ts` (new sidebar), `docs/TESTING.md`, `docs/KNOWN_LIMITATIONS.md` (51–53), `docs/API_DOCUMENTATION.md`.
+- **Database changes:** none.
+
+### Phase 3 summary (waiting for the product owner's review)
+
+- **What Phase 3 delivered:**
+  - background jobs and versioned settings;
+  - timetables with recurrence, holidays and clash checks;
+  - class sessions generated on publish;
+  - the class lifecycle with every lecturer and administrator action;
+  - reschedules (D-11);
+  - class monitoring with the D-13 rules and the course-rep rule;
+  - the review queue;
+  - notifications (in-app and email; push built but off);
+  - the web and phone screens for all of it.
+- **Open points for the product owner:**
+  - the judgment call that student reports can still send a confirmed but not-started class to review (step 5a);
+  - the remaining known limitations 37–53.
+- **Next:** the product owner reviews Phase 3. Phase 4 starts only after approval.
+- **Tests run (steps 6–8 together):** `npm run check` exit 0: design-tokens 3, shared 10, API **279**, mobile **11**, web **13**, so **316 passed**. Browser journeys (`npm run e2e -w @attendsure/web`): 5 passed (see the note on one flaky run above).

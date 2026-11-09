@@ -8,7 +8,7 @@ import { SelectField, StatusBadge } from '@/components/records';
 import { Alert, Button, Field, LoadingState, PageHeader } from '@/components/ui';
 import { describeError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { classLabel, classTime, type RescheduleRequestView } from '@/lib/classes';
+import { classLabel, classTime, type RescheduleRequestView, refreshClassData } from '@/lib/classes';
 import { formatDateTime } from '@/lib/format';
 
 const STATUS_TONE = {
@@ -44,7 +44,7 @@ export default function RescheduleRequestsPage() {
         `/reschedule-requests${status ? `?status=${status}` : ''}`,
       ),
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['reschedule-requests'] });
+  const refresh = () => refreshClassData(queryClient);
 
   async function withdraw(id: string) {
     setError(null);

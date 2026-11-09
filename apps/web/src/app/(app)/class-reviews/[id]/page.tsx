@@ -18,6 +18,7 @@ import {
   ISSUE_TYPE_LABELS,
   REVIEW_DECISION_LABELS,
   type ReviewView,
+  refreshClassData,
   STATUS_DISPLAY,
 } from '@/lib/classes';
 import { formatDateTime } from '@/lib/format';
@@ -42,11 +43,7 @@ function Review({ id }: { id: string }) {
   });
   const [deciding, setDeciding] = useState(false);
   const [dismissing, setDismissing] = useState<string | null>(null);
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['class-review', id] }),
-      queryClient.invalidateQueries({ queryKey: ['class-reviews'] }),
-    ]);
+  const refresh = () => refreshClassData(queryClient);
 
   if (review.isPending) return <LoadingState />;
   if (review.isError) return <Alert tone="error">{describeError(review.error)}</Alert>;

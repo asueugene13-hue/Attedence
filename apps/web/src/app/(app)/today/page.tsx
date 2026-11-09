@@ -15,6 +15,7 @@ import {
   classTime,
   STATUS_DISPLAY,
   todayInAccra,
+  refreshClassData,
 } from '@/lib/classes';
 
 /** The lecturer's classes today, each with the buttons they need, and the week ahead. */
@@ -34,7 +35,7 @@ export default function TodayPage() {
   if (mine.isError) return <Alert tone="error">{describeError(mine.error)}</Alert>;
   const todays = mine.data.data.filter((s) => todayInAccra(new Date(s.scheduledStart)) === today);
   const later = mine.data.data.filter((s) => todayInAccra(new Date(s.scheduledStart)) !== today);
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['my-timetable'] });
+  const refresh = () => refreshClassData(queryClient);
 
   return (
     <div className="stack">

@@ -17,6 +17,7 @@ import {
   EVENT_LABELS,
   ISSUE_TYPE_LABELS,
   type IssueReportView,
+  refreshClassData,
   STATUS_DISPLAY,
 } from '@/lib/classes';
 import { formatDateTime } from '@/lib/format';
@@ -35,12 +36,7 @@ export default function ClassPage({ params }: { params: Promise<{ id: string }> 
     queryKey: ['class-session', id, 'reports'],
     queryFn: () => auth.call<{ data: IssueReportView[] }>(`/class-sessions/${id}/issue-reports`),
   });
-  const refresh = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['class-session', id] }),
-      queryClient.invalidateQueries({ queryKey: ['class-sessions'] }),
-      queryClient.invalidateQueries({ queryKey: ['my-timetable'] }),
-    ]);
+  const refresh = () => refreshClassData(queryClient);
 
   if (session.isPending) return <LoadingState />;
   if (session.isError) return <Alert tone="error">{describeError(session.error)}</Alert>;

@@ -126,7 +126,7 @@ Imports have one address per type, `/imports/<type>` with `<type>` = `students` 
 | GET | `/timetables/:id/history` | `timetables.manage` | Every change, newest first, with who, when, before, after and reason. **Built.** |
 | GET | `/me/timetable?from=&to=` | Signed in | The caller's own sessions in the active role: a lecturer's classes, or a student's (and course rep's) enrolled sections. Local dates, at most 62 days; cancelled classes included and marked. `{ as: LECTURER\|STUDENT\|NONE, data }`. **Built.** |
 | GET | `/class-sessions?from=&to=&sectionId=&lecturerId=&classroomId=&status=` | `timetables.read` | Sessions between two local dates (inclusive, at most 62 days, `400` otherwise), with sections, lecturer, room, status and cancellation reason. **Built.** Scoped monitoring views come with step 5. |
-| GET | `/class-sessions/:id` | `timetables.read` | One session with its full, append-only event history. **Built.** |
+| GET | `/class-sessions/:id` | `timetables.read` | One session with its full, append-only event history. The lecturer includes `userId`, so the apps can tell the class's own lecturer which buttons apply (the API still checks). **Built.** |
 Class actions follow the shared transition table (`packages/shared/src/class-lifecycle.ts`, CLASS_LIFECYCLE.md §4). Each returns the session with its history. A lecturer may act only on classes they teach (`403 NOT_YOUR_CLASS`); administrators only within their faculty or department scope. An action not allowed from the current status gets `409 TRANSITION_NOT_ALLOWED`; if someone else changed the class a moment earlier, `409 STATUS_CHANGED`. Every action writes a class event and an audit entry. **Built (Phase 3 step 4a).**
 
 | Method | Path | Who | Purpose |
