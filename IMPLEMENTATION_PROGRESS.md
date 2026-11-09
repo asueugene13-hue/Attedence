@@ -1362,3 +1362,6 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - **First clean-clone rehearsal of steps 6–8: failed** (one API test). Emptying the test database deadlocked with alert jobs still running from the previous test. Alerts now follow every class change, so leftover background work became common.
   - **Fix:** the test reset now waits (up to 15 s) until no job is queued, running or retrying before it empties the tables. The six test files that record sent emails clear that record after the reset instead of before, so a leftover email from the previous test is never counted.
   - Checked: imports tests 3 runs out of 3 and class-session tests 3 out of 3 pass; `npm run check` exit 0, 316 passed.
+- **CI (steps 6–8):**
+  - Second clean-clone rehearsal of every CI step: all passed (API 279, mobile 11, web 13, e2e 5, audit clean).
+  - GitHub run 42695433225 on `20ba560`: **success**.
