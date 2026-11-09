@@ -1012,3 +1012,6 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
   - No dashboard screens yet for settings or system events (step 7).
   - Monitoring checkpoints use the queues from step 5.
 - **Next step:** Phase 3, step 2: timetables (entries with the decided recurrence options, conflict check, publish).
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (API 189, e2e 4, audit clean).
+  - GitHub run 42620376326 on `08ec1bc`: **success**.
