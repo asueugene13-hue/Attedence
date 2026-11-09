@@ -1129,3 +1129,6 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
   - reschedule requests with a conflict check, approval and direct reschedules (D-11);
   - changes to published timetables;
   - holidays added after publishing.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (e2e 4, audit clean).
+  - GitHub run 42636879682 on `cf90203`: **success**.
