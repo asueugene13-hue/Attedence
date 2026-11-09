@@ -163,3 +163,32 @@ export const IMPORT_KINDS: Record<ImportKind, { label: string; noun: string; per
   students: { label: 'Students', noun: 'students', permission: 'students.import' },
   enrollments: { label: 'Enrolments', noun: 'enrolments', permission: 'enrollments.manage' },
 };
+
+/** A section as the setup screens see it: hints and current lecturers included. */
+export interface SetupSection extends Section {
+  programme: { id: string; code: string; name: string } | null;
+  level: { id: string; code: string; name: string } | null;
+  assignments: {
+    id: string;
+    isPrimary: boolean;
+    assignedAt: string;
+    lecturer: { id: string; staffNumber: string; title: string | null; user: { fullName: string } };
+  }[];
+}
+
+export interface SetupOffering extends Omit<Offering, 'sections'> {
+  sections: SetupSection[];
+}
+
+export interface CourseRepView {
+  id: string;
+  status: 'NOMINATED' | 'ACTIVE' | 'ENDED' | 'REJECTED';
+  student: { id: string; studentNumber: string; fullName: string };
+  section: { id: string; code: string };
+  course: { id: string; code: string; title: string };
+  nominationNote: string | null;
+  startsAt: string | null;
+  endedAt: string | null;
+  endReason: string | null;
+  createdAt: string;
+}

@@ -95,7 +95,7 @@ Imports have one address per type, `/imports/<type>` with `<type>` = `students` 
 | GET · POST | `/enrollments` | SA, RG (`enrollments.manage`) | List `?sectionId=&offeringId=&studentId=&status=&limit=&cursor=`. Enrol `{ studentId, sectionId }`: the student must be ACTIVE (`409 STUDENT_NOT_ACTIVE`), the section active and its offering and semester not closed (`409 OFFERING_CLOSED`); one active enrolment per student per offering (`409 ALREADY_ENROLLED`); section capacity is enforced under a row lock (`409 SECTION_FULL`). The enrolment time is the server's. **Built.** |
 | GET | `/enrollments/:id` | SA, RG | One enrolment with student, course, section and semester. **Built.** |
 | POST | `/enrollments/:id/end` | SA, RG | `{ status: DROPPED\|WITHDRAWN, reason }`. The record is kept; the student can be enrolled again later. Ends any course-rep role or nomination the student holds for that section. **Built.** |
-| GET | `/course-sections/:id/students` | Enrolment staff, or a lecturer teaching the section | The section's current roster with Student ID, name, programme and level. **Built.** |
+| GET | `/course-sections/:id/students` | Enrolment staff; a lecturer teaching the section; or a course-rep administrator (`course_reps.assign`) within their faculty or department scope, to choose a rep | The section's current roster with Student ID, name, programme and level. **Built.** |
 | GET | `/me/enrollments` | Signed in | The caller's own enrolments (empty for non-students). **Built.** |
 
 ### Places, beacons, devices

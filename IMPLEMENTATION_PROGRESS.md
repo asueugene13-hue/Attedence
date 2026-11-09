@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 2, academic management. Steps 1–6 and 7a are done; step 7b (Administrator and Super Admin setup screens) is next, then the exit check (7c). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 2, academic management. Steps 1–6, 7a and 7b are done; the Phase 2 exit check (7c) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -25,7 +25,7 @@ Read this first in every session, and update it after every implementation step.
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
 | 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Done; CI green 2026-11-08 (native mobile build still open) |
-| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | In progress (steps 1–6 and 7a of 7 done) |
+| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | In progress (steps 1–6, 7a and 7b done; exit check next) |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Not started |
@@ -565,7 +565,7 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 | 5 | Bulk student import (CSV/XLSX): templates, validation, preview, confirm, error report, history | Done (2026-11-08), with file storage and profile photos |
 | 6 | Enrolments and course-rep assignments | Done (2026-11-08) |
 | 7a | Module-boundary fix; "Email or Student ID" sign-in; Registrar screens (students, bulk import, enrolments); Registrar browser journey | Done (2026-11-09) |
-| 7b | Administrator and Super Admin screens: academic structure, places, courses, offerings, sections, lecturers, course reps | Not started |
+| 7b | Administrator and Super Admin screens: academic structure, places, courses, offerings, sections, lecturers, course reps | Done (2026-11-09) |
 | 7c | Phase 2 exit check | Not started |
 
 ### 2026-11-08 — Phase 2, step 1: academic structure
@@ -852,3 +852,46 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (API 179, web 11, e2e 2, audit clean).
   - GitHub run 42539081813 on `baa6379`: **success**, including the Registrar journey against Mailpit on the runner.
+
+### 2026-11-09 — Phase 2, step 7b: setup screens for Administrators and the Super Admin
+
+- **Built (web dashboard):**
+  - **Academic structure:** faculties, departments, programmes and levels. Add, edit, deactivate and reactivate; inactive records can be shown.
+  - **Academic calendar:**
+    - academic years (add, edit, make current) with their semesters (add, edit while planned, activate, close);
+    - holidays and closures (add, remove with a reason).
+  - **Places:** campuses, buildings and classrooms. A geofence (centre and radius) can be set on a campus or building, and each room shows the geofence that applies to it.
+  - **Lecturers:** add (a new email gets an account and an activation email), edit staff number, department, title and status.
+  - **Courses:**
+    - courses (add, edit, deactivate);
+    - for a chosen semester: offer a course, open it for enrolment, close it, add and edit sections (places, programme and level hints);
+    - a section page with lecturer assignments (assign, primary or assistant; end with a reason) and course reps (appoint from the enrolled students, nominate, approve, reject, end with a reason).
+  - These screens share one table-and-form component (`components/entity-manager.tsx`). Buttons appear only for roles holding the permission, and every change is still checked and audited by the API.
+  - Five sidebar items: Courses, Lecturers, Academic structure and Academic calendar for roles that may read the structure; Places for roles that manage rooms.
+- **API change:** a course-rep administrator may now see a section's enrolled students, within their own faculty or department scope only, so they can choose a rep. A new API test covers it: in scope 200, out of scope 403.
+- **Browser tests, now four journeys in order:**
+  - **01 Super Admin first sign-in:** saves its recovery codes for the later journeys.
+  - **02 Setup (new):** the Super Admin signs in with a recovery code and sets up the following entirely through the screens:
+    - faculty, department, programme and level, including a refused duplicate code;
+    - year, semester and holiday;
+    - campus, a building with a geofence the room inherits, and a classroom;
+    - a lecturer, then a course, offering (opened), section and lecturer assignment;
+    - the Registrar account.
+  - **03 Registrar:** as in 7a, now on the data from 02, and leaves a student enrolled.
+  - **04 Course rep (new):** the Super Admin appoints that student as course rep, then ends the role with a reason.
+- **Mistakes caught:**
+  - Two test lookups were too loose: "Code" vs "Code *", and "Semester" also matched a dialog name.
+  - A shell edit mangled a regular expression in the test helper. I replaced it using the Edit tool. My memory note already says to do that, and I did not follow it here.
+- **Files:**
+  - Web: `components/entity-manager.tsx` (new), `app/(app)/setup/{structure,calendar,places,lecturers,courses}/page.tsx`, `app/(app)/setup/courses/sections/[id]/page.tsx`, `lib/{records,navigation}.ts`, `lib/web-units.test.tsx`.
+  - E2E: `e2e/helpers.ts` (new), `e2e/02-setup.spec.ts` (new), `e2e/03-registrar.spec.ts` (was 02), `e2e/04-course-rep.spec.ts` (new), `e2e/01-super-admin.spec.ts`.
+  - API: `enrollments/enrollments.service.ts`, `test/enrollments.test.ts`.
+  - Docs: API_DOCUMENTATION, TESTING, README.
+- **Database changes:** none.
+- **Tests run:**
+  - `npm run check` exit 0: design-tokens 3, shared 10, API **180** (1 new), mobile 9, web **12** (1 new), so **214 passed**.
+  - `npm run e2e -w @attendsure/web`: **4 passed**.
+- **Known limitations:**
+  - Lecturers reach their own sections from `/me/teaching`; their daily screens (Today, Live attendance) come with Phases 3–5.
+  - Nominating a course rep works on the section page, but lecturers do not yet have a dashboard route to it.
+- **Next step:** Phase 2, step 7c: the Phase 2 exit check, set against the exit criteria, then a report for the product owner to approve Phase 2 as complete.

@@ -188,6 +188,25 @@ describe('enrolling one student', () => {
     expect(history.map((e: { status: string }) => e.status).sort()).toEqual(['DROPPED', 'ENROLLED']);
   });
 
+  it('shows the roster to course-rep administrators only within their scope', async () => {
+    const s1 = await student(1);
+    await post('/enrollments', { studentId: s1, sectionId: ids.sectionA }).expect(201);
+    const inScope = (
+      await signInAs(app, prisma, 'fac.admin@example.test', ['UNIVERSITY_ADMIN'], {
+        scope: { type: 'FACULTY', id: ids.faculty },
+      })
+    ).auth;
+    const outOfScope = (
+      await signInAs(app, prisma, 'other.admin@example.test', ['UNIVERSITY_ADMIN'], {
+        scope: { type: 'FACULTY', id: ids.otherFaculty },
+      })
+    ).auth;
+    expect(
+      (await get(`/course-sections/${ids.sectionA}/students`, inScope).expect(200)).body.enrolledCount,
+    ).toBe(1);
+    await get(`/course-sections/${ids.sectionA}/students`, outOfScope).expect(403);
+  });
+
   it('shows a section roster to its lecturers and enrolment staff only, and students their own enrolments', async () => {
     const s1 = await student(1);
     await post('/enrollments', { studentId: s1, sectionId: ids.sectionA }).expect(201);

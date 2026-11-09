@@ -6,6 +6,7 @@ import { rethrowAsConflict } from '../../common/db-errors.js';
 import type { RequestContext } from '../../common/request-context.js';
 import type { CourseEnrollment, Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { AcademicAccessService } from '../academic/academic-access.service.js';
 import { AuditService } from '../audit-logs/audit.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { PermissionService } from '../authorization/permission.service.js';
@@ -54,6 +55,7 @@ export class EnrollmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly access: AcademicAccessService,
     private readonly permissions: PermissionService,
     private readonly courses: CoursesService,
     private readonly lecturers: LecturersService,
@@ -225,13 +227,19 @@ export class EnrollmentsService {
     const section = await this.courses.sectionFacts(sectionId);
     if (!section) throw new NotFoundException({ code: 'NOT_FOUND', message: 'No such section.' });
     const held = await this.permissions.forRole(actor.role);
-    const mayRead =
+    let mayRead =
       held.has('enrollments.manage') ||
       (actor.role === 'LECTURER' && (await this.lecturers.teaches(actor.userId, sectionId)));
+    // Administrators who appoint course reps choose from the enrolled students, within their own scope.
+    if (!mayRead && held.has('course_reps.assign')) {
+      await this.access.assertDepartment(actor, section.department);
+      mayRead = true;
+    }
     if (!mayRead) {
       throw new ForbiddenException({
         code: 'PERMISSION_DENIED',
-        message: 'Only the lecturers of this section and enrolment staff can see its students.',
+        message:
+          'Only the lecturers of this section, enrolment staff and course-rep administrators can see its students.',
       });
     }
     const rows = await this.prisma.courseEnrollment.findMany({

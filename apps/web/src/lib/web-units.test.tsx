@@ -131,6 +131,17 @@ describe('sidebar', () => {
       'Enrolments',
     ]);
   });
+
+  it('shows the setup screens to roles that may read the structure, and Places only to room managers', () => {
+    expect(visibleNavItems(['academic_structure.read']).map((i) => i.label)).toEqual([
+      'Home',
+      'Courses',
+      'Lecturers',
+      'Academic structure',
+      'Academic calendar',
+    ]);
+    expect(visibleNavItems(['classrooms.manage']).map((i) => i.label)).toEqual(['Home', 'Places']);
+  });
 });
 
 describe('ReasonDialog', () => {

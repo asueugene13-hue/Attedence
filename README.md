@@ -79,7 +79,7 @@ docs/                    Design documents
 | `npm run dev -w @attendsure/web` | Dashboard in development mode (http://localhost:3001) |
 | `npm run bundle:check -w @attendsure/mobile` | Builds the mobile app's Android JavaScript bundle (no Android tools needed) |
 | `npm run android -w @attendsure/mobile` | Builds and runs the app on an Android emulator or phone. Needs JDK 17 and the Android SDK (decision D-05). |
-| `npm run e2e -w @attendsure/web` (after `npm run build -w @attendsure/api`) | Browser tests of the Super Admin journey and the Registrar journey (import, records, enrolments), on their own database. Needs the Docker services, including Mailpit, which the Registrar journey reads activation emails from. Screenshots land in `apps/web/test-results/screens/`. |
+| `npm run e2e -w @attendsure/web` (after `npm run build -w @attendsure/api`) | Browser tests, run in order on their own database: Super Admin first sign-in; setup through the dashboard; the Registrar journey (import, records, enrolments); course reps. Needs the Docker services, including Mailpit, which the Registrar journey reads activation emails from. Screenshots land in `apps/web/test-results/screens/`. |
 | `npm run db:migrate -w @attendsure/api` | Apply new database migrations (development) |
 | `npm run build -w @attendsure/api`, then `npm run db:seed -w @attendsure/api` | Load the system roles and permissions (safe to repeat) |
 | `npm run admin:create-super-admin -w @attendsure/api -- --email you@example.test --name "Your Name"` (after a build) | Create the first Super Admin; prints an activation link. Works only while no Super Admin exists. |

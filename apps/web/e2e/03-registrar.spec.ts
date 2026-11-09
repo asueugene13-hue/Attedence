@@ -1,68 +1,19 @@
 import { readFileSync } from 'node:fs';
-import { type APIRequestContext, expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { generateSync } from 'otplib';
+import { activationToken, clearMail, PASSWORD, REGISTRAR_EMAIL } from './helpers';
 
 // Phase 2 exit journey: a Registrar imports students from the template end to end. Bad rows and
 // duplicates are held back with a downloadable error report; then the Registrar works with one record
-// and enrols a student. All data is obviously fake (99xxxxxx Student IDs, TEST-* labels, example.test).
+// and enrols a student. Uses the structure 02-setup created. All data is obviously fake.
 test.describe.configure({ mode: 'serial' });
 
-const API = 'http://localhost:3100/api/v1';
-const MAILPIT = process.env.E2E_MAILPIT_URL ?? 'http://localhost:8025';
-const PASSWORD = 'river-mango-lantern-42';
-const REGISTRAR_EMAIL = 'e2e.registrar@example.test';
 const STUDENT_EMAILS = ['e2e.student1@example.test', 'e2e.student2@example.test'];
 // The smallest valid PNG (1×1 pixel), so the browser can display the uploaded photo.
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64',
 );
-
-/** Signs in as the Super Admin through the API with a recovery code saved by the first journey. */
-async function superAdmin(request: APIRequestContext) {
-  const state = JSON.parse(readFileSync('test-results/e2e-state.json', 'utf8')) as {
-    adminEmail: string;
-    password: string;
-    recoveryCodes: string[];
-  };
-  const login = await request.post(`${API}/auth/login`, {
-    data: { email: state.adminEmail, password: state.password, client: 'MOBILE' },
-  });
-  expect(login.ok(), await login.text()).toBe(true);
-  const { mfaToken } = (await login.json()) as { mfaToken: string };
-  const verify = await request.post(`${API}/auth/mfa/verify`, {
-    data: { mfaToken, recoveryCode: state.recoveryCodes[0] },
-  });
-  expect(verify.ok(), await verify.text()).toBe(true);
-  const { accessToken } = (await verify.json()) as { accessToken: string };
-  const headers = { Authorization: `Bearer ${accessToken}` };
-  return async <T>(path: string, data?: unknown): Promise<T> => {
-    const res = await request.post(`${API}${path}`, { headers, data: data ?? {} });
-    expect(res.ok(), `${path}: ${await res.text()}`).toBe(true);
-    return (await res.json()) as T;
-  };
-}
-
-async function clearMail(request: APIRequestContext, to: string) {
-  await request.delete(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:"${to}"`)}`);
-}
-
-/** Waits for the activation email to arrive in Mailpit and returns the link's token. */
-async function activationToken(request: APIRequestContext, to: string): Promise<string> {
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const search = await request.get(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:"${to}"`)}`);
-    const { messages } = (await search.json()) as { messages: { ID: string }[] };
-    if (messages.length > 0) {
-      const message = (await (await request.get(`${MAILPIT}/api/v1/message/${messages[0]!.ID}`)).json()) as {
-        Text: string;
-      };
-      const token = message.Text.match(/activate\?token=([A-Za-z0-9_-]+)/)?.[1];
-      if (token) return token;
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`No activation email reached ${to} in Mailpit (${MAILPIT}).`);
-}
 
 async function activateAndSignIn(page: Page, token: string, email: string) {
   await page.goto(`/activate?token=${token}`);
@@ -84,46 +35,7 @@ async function activateAndSignIn(page: Page, token: string, email: string) {
 }
 
 test('Registrar imports students from the template and manages a record', async ({ page, request }) => {
-  for (const to of [REGISTRAR_EMAIL, ...STUDENT_EMAILS]) await clearMail(request, to);
-
-  // Set-up by the Super Admin (the academic structure screens come in step 7b): fake structure only.
-  const post = await superAdmin(request);
-  const faculty = await post<{ id: string }>('/faculties', { code: 'E2EF', name: 'E2E Faculty (test)' });
-  const department = await post<{ id: string }>('/departments', {
-    facultyId: faculty.id,
-    code: 'E2ED',
-    name: 'E2E Department (test)',
-  });
-  await post('/programmes', { departmentId: department.id, code: 'E2EP', name: 'E2E Programme (test)' });
-  await post('/academic-levels', { code: 'E2EL1', name: 'E2E Level 1 (test)', sortOrder: 1 });
-  const year = await post<{ id: string }>('/academic-years', {
-    label: 'TEST-2030',
-    startDate: '2030-08-01',
-    endDate: '2031-07-31',
-  });
-  const semester = await post<{ id: string }>('/semesters', {
-    academicYearId: year.id,
-    number: 1,
-    name: 'First (test)',
-    startDate: '2030-08-15',
-    endDate: '2030-12-20',
-  });
-  const course = await post<{ id: string }>('/courses', {
-    departmentId: department.id,
-    code: 'TST101',
-    title: 'Test Course',
-  });
-  const offering = await post<{ id: string }>('/course-offerings', {
-    courseId: course.id,
-    semesterId: semester.id,
-  });
-  await post(`/course-offerings/${offering.id}/open`);
-  await post('/course-sections', { offeringId: offering.id, code: 'A', capacity: 30 });
-  await post('/users', {
-    email: REGISTRAR_EMAIL,
-    fullName: 'E2E Registrar (test)',
-    roles: [{ role: 'REGISTRAR' }],
-  });
+  for (const to of STUDENT_EMAILS) await clearMail(request, to);
 
   // 1. The Registrar activates from the real email and signs in.
   await activateAndSignIn(page, await activationToken(request, REGISTRAR_EMAIL), REGISTRAR_EMAIL);
@@ -166,7 +78,7 @@ test('Registrar imports students from the template and manages a record', async 
   await expect(rows.getByRole('row').filter({ hasText: 'unknown@example.test' })).toContainText(
     'No active programme has the code NOPE',
   );
-  await page.screenshot({ path: 'test-results/screens/4-import-preview.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/screens/6-import-preview.png', fullPage: true });
 
   // 4. The error report lists exactly the rows that will not be imported, with reasons.
   const reportDownload = page.waitForEvent('download');
@@ -185,7 +97,7 @@ test('Registrar imports students from the template and manages a record', async 
   await expect(page.getByRole('button', { name: /ready rows?$/ })).toHaveCount(0);
   await expect(page.getByText(/2 sent · 0 waiting · 0 failed/)).toBeVisible({ timeout: 20_000 });
   for (const to of STUDENT_EMAILS) expect(await activationToken(request, to)).toBeTruthy();
-  await page.screenshot({ path: 'test-results/screens/5-import-done.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/screens/7-import-done.png', fullPage: true });
 
   // 6. The students are in the list; one record gets a photo and is verified, another a status change.
   await nav.getByRole('link', { name: 'Students' }).click();
@@ -197,7 +109,7 @@ test('Registrar imports students from the template and manages a record', async 
   await expect(page.getByAltText('Photo of E2E Student One')).toBeVisible();
   await page.getByRole('button', { name: 'Mark record as verified' }).click();
   await expect(page.getByText(/^Verified /)).toBeVisible();
-  await page.screenshot({ path: 'test-results/screens/6-student-record.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/screens/8-student-record.png', fullPage: true });
 
   await page.getByRole('link', { name: 'All students' }).click();
   await page.getByRole('link', { name: '99000002' }).click();
@@ -221,7 +133,7 @@ test('Registrar imports students from the template and manages a record', async 
   await page.getByLabel('Enrol by Student ID').fill('99000002');
   await page.getByRole('button', { name: 'Enrol', exact: true }).click();
   await expect(page.getByText(/status is deferred/)).toBeVisible();
-  await page.screenshot({ path: 'test-results/screens/7-roster.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/screens/9-roster.png', fullPage: true });
   await enrolledRow.getByRole('button', { name: 'Drop' }).click();
   await page
     .getByRole('dialog')
@@ -229,4 +141,9 @@ test('Registrar imports students from the template and manages a record', async 
     .fill('Changed course (e2e test)');
   await page.getByRole('dialog').getByRole('button', { name: 'Drop enrolment' }).click();
   await expect(page.getByText('No students enrolled yet.')).toBeVisible();
+
+  // Enrolled again (the dropped enrolment stays as history), for the course-rep journey that follows.
+  await page.getByLabel('Enrol by Student ID').fill('99000001');
+  await page.getByRole('button', { name: 'Enrol', exact: true }).click();
+  await expect(page.getByRole('row').filter({ hasText: '99000001' })).toBeVisible();
 });
