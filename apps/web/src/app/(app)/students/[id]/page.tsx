@@ -457,7 +457,13 @@ function EnrolmentsCard({ student }: { student: StudentView }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ending, setEnding] = useState<EnrollmentView | null>(null);
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['enrollments'] });
+  // Enrolling or dropping also changes section rosters, and a drop can end a course-rep role.
+  const refresh = () =>
+    Promise.all(
+      [['enrollments'], ['roster'], ['course-reps']].map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey }),
+      ),
+    );
 
   if (!canManage) return null;
 

@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 2, academic management. Steps 1–6, 7a and 7b are done; the Phase 2 exit check (7c) is next. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 2, academic management. All steps are built and the exit check passed; waiting for the product owner to approve closing Phase 2 before Phase 3 starts. Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -25,7 +25,7 @@ Read this first in every session, and update it after every implementation step.
 | --- | --- | --- | --- |
 | 0 Inspection and architecture | Design documents in `docs/` | Product owner approves; D-01 to D-07 decided | Done, approved 2026-11-08 |
 | 1 Foundation | Monorepo, local services, API/web/mobile shells, database, sign-in, refresh tokens, MFA, roles and permissions, Super Admin tools, audit log, CI | Auth and RBAC tests pass in CI; first Super Admin created with a one-time command, not a seeded password | Done; CI green 2026-11-08 (native mobile build still open) |
-| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | In progress (steps 1–6, 7a and 7b done; exit check next) |
+| 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Built; exit check passed 2026-11-09; awaiting approval to close |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Not started |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Not started |
@@ -566,7 +566,7 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 | 6 | Enrolments and course-rep assignments | Done (2026-11-08) |
 | 7a | Module-boundary fix; "Email or Student ID" sign-in; Registrar screens (students, bulk import, enrolments); Registrar browser journey | Done (2026-11-09) |
 | 7b | Administrator and Super Admin screens: academic structure, places, courses, offerings, sections, lecturers, course reps | Done (2026-11-09) |
-| 7c | Phase 2 exit check | Not started |
+| 7c | Phase 2 exit check | Done (2026-11-09); waiting for the product owner to approve closing Phase 2 |
 
 ### 2026-11-08 — Phase 2, step 1: academic structure
 
@@ -898,3 +898,49 @@ Approved by the product owner 2026-11-08 ("next" after Phase 1 was confirmed gre
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (API 180, web 12, e2e 4, audit clean).
   - GitHub run 42542889814 on `aabac01`: **success**.
+
+### 2026-11-09 — Phase 2, step 7c: exit check
+
+**Exit criterion:** "Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report." **Met.** The browser journey `03-registrar` does exactly this in Chromium, against the real API, database, file storage and email catcher. It passes locally, in a fresh clone, and on GitHub CI:
+- A Registrar activates from a real email.
+- They download the template and upload a file with good rows, a short Student ID, a repeated Student ID and an unknown programme.
+- They see each problem explained and download the error report, which lists exactly the rejected rows with reasons.
+- They confirm, and only the good rows are saved.
+
+**Scope, item by item:**
+
+| Phase 2 scope | API | API tests | Screens | Browser journey |
+| --- | --- | --- | --- | --- |
+| Faculties, departments, programmes, levels | Built | academic.test | Academic structure | 02-setup (incl. a refused duplicate) |
+| Academic years, semesters, calendar exceptions | Built | academic.test | Academic calendar | 02-setup |
+| Courses, offerings, sections | Built | courses.test | Courses | 02-setup |
+| Lecturers and assignments | Built | courses.test | Lecturers; section page | 02-setup |
+| Students, manual registration | Built | students.test | Students, Register student, record page | 03-registrar (register by hand; photo; verify; status) |
+| Students, bulk import | Built | imports.test | Bulk import | 03-registrar (exit criterion) |
+| Enrolments, single and bulk | Built | enrollments.test | Enrolments; record page; Bulk import | 03-registrar (enrol, refuse deferred, drop, bulk file) |
+| Course reps (D-12) | Built | enrollments.test | Section page | 04-course-rep (appoint, end) |
+| Basic classrooms | Built | places.test | Places | 02-setup (geofence inherited by room) |
+| Unauthorised access (scenario 24) | Every route | scenario-24 (automatic over all routes and roles) | — | — |
+
+**Problem found and fixed during the check:** the new bulk-enrolment browser step showed that the roster stayed out of date after an enrolment import. The data was correct, but the screen kept its old copy for up to 15 seconds because nothing told it to refresh. I fixed it, and also the same gap after enrolling from a student's record and after drops that end a rep role.
+
+**Final results (2026-11-09):**
+- `npm run check` exit 0: design-tokens 3, shared 10, API 180, mobile 9, web 12, so **214 passed**.
+- `npm run e2e -w @attendsure/web`: **4 passed**.
+
+**Open items carried forward (none blocks Phase 3):**
+- **D-14 (part):** the staff-number format is not confirmed; any 1–30 letters, digits, / - _ are accepted until it is.
+- **D-16:** production file storage and hosting are not chosen. Development uses SeaweedFS; switching needs settings only.
+- **D-06 open question:** does every student have a university email? Activation emails assume so. If not, an SMS fallback is needed (with D-17).
+- **D-08 beacon trial:** planned for Phase 2 but needs hardware bought first. It has not happened and must happen before Phase 4.
+- **Phase 1 leftover:** the native Android build still needs JDK 17 and the Android SDK.
+- **Known limitations 29–35:**
+  - import emails are sent by the API process until the Phase 3 job queue;
+  - 5,000 rows per import;
+  - no virus scan yet;
+  - 90-day clean-up not automated;
+  - moving a student between sections is two steps;
+  - reps keep only the Student role until rep tools exist.
+- **Docs corrected:** SYSTEM_ARCHITECTURE now names the libraries actually used. PRESENCE_VERIFICATION no longer implies the beacon trial happened.
+
+**Next:** the product owner approves closing Phase 2. Phase 3 (timetables, class sessions, class monitoring) then starts with its own plan for approval.

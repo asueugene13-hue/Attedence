@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
 import { generateSync } from 'otplib';
-import { activationToken, clearMail, PASSWORD, REGISTRAR_EMAIL } from './helpers';
+import { activationToken, clearMail, fieldLabel, PASSWORD, REGISTRAR_EMAIL } from './helpers';
 
 // Phase 2 exit journey: a Registrar imports students from the template end to end. Bad rows and
 // duplicates are held back with a downloadable error report; then the Registrar works with one record
@@ -9,6 +9,7 @@ import { activationToken, clearMail, PASSWORD, REGISTRAR_EMAIL } from './helpers
 test.describe.configure({ mode: 'serial' });
 
 const STUDENT_EMAILS = ['e2e.student1@example.test', 'e2e.student2@example.test'];
+const MANUAL_EMAIL = 'e2e.student7@example.test';
 // The smallest valid PNG (1×1 pixel), so the browser can display the uploaded photo.
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -146,4 +147,50 @@ test('Registrar imports students from the template and manages a record', async 
   await page.getByLabel('Enrol by Student ID').fill('99000001');
   await page.getByRole('button', { name: 'Enrol', exact: true }).click();
   await expect(page.getByRole('row').filter({ hasText: '99000001' })).toBeVisible();
+
+  // 8. Register one student by hand with the form.
+  await clearMail(request, MANUAL_EMAIL);
+  await nav.getByRole('link', { name: 'Students' }).click();
+  await page.getByRole('link', { name: 'Register student' }).click();
+  await page.getByLabel(fieldLabel('Student ID')).fill('99000007');
+  await page.getByLabel(fieldLabel('Full name')).fill('E2E Student Seven');
+  await page.getByLabel(fieldLabel('Email')).fill(MANUAL_EMAIL);
+  await page.getByLabel(fieldLabel('Phone')).fill('024 555 0107');
+  await page.getByLabel(fieldLabel('Programme')).selectOption({ label: 'E2EP · E2E Programme (test)' });
+  await page.getByLabel(fieldLabel('Level')).selectOption({ label: 'E2E Level 1 (test)' });
+  await page.getByLabel(fieldLabel('Academic year')).selectOption({ label: 'TEST-2030' });
+  await page.getByLabel(fieldLabel('Semester')).selectOption({ label: 'First (test)' });
+  await page.getByRole('button', { name: 'Register student' }).click();
+  await expect(page.getByRole('heading', { name: 'E2E Student Seven' })).toBeVisible();
+  await expect(page.getByText('Student registered. An activation email was sent.')).toBeVisible();
+  expect(await activationToken(request, MANUAL_EMAIL)).toBeTruthy();
+
+  // 9. Bulk enrolment from a file: one good row, one refused because the student is deferred.
+  await nav.getByRole('link', { name: 'Bulk import' }).click();
+  await page
+    .getByRole('navigation', { name: 'Import type' })
+    .getByRole('link', { name: 'Enrolments' })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Import enrolments' })).toBeVisible();
+  const enrolCsv = [
+    'student_number,course_code,academic_year,semester_number,section_code',
+    '99000007,TST101,TEST-2030,1,A',
+    '99000002,TST101,TEST-2030,1,A',
+  ].join('\n');
+  await page
+    .getByLabel('File')
+    .setInputFiles({ name: 'enrol.csv', mimeType: 'text/csv', buffer: Buffer.from(enrolCsv) });
+  await page.getByRole('button', { name: 'Upload and check' }).click();
+  await expect(page.getByRole('heading', { name: 'Enrolments import' })).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Rows' }).getByRole('row').filter({ hasText: '99000002' }),
+  ).toContainText('deferred');
+  await page.getByRole('button', { name: 'Import 1 ready row' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Summary' }).locator('.badge', { hasText: 'Imported' }),
+  ).toBeVisible();
+  await nav.getByRole('link', { name: 'Enrolments' }).click();
+  await page.getByLabel('Semester', { exact: true }).selectOption({ label: 'TEST-2030 · First (test)' });
+  await page.getByLabel('Course section').selectOption({ label: 'TST101 Test Course · section A' });
+  await expect(page.getByRole('row').filter({ hasText: '99000007' })).toBeVisible();
 });

@@ -8,7 +8,7 @@ A check-in is confirmed automatically only when the server has all three:
 
 and no GPS reading that clearly places the phone somewhere else. Weaker evidence goes to the lecturer for a quick decision instead of being rejected outright. The phone gathers evidence; the server decides.
 
-**Status:** design draft (2026-11-08). The beacon hardware is not chosen yet (D-08); the hardware trial is planned for Phase 2.
+**Status:** design draft (2026-11-08). The beacon hardware is not chosen yet (D-08). The hardware trial was planned for Phase 2 but needs beacons bought first; it has not happened and must be done before Phase 4 (see IMPLEMENTATION_PROGRESS, Phase 2 exit check).
 
 ## 1. The layers and what each one proves
 

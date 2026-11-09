@@ -64,7 +64,11 @@ function BatchDetail({ kind }: { kind: ImportKind }) {
         queryClient.invalidateQueries({ queryKey: ['import', kind, id] }),
         queryClient.invalidateQueries({ queryKey: ['import-rows', kind, id] }),
         queryClient.invalidateQueries({ queryKey: ['imports', kind] }),
-        queryClient.invalidateQueries({ queryKey: [kind] }),
+        // Everything an import can change: student lists and records, enrolments and section rosters.
+        queryClient.invalidateQueries({ queryKey: ['students'] }),
+        queryClient.invalidateQueries({ queryKey: ['student'] }),
+        queryClient.invalidateQueries({ queryKey: ['enrollments'] }),
+        queryClient.invalidateQueries({ queryKey: ['roster'] }),
       ]);
       setConfirmingCancel(false);
     } catch (err) {

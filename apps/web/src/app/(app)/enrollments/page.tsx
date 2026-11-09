@@ -109,6 +109,8 @@ function SectionRoster({ sectionId }: { sectionId: string }) {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ['roster', sectionId] }),
       queryClient.invalidateQueries({ queryKey: ['enrollments'] }),
+      // Dropping a student ends their course-rep role for this section.
+      queryClient.invalidateQueries({ queryKey: ['course-reps', sectionId] }),
     ]);
 
   async function enrol(event: React.FormEvent) {

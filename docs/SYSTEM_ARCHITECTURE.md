@@ -185,8 +185,8 @@ Exact versions are pinned when each package is installed in its phase, using the
 | Auth and security | `argon2` (password hashing), `jose` (JWT), `otplib` (TOTP), `helmet`, `@nestjs/throttler` with Redis storage | 1 |
 | Logging and health | `nestjs-pino`, `pino`, `@nestjs/terminus`, `prom-client` | 1 |
 | Jobs and realtime | Redis 7 with append-only persistence, `bullmq`, `@nestjs/bullmq`, `ioredis`, `@nestjs/websockets`, `@nestjs/platform-socket.io`, `socket.io`, `@socket.io/redis-adapter` | 1, 3 |
-| Files | S3-compatible storage (SeaweedFS locally), `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `file-type` (checks real file type) | 2 |
-| Imports and exports | `csv-parse`, `csv-stringify`, an XLSX library (SheetJS Community Edition from its official CDN, because the npm-registry copy is outdated, or ExcelJS; chosen in Phase 2 after a security check), `pdfkit` | 2, 7 |
+| Files | S3-compatible storage (SeaweedFS locally), `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`; the real file type is checked from the first bytes by our own small check (`modules/files/file-type.ts`), so no extra library was needed | 2 |
+| Imports and exports | `csv-parse`, `csv-stringify`, `read-excel-file` and `write-excel-file` for .xlsx (chosen in Phase 2: small, maintained, no high-severity audit findings), `pdfkit` | 2, 7 |
 | Notifications | Firebase project with `firebase-admin` (FCM), `nodemailer` or a provider SDK (D-17), SMS gateway SDK (D-17) | 3 |
 | Web | `next`, `react`, `@tanstack/react-query`, `@tanstack/react-table`, `react-hook-form`, `@hookform/resolvers`, `socket.io-client`, Radix UI primitives (accessible dialogs, menus, selects), `qrcode` | 1+ |
 | Mobile | `expo`, `react-native`, `@react-navigation/native` (+ bottom-tabs, native-stack), `@tanstack/react-query`, `zustand`, `react-hook-form`, `expo-camera` (QR scanning), `react-native-ble-plx`, `expo-location`, `expo-secure-store`, `@react-native-firebase/messaging`, `react-native-qrcode-svg`, an integrity module for Play Integrity and App Attest (chosen in Phase 4) | 1+ |
