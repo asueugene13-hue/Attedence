@@ -124,9 +124,9 @@ Imports have one address per type, `/imports/<type>` with `<type>` = `students` 
 | GET | `/timetables/:id/conflicts` | `timetables.manage` | `{ blocking, warnings, canPublish }`. Blocking: the same room, lecturer or section at overlapping times on the same date. Warnings: students enrolled in two overlapping sections (with their Student IDs), rooms smaller than the enrolment, inactive rooms, lecturers on leave, dates removed by holidays, entries that never meet. **Built.** |
 | POST | `/timetables/:id/publish` | `timetables.publish` with university-wide scope | `{ reason? }`. Refused while blocking clashes remain (`409 HAS_CONFLICTS`, each clash listed) or with no entries. The semester's previous published version becomes SUPERSEDED. **Built.** Class meetings are generated in step 3. |
 | GET | `/timetables/:id/history` | `timetables.manage` | Every change, newest first, with who, when, before, after and reason. **Built.** |
-| GET | `/me/timetable?from=&to=` | LE, ST, CR | Own sessions with live status |
-| GET | `/class-sessions?from=&to=&status=&sectionId=` | SA, UA, LE (scoped) | Session list and monitor |
-| GET | `/class-sessions/:id` · `/class-sessions/:id/events` | Scoped | Details; event history |
+| GET | `/me/timetable?from=&to=` | Signed in | The caller's own sessions in the active role: a lecturer's classes, or a student's (and course rep's) enrolled sections. Local dates, at most 62 days; cancelled classes included and marked. `{ as: LECTURER\|STUDENT\|NONE, data }`. **Built.** |
+| GET | `/class-sessions?from=&to=&sectionId=&lecturerId=&classroomId=&status=` | `timetables.read` | Sessions between two local dates (inclusive, at most 62 days, `400` otherwise), with sections, lecturer, room, status and cancellation reason. **Built.** Scoped monitoring views come with step 5. |
+| GET | `/class-sessions/:id` | `timetables.read` | One session with its full, append-only event history. **Built.** |
 | POST | `/class-sessions/:id/confirm` · `/start` · `/end` · `/interrupt` · `/resume` | LE | Lecturer actions |
 | POST | `/class-sessions/:id/delay` | LE, UA | `{ minutes, reason }` |
 | POST | `/class-sessions/:id/cancel` | LE (before attendance), UA, SA | `{ reasonCode, note }` |

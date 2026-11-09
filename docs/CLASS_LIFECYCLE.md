@@ -31,7 +31,16 @@ When a timetable is published, a background job runs over every active entry. Fo
 - Start and end times are converted from Africa/Accra wall-clock time to UTC.
 - Each session copies the entry's lecturer, room and sections.
 - The unique key `(timetableEntryId, scheduledStart)` means a re-run never creates duplicates.
-- A `GENERATED` event is written for each session, and the monitoring checkpoints are scheduled (CLASS_MONITORING.md).
+- A `GENERATED` event is written for each session, and the monitoring checkpoints are scheduled (CLASS_MONITORING.md, Phase 3 step 5).
+- Only meetings still in the future get sessions; a session that has started or lies in the past is never touched.
+
+**A new version replacing a published one** (built in Phase 3 step 2–3). Each entry of the new version remembers the entry it was copied from. Generation then reconciles instead of starting again:
+
+- A future meeting that still exists keeps its session (the same row, so a lecturer's confirmation and its history stay) and moves to the new version's entry.
+- If the lecturer, room, end time or sections changed, a session that has not started is updated in place, with an `UPDATED` event (`VENUE_CHANGED` when only the room changed).
+- A session that was already cancelled or rescheduled keeps that status; a timetable change never brings a cancelled class back.
+- A future meeting that no longer exists (entry removed, or its start time changed) is cancelled with reason `OTHER` and the note "Timetable changed", recorded as the publishing administrator's act. This is the administrator's decision to change the timetable, not an automatic cancellation by the monitoring system.
+- New meetings get new sessions.
 
 *Why generate the whole semester at once:* a few thousand rows is small for PostgreSQL. It lets the student app show "34 classes remaining". It also lets the database's no-overlap constraints check concrete sessions, not just repeating patterns.
 

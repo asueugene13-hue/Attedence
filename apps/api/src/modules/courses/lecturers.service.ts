@@ -299,6 +299,11 @@ export class LecturersService implements OnModuleInit {
     });
   }
 
+  async idForUser(userId: string): Promise<string | null> {
+    const row = await this.prisma.lecturerProfile.findUnique({ where: { userId }, select: { id: true } });
+    return row?.id ?? null;
+  }
+
   /** What timetables need to know about lecturers: status, name and the sections they currently teach. */
   async facts(lecturerIds: string[]) {
     const rows = await this.prisma.lecturerProfile.findMany({

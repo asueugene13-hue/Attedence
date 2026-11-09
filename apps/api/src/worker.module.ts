@@ -3,6 +3,7 @@ import { INFRASTRUCTURE_MODULES } from './app.module.js';
 import { JobRunnerModule } from './infrastructure/jobs/jobs.module.js';
 import { StorageModule } from './infrastructure/storage/storage.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
+import { ClassSessionsModule } from './modules/class-sessions/class-sessions.module.js';
 import { ImportsModule } from './modules/imports/imports.module.js';
 
 /**
@@ -16,6 +17,8 @@ import { ImportsModule } from './modules/imports/imports.module.js';
     AuthorizationModule,
     // Declares the student activation-email job.
     ImportsModule,
+    // Declares the class-session generation job.
+    ClassSessionsModule,
     JobRunnerModule.forRoot('always'),
   ],
 })

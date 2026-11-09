@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–2 done; step 3 (class sessions) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; steps 1–3 done; step 4 (class lifecycle) is next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1054,3 +1054,39 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (e2e 4, audit clean).
   - GitHub run 42625413700 on `ac97182`: **success**.
+
+### 2026-11-09 — Phase 3, step 3: class sessions
+
+- **Built:**
+  - **Generation on publish:** publishing a timetable queues a background job, in the same transaction as the publish. The job creates one class session per future meeting, using the same date function as the clash check:
+    - holidays and entry exceptions are skipped;
+    - Africa/Accra wall-clock times are converted to exact instants;
+    - it is safe to run again: it reconciles and never duplicates.
+  - **New versions reconcile instead of duplicating.** Each copied entry remembers its source entry.
+    - Future sessions carry over (same rows, so history and confirmations stay).
+    - Changed rooms, lecturers, end times and sections update sessions that have not started.
+    - Removed meetings are cancelled with "Timetable changed", as the publishing administrator's act.
+    - A cancelled class is never brought back, and past or started sessions are never touched.
+  - **Database safeguards:**
+    - no room and no lecturer can hold two live sessions at overlapping times (exclusion constraints, checked at commit);
+    - a cancelled session must have a reason;
+    - class history is append-only (a trigger).
+  - **Reading:** `GET /class-sessions` (date range and filters), `GET /class-sessions/:id` with its event history, and `GET /me/timetable` for a lecturer's or a student's own classes.
+  - **Time zone:** a tested function turns wall-clock times into instants for any zone. Checked with Accra, and with London across its clock change.
+- **A failure, and how it showed up:** my first version took a database lock in a way Prisma could not read back. Every generation job failed. The job system did what step 1 built it for: 5 tries, then DEAD, with a system event raised and the exact error recorded. I fixed the call and all tests pass.
+- **Files:**
+  - New: `modules/class-sessions/{session-generation.service,class-sessions.service,class-sessions.controller,class-sessions.module}.ts`, `common/time-zone.ts` (+ test), `test/class-sessions.test.ts`, migration `20261109150000_class_sessions`.
+  - Changed: `timetables.service.ts` (source entry on copy, generation queued on publish, planned meetings), `lecturers.service.ts`, `enrollments.service.ts`, `schema.prisma`, `app.module.ts`, `worker.module.ts`, `test/fixtures.ts`, `packages/shared/src/timetables.ts`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA, CLASS_LIFECYCLE, KNOWN_LIMITATIONS (37–39).
+- **Database changes:**
+  - Tables `class_sessions`, `class_session_sections`, `class_events`; enums for kind, status, event type and cancel reason.
+  - Columns `timetable_entries.source_entry_id`, `timetables.sessions_generated_at`.
+  - Two exclusion constraints, three checks, an append-only trigger. Drift check: no difference.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **221** (12 new: 3 time-zone, 9 sessions), mobile 9, web 12, so **255 passed**.
+- **Known limitations:** KNOWN_LIMITATIONS 37–39 (holidays added after publishing, start-time changes, notifications).
+- **Next step:** Phase 3, step 4: the class lifecycle.
+  - The only place a status changes, with the allowed-transition table.
+  - Lecturer actions (confirm, delay, start, end, interrupt, resume, cancel with reason).
+  - Administrator actions (hold, lift, void, reinstate, open review).
+  - Reschedule requests with a conflict check, and direct reschedules (D-11).
+  - Changes to published timetables.

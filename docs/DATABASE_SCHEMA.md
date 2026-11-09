@@ -1146,7 +1146,11 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | A published timetable says who published it and when; a draft has neither | `timetables_publish_complete` check |
 | Entry times, weekday and dates make sense; a one-time class has one date; only "selected weeks" lists weeks | `timetable_entries_times_valid`, `_day_valid`, `_dates_valid`, `_once_single_day`, `_selected_weeks` checks |
 | One exception per entry and date | `@@unique([entryId, date])` |
-| No room, lecturer or section booked twice at the same time | Service: the clash check runs on every publish and blocks it (concrete class meetings get database no-overlap rules in step 3) |
+| No room, lecturer or section booked twice at the same time | Service: the clash check runs on every publish and blocks it |
+| No room and no lecturer has two live sessions at overlapping times | `class_sessions_room_no_overlap`, `class_sessions_lecturer_no_overlap` exclusion constraints, deferrable so a regeneration is checked as a whole at commit (Phase 3 step 3, migration `20261109150000_class_sessions`) |
+| Generation never creates a session twice | `@@unique([timetableEntryId, scheduledStart])` |
+| A session ends after it starts; a cancelled one has a reason, any other has none; regular sessions come from an entry, make-up and replacement sessions do not | `class_sessions_time_order`, `class_sessions_cancel_complete`, `class_sessions_kind_source` checks |
+| Class history cannot be edited or deleted | `class_events_append_only` trigger |
 | A section never takes more students than its capacity, even with simultaneous requests | Service: the section row is locked (`SELECT … FOR UPDATE`) while counting and inserting |
 
 `npm run db:drift -w @attendsure/api` confirms Prisma sees no difference between the migrations and `schema.prisma`, so it will not try to drop these. CI runs it on every push.

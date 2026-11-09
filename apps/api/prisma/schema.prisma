@@ -119,6 +119,8 @@ model User {
   timetableEntriesCreated   TimetableEntry[]          @relation("TimetableEntryCreatedBy")
   timetableExceptions       TimetableEntryException[] @relation("TimetableExceptionCreatedBy")
   timetableChanges          TimetableChange[]         @relation("TimetableChangedBy")
+  classSessionsCancelled    ClassSession[]            @relation("ClassSessionCancelledBy")
+  classEvents               ClassEvent[]              @relation("ClassEventActor")
 
   @@map("users")
 }
@@ -516,6 +518,7 @@ model Classroom {
 
   building         Building         @relation(fields: [buildingId], references: [id])
   timetableEntries TimetableEntry[]
+  classSessions    ClassSession[]
 
   @@unique([buildingId, code])
   @@map("classrooms")
@@ -591,6 +594,7 @@ model CourseSection {
   courseEnrollments      CourseEnrollment[]
   courseRepAssignments   CourseRepAssignment[]
   timetableEntrySections TimetableEntrySection[]
+  classSessionSections   ClassSessionSection[]
 
   @@unique([offeringId, code])
   @@map("course_sections")
@@ -611,6 +615,7 @@ model LecturerProfile {
   department       Department           @relation(fields: [departmentId], references: [id])
   assignments      LecturerAssignment[]
   timetableEntries TimetableEntry[]
+  classSessions    ClassSession[]
 
   @@index([departmentId])
   @@map("lecturer_profiles")
@@ -980,16 +985,18 @@ enum Recurrence {
 
 /// Partial unique indexes (SQL): at most one DRAFT and one PUBLISHED timetable per semester.
 model Timetable {
-  id            String          @id @default(uuid(7)) @db.Uuid
-  semesterId    String          @map("semester_id") @db.Uuid
-  name          String
-  version       Int
-  status        TimetableStatus @default(DRAFT)
-  publishedAt   DateTime?       @map("published_at") @db.Timestamptz(3)
-  publishedById String?         @map("published_by_id") @db.Uuid
-  createdById   String          @map("created_by_id") @db.Uuid
-  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                  String          @id @default(uuid(7)) @db.Uuid
+  semesterId          String          @map("semester_id") @db.Uuid
+  name                String
+  version             Int
+  status              TimetableStatus @default(DRAFT)
+  publishedAt         DateTime?       @map("published_at") @db.Timestamptz(3)
+  publishedById       String?         @map("published_by_id") @db.Uuid
+  /// Set when the class sessions for this published version have been generated.
+  sessionsGeneratedAt DateTime?       @map("sessions_generated_at") @db.Timestamptz(3)
+  createdById         String          @map("created_by_id") @db.Uuid
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   semester    Semester          @relation(fields: [semesterId], references: [id])
   publishedBy User?             @relation("TimetablePublishedBy", fields: [publishedById], references: [id], onDelete: Restrict)
@@ -1017,18 +1024,21 @@ model TimetableEntry {
   selectedWeeks Int[]      @map("selected_weeks")
   effectiveFrom DateTime   @map("effective_from") @db.Date
   effectiveTo   DateTime   @map("effective_to") @db.Date
+  /// The entry this one was copied from (the previous version), so its future sessions carry over.
+  sourceEntryId String?    @map("source_entry_id") @db.Uuid
   isCancelled   Boolean    @default(false) @map("is_cancelled")
   version       Int        @default(0)
   createdById   String     @map("created_by_id") @db.Uuid
   createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  timetable  Timetable                 @relation(fields: [timetableId], references: [id])
-  lecturer   LecturerProfile           @relation(fields: [lecturerId], references: [id])
-  classroom  Classroom                 @relation(fields: [classroomId], references: [id])
-  createdBy  User                      @relation("TimetableEntryCreatedBy", fields: [createdById], references: [id])
-  sections   TimetableEntrySection[]
-  exceptions TimetableEntryException[]
+  timetable     Timetable                 @relation(fields: [timetableId], references: [id])
+  lecturer      LecturerProfile           @relation(fields: [lecturerId], references: [id])
+  classroom     Classroom                 @relation(fields: [classroomId], references: [id])
+  createdBy     User                      @relation("TimetableEntryCreatedBy", fields: [createdById], references: [id])
+  sections      TimetableEntrySection[]
+  exceptions    TimetableEntryException[]
+  classSessions ClassSession[]
 
   @@index([timetableId])
   @@map("timetable_entries")
@@ -1081,4 +1091,135 @@ model TimetableChange {
 
   @@index([timetableId, changedAt])
   @@map("timetable_changes")
+}
+
+// ───────────────────────── Class sessions (Phase 3) ─────────────────────────
+
+enum SessionKind {
+  REGULAR
+  MAKEUP
+  REPLACEMENT
+}
+
+/// The 11 class statuses (CLASS_LIFECYCLE.md §3).
+enum ClassStatus {
+  SCHEDULED
+  CONFIRMED
+  POSTPONED
+  UNCONFIRMED
+  UNDER_REVIEW
+  ACTIVE
+  INTERRUPTED
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+  SUSPENDED
+}
+
+enum ClassEventType {
+  GENERATED
+  UPDATED
+  VENUE_CHANGED
+  REMINDER_SENT
+  CONFIRMED
+  STARTED
+  DELAY_REPORTED
+  MARKED_UNCONFIRMED
+  LECTURER_PROMPTED
+  ISSUE_REPORTED
+  ESCALATED
+  REVIEW_DECIDED
+  CANCELLED
+  RESCHEDULED
+  SUSPENDED
+  RESUMED
+  INTERRUPTED
+  ENDED
+  AUTO_ENDED
+  ATTENDANCE_OPENED
+  ATTENDANCE_CLOSED
+  ATTENDANCE_REOPENED
+  ATTENDANCE_VOIDED
+  REINSTATED
+}
+
+enum CancelReason {
+  LECTURER_UNAVAILABLE
+  ILLNESS
+  OFFICIAL_DUTY
+  VENUE_UNAVAILABLE
+  INSTITUTION_EVENT
+  PUBLIC_HOLIDAY
+  EMERGENCY
+  LECTURER_ABSENT_NO_NOTICE
+  OTHER
+}
+
+/// One concrete class meeting. Exclusion constraints (SQL): no room and no lecturer has two live
+/// sessions at overlapping times. A re-run of generation never duplicates (entry, start).
+model ClassSession {
+  id               String        @id @default(uuid(7)) @db.Uuid
+  /// Null for make-up and replacement sessions.
+  timetableEntryId String?       @map("timetable_entry_id") @db.Uuid
+  kind             SessionKind   @default(REGULAR)
+  lecturerId       String        @map("lecturer_id") @db.Uuid
+  classroomId      String        @map("classroom_id") @db.Uuid
+  scheduledStart   DateTime      @map("scheduled_start") @db.Timestamptz(3)
+  scheduledEnd     DateTime      @map("scheduled_end") @db.Timestamptz(3)
+  /// Set when a delay is reported.
+  expectedStart    DateTime?     @map("expected_start") @db.Timestamptz(3)
+  actualStart      DateTime?     @map("actual_start") @db.Timestamptz(3)
+  actualEnd        DateTime?     @map("actual_end") @db.Timestamptz(3)
+  status           ClassStatus   @default(SCHEDULED)
+  statusChangedAt  DateTime      @default(now()) @map("status_changed_at") @db.Timestamptz(3)
+  cancelReason     CancelReason? @map("cancel_reason")
+  cancelNote       String?       @map("cancel_note")
+  cancelledById    String?       @map("cancelled_by_id") @db.Uuid
+  version          Int           @default(0)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  timetableEntry TimetableEntry?       @relation(fields: [timetableEntryId], references: [id], onDelete: Restrict)
+  lecturer       LecturerProfile       @relation(fields: [lecturerId], references: [id])
+  classroom      Classroom             @relation(fields: [classroomId], references: [id])
+  cancelledBy    User?                 @relation("ClassSessionCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  sections       ClassSessionSection[]
+  events         ClassEvent[]
+
+  @@unique([timetableEntryId, scheduledStart])
+  @@index([status, scheduledStart])
+  @@index([lecturerId, scheduledStart])
+  @@index([classroomId, scheduledStart])
+  @@map("class_sessions")
+}
+
+model ClassSessionSection {
+  classSessionId String @map("class_session_id") @db.Uuid
+  sectionId      String @map("section_id") @db.Uuid
+
+  classSession ClassSession  @relation(fields: [classSessionId], references: [id])
+  section      CourseSection @relation(fields: [sectionId], references: [id])
+
+  @@id([classSessionId, sectionId])
+  @@index([sectionId])
+  @@map("class_session_sections")
+}
+
+/// Append-only history of a session (a database trigger rejects UPDATE and DELETE).
+model ClassEvent {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  classSessionId String         @map("class_session_id") @db.Uuid
+  type           ClassEventType
+  fromStatus     ClassStatus?   @map("from_status")
+  toStatus       ClassStatus?   @map("to_status")
+  actorType      ActorType      @map("actor_type")
+  actorUserId    String?        @map("actor_user_id") @db.Uuid
+  payload        Json?
+  occurredAt     DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  classSession ClassSession @relation(fields: [classSessionId], references: [id])
+  actor        User?        @relation("ClassEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([classSessionId, occurredAt])
+  @@map("class_events")
 }

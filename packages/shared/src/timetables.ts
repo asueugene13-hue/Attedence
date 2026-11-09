@@ -83,3 +83,49 @@ export const TimetableQuerySchema = z.strictObject({
 });
 
 export const PublishTimetableSchema = z.strictObject({ reason: ReasonSchema.optional() });
+
+export const CLASS_STATUSES = [
+  'SCHEDULED',
+  'CONFIRMED',
+  'POSTPONED',
+  'UNCONFIRMED',
+  'UNDER_REVIEW',
+  'ACTIVE',
+  'INTERRUPTED',
+  'COMPLETED',
+  'CANCELLED',
+  'RESCHEDULED',
+  'SUSPENDED',
+] as const;
+
+/** At most this many days per request, so a list stays small. */
+export const MAX_SESSION_RANGE_DAYS = 62;
+
+const dayRange = {
+  from: DateOnlySchema,
+  to: DateOnlySchema,
+};
+const rangeRule = (v: { from: string; to: string }, ctx: z.RefinementCtx) => {
+  const days = (Date.parse(v.to) - Date.parse(v.from)) / 86_400_000;
+  if (days < 0) ctx.addIssue({ code: 'custom', path: ['to'], message: 'must not be before "from"' });
+  if (days > MAX_SESSION_RANGE_DAYS) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['to'],
+      message: `at most ${MAX_SESSION_RANGE_DAYS} days at a time`,
+    });
+  }
+};
+
+/** Dates are local dates in the university's time zone, inclusive. */
+export const ClassSessionQuerySchema = z
+  .strictObject({
+    ...dayRange,
+    sectionId: z.uuid().optional(),
+    lecturerId: z.uuid().optional(),
+    classroomId: z.uuid().optional(),
+    status: z.enum(CLASS_STATUSES).optional(),
+  })
+  .superRefine(rangeRule);
+
+export const MyTimetableQuerySchema = z.strictObject(dayRange).superRefine(rangeRule);

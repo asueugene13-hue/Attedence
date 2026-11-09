@@ -5,6 +5,7 @@ import { auditEntry } from '../../common/audit-entry.js';
 import { rethrowAsConflict } from '../../common/db-errors.js';
 import type { RequestContext } from '../../common/request-context.js';
 import { Prisma } from '../../generated/prisma/client.js';
+import { OutboxService } from '../../infrastructure/jobs/outbox.service.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AcademicAccessService } from '../academic/academic-access.service.js';
 import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
@@ -51,6 +52,7 @@ export class TimetablesService {
     private readonly places: PlacesService,
     private readonly enrollments: EnrollmentsService,
     private readonly students: StudentsService,
+    private readonly outbox: OutboxService,
   ) {}
 
   // ───────── Timetables ─────────
@@ -119,6 +121,8 @@ export class TimetablesService {
               selectedWeeks: e.selectedWeeks,
               effectiveFrom: e.effectiveFrom,
               effectiveTo: e.effectiveTo,
+              // Remembered so this version's sessions can take over the previous version's.
+              sourceEntryId: e.id,
               createdById: actor.userId,
               sections: { create: e.sections.map((s) => ({ sectionId: s.sectionId })) },
               exceptions: {
@@ -509,8 +513,62 @@ export class TimetablesService {
         ),
         tx,
       );
+      // The class meetings are generated in the background, queued with the publish itself.
+      await this.outbox.add(tx, 'system', 'generate-sessions', {
+        timetableId: id,
+        publishedById: actor.userId,
+      });
     });
     return this.get(id);
+  }
+
+  /**
+   * Everything session generation needs for a timetable: each active entry with its meeting dates
+   * (holidays and exceptions already removed) and the entry it was copied from, so future sessions
+   * carry over between versions. Used by the class-sessions module.
+   */
+  async plannedMeetings(timetableId: string) {
+    const timetable = await this.prisma.timetable.findUnique({
+      where: { id: timetableId },
+      include: { entries: { include: entryInclude } },
+    });
+    if (!timetable) return null;
+    const semester = (await this.academic.semester(timetable.semesterId))!;
+    const noClassDays = await this.academic.noClassDays(semester.id, semester.startDate, semester.endDate);
+    const previous = await this.prisma.timetable.findFirst({
+      where: { semesterId: timetable.semesterId, version: { lt: timetable.version } },
+      orderBy: { version: 'desc' },
+      select: { id: true },
+    });
+    return {
+      id: timetable.id,
+      status: timetable.status,
+      semesterId: timetable.semesterId,
+      version: timetable.version,
+      previousTimetableId: previous?.id ?? null,
+      entries: timetable.entries
+        .filter((e) => !e.isCancelled)
+        .map((e) => ({
+          entryId: e.id,
+          sourceEntryId: e.sourceEntryId,
+          lecturerId: e.lecturerId,
+          classroomId: e.classroomId,
+          sectionIds: e.sections.map((s) => s.sectionId),
+          startMinute: e.startMinute,
+          endMinute: e.endMinute,
+          dates: meetingDates(this.ruleOf(e), semester.startDate, noClassDays, exceptionsOf(e)).dates,
+        })),
+    };
+  }
+
+  /** Entry ids of a timetable (all, including cancelled), for finding sessions to reconcile. */
+  async entryIdsOf(timetableId: string): Promise<string[]> {
+    const rows = await this.prisma.timetableEntry.findMany({ where: { timetableId }, select: { id: true } });
+    return rows.map((r) => r.id);
+  }
+
+  async markSessionsGenerated(timetableId: string, at: Date): Promise<void> {
+    await this.prisma.timetable.update({ where: { id: timetableId }, data: { sessionsGeneratedAt: at } });
   }
 
   async history(id: string) {
