@@ -646,18 +646,15 @@ model MakeupSuggestion {             // from course reps; the lecturer decides
 ### 3.4 Attendance and verification
 
 ```prisma
-model VerificationPolicy {           // immutable: a change creates a new version
+model VerificationPolicy {           // Phase 4 step 2; append-only: a change creates a new version (trigger)
   id
-  name          String
-  scopeType     PolicyScope @default(INSTITUTION)
-  scopeId       String?     @db.Uuid
-  version       Int
-  rules         Json        // validated by the shared Zod schema; fields in PRESENCE_VERIFICATION.md §9
-  isActive      Boolean     @default(true)
-  effectiveFrom DateTime
-  createdById   String      @db.Uuid
+  version     Int      @unique              // 1, 2, 3 …; version 0 is the built-in defaults
+  rules       Json                          // validated by VerificationRulesSchema (packages/shared); fields in PRESENCE_VERIFICATION.md §9
+  reason      String
+  createdById String   @db.Uuid
   createdAt
-  @@unique([scopeType, scopeId, version])
+  // One university-wide policy for now. The first plan had per-faculty policies (scopeType, scopeId,
+  // name, isActive, effectiveFrom); they can be added if a faculty ever needs different rules.
 }
 
 model AttendancePolicy {             // how attendance is counted (D-09); versioned the same way
@@ -1167,6 +1164,7 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | Class history cannot be edited or deleted | `class_events_append_only` trigger |
 | At most one waiting reschedule request per class | `reschedule_requests_one_pending` partial unique index (Phase 3 step 4b, migration `20261109180000_reschedules`) |
 | A decided request says who decided and when; an approved one names its replacement; the new time ends after it starts | `reschedule_requests_decision_complete`, `reschedule_requests_time_order` checks |
+| Policy versions are never edited or deleted; version numbers start at 1 | `verification_policies_append_only` trigger, `verification_policies_version_positive` check (Phase 4 step 2, migration `20261110120000_verification_policies`) |
 | A student has at most one trusted attendance phone; a public key is 32 bytes in base64url | `user_devices_one_attendance_device` partial unique index, `user_devices_public_key_format` check (Phase 4 step 1, migration `20261110100000_trusted_devices_and_risk_flags`) |
 | The same situation is flagged once while open; a reviewed flag has its reviewer, time and note | `risk_flags_one_open_per_key` partial unique index, `risk_flags_review_complete` check |
 | At most one open review per class; a decided review has its decision, time and note, an open one none | `class_status_reviews_one_open` partial unique index, `class_status_reviews_decision_complete` check (Phase 3 step 5a, migration `20261109200000_class_monitoring`) |

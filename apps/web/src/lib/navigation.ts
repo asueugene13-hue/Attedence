@@ -37,6 +37,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/admin/roles', label: 'Roles and permissions', permission: 'roles.edit_permissions' },
   { href: '/admin/audit', label: 'Audit log', permission: 'audit_logs.read' },
   { href: '/admin/settings', label: 'Settings', permission: 'settings.manage' },
+  {
+    href: '/admin/verification-policy',
+    label: 'Verification policy',
+    permission: 'verification_policies.manage',
+  },
   { href: '/admin/system-health', label: 'System health', permission: 'system_health.read' },
 ];
 

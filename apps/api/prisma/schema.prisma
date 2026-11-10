@@ -128,6 +128,7 @@ model User {
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
   riskFlagReviews           RiskFlag[]                @relation("RiskFlagReviewedBy")
+  verificationPolicies      VerificationPolicy[]
 
   @@map("users")
 }
@@ -1506,4 +1507,22 @@ model RiskFlag {
   @@index([status, createdAt])
   @@index([studentId, createdAt])
   @@map("risk_flags")
+}
+
+// ───────────────────────── Verification policy (Phase 4 step 2) ─────────────────────────
+
+/// The rules the verification engine follows (PRESENCE_VERIFICATION.md §9). Versions are never edited:
+/// each change is a new version, so a decision made in March can be explained in May. Until the first
+/// version is saved, the defaults in packages/shared apply (version 0).
+model VerificationPolicy {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  version     Int      @unique
+  rules       Json
+  reason      String
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@map("verification_policies")
 }

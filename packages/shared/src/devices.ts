@@ -79,6 +79,7 @@ export const RISK_TYPES = [
   'REPEATED_REJECTIONS',
   'UNEXPECTED_BEACON',
 ] as const;
+export type RiskType = (typeof RISK_TYPES)[number];
 export const FLAG_STATUSES = ['OPEN', 'DISMISSED', 'CONFIRMED'] as const;
 
 export const RiskFlagQuerySchema = z.strictObject({

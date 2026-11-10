@@ -78,6 +78,7 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
     'Roles and permissions',
     'Audit log',
     'Settings',
+    'Verification policy',
     'System health',
   ]);
 

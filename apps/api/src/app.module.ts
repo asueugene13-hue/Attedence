@@ -20,6 +20,7 @@ import { AuthorizationModule } from './modules/authorization/authorization.modul
 import { ClassSessionsModule } from './modules/class-sessions/class-sessions.module.js';
 import { DevicesModule } from './modules/devices/devices.module.js';
 import { RiskFlagsModule } from './modules/risk-flags/risk-flags.module.js';
+import { VerificationModule } from './modules/verification/verification.module.js';
 import { PermissionGuard } from './modules/authorization/permission.guard.js';
 import { CoursesModule } from './modules/courses/courses.module.js';
 import { HealthModule } from './modules/health/health.module.js';
@@ -67,6 +68,7 @@ export const INFRASTRUCTURE_MODULES = [
     ClassSessionsModule,
     DevicesModule,
     RiskFlagsModule,
+    VerificationModule,
     // Runs background jobs in this process only when RUN_JOBS_IN_API=true; the worker always runs them.
     JobRunnerModule.forRoot('fromConfig'),
   ],

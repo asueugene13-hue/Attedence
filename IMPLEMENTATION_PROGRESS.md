@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; step 1 (trusted phones) in progress. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–2 done; step 3 (beacon register and calibration) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1463,3 +1463,42 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (API 293, mobile 17, web 13, e2e 5, audit clean).
   - GitHub run 42783523375 on `16b9e1a`: **success**.
+
+### 2026-11-10 — Phase 4, step 2: verification policy and decision engine
+
+- **Built:**
+  - **Evidence rules** (pure functions, `modules/verification/evidence.ts`):
+    - **GPS** (§4): distance by the haversine formula; MOCKED, UNCERTAIN (no reading, no geofence, or accuracy worse than the policy allows), OUTSIDE only when even the most favourable point of the error circle is beyond the geofence plus margin, INSIDE when consistent with being on site.
+    - **Beacon** (§3): STRONG at or above the room beacon's calibrated threshold, WEAK below it, OTHER_ROOM when only other rooms' beacons are heard strongly, NONE, OFF. Unregistered beacons are ignored.
+  - **The decision engine** (`decision-engine.ts`, pure):
+    - hard gates in the documented order;
+    - the §6 decision table;
+    - the modifiers: an integrity failure turns "verified" into "lecturer confirms" and raises a flag; a phone shared in the same class goes to review; degraded mode stops a missing beacon counting against students; after a second rejection with a retry, the student may ask the lecturer to review.
+    - Every decision returns its outcome, reason code, the student's message, retry and review options, the flags to raise and the **full rule trace**.
+  - **Cases the design's table did not cover** are decided and written into PRESENCE_VERIFICATION.md §6 for the product owner's review: a weak beacon with GPS off site, a new phone with no beacon, Bluetooth off reaching the server, shared phone versus rejection, integrity flag when not verified, degraded mode with a new phone, and beacons not required.
+  - **Versioned policy:**
+    - the §9 rules, each range-checked, with defaults as version 0;
+    - each change is a new version with a reason;
+    - a database trigger refuses edits or deletions;
+    - a lock gives two simultaneous saves different numbers;
+    - only a Super Admin may turn off the beacon requirement;
+    - audited.
+    - Simpler than the first schema plan (one university-wide policy rather than per-faculty ones); recorded in DATABASE_SCHEMA.
+  - **"Try a case":** an administrator picks evidence and sees what the current policy would decide, with the trace. Nothing is saved.
+  - **Web:** Verification policy screen (the rules in plain words, change with a reason, version history, try a case).
+- **Scope note:** the design says each decision is saved with its trace. That record belongs to a check-in attempt, which arrives in Phase 5; the engine already returns the trace, and Phase 5 stores it with each attempt.
+- **Proof the key tests bite:** with GPS accuracy ignored in the off-site rule (a mistake that would wrongly reject students with poor indoor GPS), a test failed. Restored.
+- **My own test mistakes, caught by the tests:** two GPS test cases had wrong arithmetic in the expected values (I wrote "uncertain" where the documented formula gives "outside"). The code followed the formula; the test cases were corrected and boundary cases added on both sides.
+- **Files:**
+  - Shared: `packages/shared/src/verification.ts` (outcomes, evidence results, reasons, student messages, the policy schema and defaults, the try-a-case schema); `devices.ts` (`RiskType`).
+  - API: new `modules/verification/` (`evidence.ts`, `decision-engine.ts`, `verification.test.ts` with 34 tests, `verification-policy.service.ts`, `verification.controller.ts`, `verification.module.ts`); `test/verification-policy.test.ts` (7 tests); migration `20261110120000_verification_policies`; `app.module.ts`, `test/fixtures.ts`.
+  - Web: `app/(app)/admin/verification-policy/page.tsx`, `lib/navigation.ts`, `e2e/01-super-admin.spec.ts`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA, PRESENCE_VERIFICATION §6.
+- **Database changes:**
+  - New table `verification_policies`.
+  - An append-only trigger.
+  - A positive-version check.
+  - Applied locally; drift check clean.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **334** (41 new), mobile 17, web 13, so **377 passed**.
+- **Known limitations:** the decision is not yet stored (Phase 5, with check-in attempts); one university-wide policy (no per-faculty rules); real beacon thresholds come with step 3 and the field test.
+- **Next step:** Phase 4, step 3: the beacon register and calibration surveys.

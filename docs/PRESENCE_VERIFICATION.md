@@ -153,7 +153,17 @@ The engine runs in this order.
 - **Degraded mode** (the room's beacon is suspected faulty). BLE NONE is not counted against students. With GPS INSIDE or UNCERTAIN and a trusted device, the check-in becomes PENDING_VERIFICATION, and the lecturer can approve all of them in one action. With GPS OUTSIDE it is still REJECTED.
 - **"Ask your lecturer to review."** After a rejection with retry allowed, the student can turn the last attempt into MANUAL_REVIEW_REQUIRED. The lecturer sees it in the roster.
 
-**Step 4: record.** The outcome becomes the attendance record status (see [ATTENDANCE_FLOW.md](ATTENDANCE_FLOW.md) §4). The full rule trace is saved in `VerificationDecision`, so every outcome can be explained in a dispute.
+**Cases the table above did not cover (decided in Phase 4 step 2, for the product owner's review):**
+
+- **WEAK beacon + GPS OUTSIDE** is treated like STRONG + OUTSIDE: review, with a `BEACON_LOCATION_CONFLICT` flag.
+- **A phone waiting for approval with no beacon heard:** GPS INSIDE → PENDING_VERIFICATION with a `DEVICE_SWITCH` flag (like the beacon rows); GPS UNCERTAIN → rejected, retry allowed; GPS OUTSIDE → rejected.
+- **Bluetooth OFF reaching the server** (the app normally stops before sending): rejected, retry allowed, with "turn Bluetooth on".
+- **A phone shared in the same class** sends both attempts to review, but never turns a rejection into a review.
+- **An integrity failure** raises its flag even when the outcome is already not "verified".
+- **Degraded mode with a phone waiting for approval** follows the new-phone rows.
+- **Beacons not required** (`bleRequired` off): GPS decides — INSIDE → `noBleGpsInsideAction`, UNCERTAIN → rejected with a retry, OUTSIDE → rejected.
+
+**Step 4: record.** The outcome becomes the attendance record status (see [ATTENDANCE_FLOW.md](ATTENDANCE_FLOW.md) §4). The full rule trace is saved in `VerificationDecision` with each check-in attempt (Phase 5), so every outcome can be explained in a dispute. The engine (`apps/api/src/modules/verification/decision-engine.ts`) already returns the trace; administrators can see it on the policy screen's "Try a case".
 
 *Why a decision table and not a points score:* a table can be read, explained to a student, argued about in a meeting and tested row by row. A hidden score cannot.
 
