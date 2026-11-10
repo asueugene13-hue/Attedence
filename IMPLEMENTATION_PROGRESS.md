@@ -1460,3 +1460,6 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **293** (14 new), mobile **17** (6 new), web 13, so **336 passed**. (The first run stopped at lint on one needless assignment in the signature guard; fixed and rerun.)
 - **Known limitations:** KNOWN_LIMITATIONS 54–56. The phone's "This phone" card works in Expo Go; Bluetooth and GPS checks need the development build (step 4).
 - **Next step:** Phase 4, step 2: the verification policy and decision engine.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (API 293, mobile 17, web 13, e2e 5, audit clean).
+  - GitHub run 42783523375 on `16b9e1a`: **success**.
