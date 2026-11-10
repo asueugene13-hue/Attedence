@@ -127,6 +127,7 @@ model User {
   classReviewDecisions      ClassStatusReview[]       @relation("ReviewDecidedBy")
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
+  riskFlagReviews           RiskFlag[]                @relation("RiskFlagReviewedBy")
 
   @@map("users")
 }
@@ -261,8 +262,12 @@ model UserDevice {
   model                String?
   osVersion            String?        @map("os_version")
   appVersion           String?        @map("app_version")
-  /// Hash of the device secret used to sign check-ins.
-  credentialHash       String?        @map("credential_hash")
+  /// The phone's Ed25519 public key (base64url, 32 bytes). The private key never leaves the phone;
+  /// the server verifies the phone's signatures with this key and holds no secret of its own.
+  publicKey            String?        @map("public_key")
+  /// A student's request to make this phone their attendance phone, and why (D-10).
+  trustRequestedAt     DateTime?      @map("trust_requested_at") @db.Timestamptz(3)
+  trustRequestReason   String?        @map("trust_request_reason")
   isAttendanceDevice   Boolean        @default(false) @map("is_attendance_device")
   status               DeviceStatus   @default(PENDING_APPROVAL)
   trustedAt            DateTime?      @map("trusted_at") @db.Timestamptz(3)
@@ -282,6 +287,7 @@ model UserDevice {
   approvedBy User?         @relation("DeviceApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
   revokedBy  User?         @relation("DeviceRevokedBy", fields: [revokedById], references: [id], onDelete: Restrict)
   sessions   AuthSession[]
+  riskFlags  RiskFlag[]
 
   @@unique([userId, installationId])
   /// Spots one phone used by several accounts.
@@ -691,6 +697,7 @@ model StudentProfile {
   photo                FileObject?           @relation(fields: [photoFileId], references: [id], onDelete: Restrict)
   courseEnrollments    CourseEnrollment[]
   courseRepAssignments CourseRepAssignment[]
+  riskFlags            RiskFlag[]
 
   @@index([programmeId, levelId])
   @@index([status])
@@ -1453,4 +1460,50 @@ model NotificationPreference {
 
   @@id([userId, category, channel])
   @@map("notification_preferences")
+}
+
+// ───────────────────────── Risk flags (Phase 4 step 1) ─────────────────────────
+
+enum RiskType {
+  SHARED_DEVICE
+  DEVICE_SWITCH
+  ACCOUNT_SWITCH
+  BEACON_LOCATION_CONFLICT
+  MOCK_LOCATION
+  INTEGRITY_FAILED
+  REPEATED_REJECTIONS
+  UNEXPECTED_BEACON
+}
+
+enum FlagStatus {
+  OPEN
+  DISMISSED
+  CONFIRMED
+}
+
+/// Something worth a person's attention. A flag never changes attendance or access by itself:
+/// a reviewer decides, with a note (PRESENCE_VERIFICATION.md §8).
+model RiskFlag {
+  id           String     @id @default(uuid(7)) @db.Uuid
+  type         RiskType
+  severity     Severity
+  status       FlagStatus @default(OPEN)
+  studentId    String?    @map("student_id") @db.Uuid
+  deviceId     String?    @map("device_id") @db.Uuid
+  /// What was seen, for the reviewer (other accounts on the phone, times, counts).
+  evidence     Json
+  /// The same situation is flagged once while open (for example one phone, two named students).
+  dedupeKey    String?    @map("dedupe_key")
+  reviewedById String?    @map("reviewed_by_id") @db.Uuid
+  reviewedAt   DateTime?  @map("reviewed_at") @db.Timestamptz(3)
+  reviewNote   String?    @map("review_note")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  student    StudentProfile? @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  device     UserDevice?     @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  reviewedBy User?           @relation("RiskFlagReviewedBy", fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([studentId, createdAt])
+  @@map("risk_flags")
 }

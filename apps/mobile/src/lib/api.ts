@@ -21,12 +21,17 @@ export interface ApiRequest {
   method?: 'GET' | 'POST' | 'PUT';
   body?: unknown;
   accessToken?: string | null;
+  /** Extra headers, such as a phone's signature. */
+  headers?: Record<string, string>;
+  /** The body exactly as signed (sent as is instead of encoding `body`). */
+  rawBody?: string;
 }
 
 /** Calls the API. Throws ApiError for any non-2xx answer, using the API's problem-details body. */
 export async function apiFetch<T>(path: string, request: ApiRequest = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (request.body !== undefined) headers['Content-Type'] = 'application/json';
+  const headers: Record<string, string> = { Accept: 'application/json', ...request.headers };
+  const body = request.rawBody ?? (request.body === undefined ? undefined : JSON.stringify(request.body));
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (request.accessToken) headers.Authorization = `Bearer ${request.accessToken}`;
 
   let response: Response;
@@ -34,7 +39,7 @@ export async function apiFetch<T>(path: string, request: ApiRequest = {}): Promi
     response = await fetch(`${API_URL}/api/v1${path}`, {
       method: request.method ?? 'GET',
       headers,
-      body: request.body === undefined ? undefined : JSON.stringify(request.body),
+      body,
     });
   } catch {
     throw new ApiError(

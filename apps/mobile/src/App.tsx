@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './lib/auth';
+import { DeviceProvider } from './lib/device-context';
 import { useTheme } from './lib/theme';
 import { RootNavigator } from './navigation/RootNavigator';
 
@@ -40,7 +41,9 @@ export function AppRoot({ queryClient: given }: { queryClient?: QueryClient }) {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <ThemedNavigation />
+          <DeviceProvider>
+            <ThemedNavigation />
+          </DeviceProvider>
         </AuthProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

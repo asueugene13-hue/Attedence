@@ -5,6 +5,6 @@ module.exports = {
   setupFiles: ['<rootDir>/jest.setup.ts'],
   // Workspace packages ship ES modules; let Babel transform them like app code.
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@react-navigation/.*|react-navigation|@attendsure/.*))',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@react-navigation/.*|react-navigation|@attendsure/.*|@noble/.*))',
   ],
 };

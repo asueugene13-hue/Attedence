@@ -26,6 +26,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/students', label: 'Students', permission: 'students.read_full' },
   { href: '/imports', label: 'Bulk import', permission: ['students.import', 'enrollments.manage'] },
   { href: '/enrollments', label: 'Enrolments', permission: 'enrollments.manage' },
+  { href: '/devices', label: 'Phones', permission: 'devices.approve' },
+  { href: '/risk-flags', label: 'Risk flags', permission: 'risk_flags.review' },
   { href: '/setup/courses', label: 'Courses', permission: 'academic_structure.read' },
   { href: '/setup/lecturers', label: 'Lecturers', permission: 'academic_structure.read' },
   { href: '/setup/structure', label: 'Academic structure', permission: 'academic_structure.read' },

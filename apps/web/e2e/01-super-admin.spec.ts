@@ -67,6 +67,8 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
     'Students',
     'Bulk import',
     'Enrolments',
+    'Phones',
+    'Risk flags',
     'Courses',
     'Lecturers',
     'Academic structure',

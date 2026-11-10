@@ -14,3 +14,4 @@ export * from './class-lifecycle.js';
 export * from './reschedules.js';
 export * from './monitoring.js';
 export * from './notifications.js';
+export * from './devices.js';

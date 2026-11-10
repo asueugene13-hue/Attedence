@@ -1,6 +1,7 @@
 import { ROLE_LABELS, type RoleKey } from '@attendsure/shared';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
+import { ThisPhone } from '../components/this-phone';
 import { Button, Card, Heading, Notice, Screen } from '../components/ui';
 import { describeError } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -41,6 +42,7 @@ export function ProfileScreen() {
         {row('Email', user.email)}
         {row('Acting as', ROLE_LABELS[activeRole])}
       </Card>
+      <ThisPhone />
       {roles.length > 1 ? (
         <Card>
           <Text style={{ color: palette.textPrimary, fontWeight: '600' }}>Switch role</Text>

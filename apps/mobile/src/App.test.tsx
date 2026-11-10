@@ -12,6 +12,18 @@ jest.mock('expo-secure-store', () => ({
   setItemAsync: jest.fn(async (key: string, value: string) => void mockSecureStore.set(key, value)),
   deleteItemAsync: jest.fn(async (key: string) => void mockSecureStore.delete(key)),
 }));
+// The phone's secure random numbers, from Node in tests.
+jest.mock('expo-crypto', () => ({
+  getRandomValues: <T extends Uint8Array>(array: T) =>
+    jest.requireActual<typeof import('node:crypto')>('node:crypto').getRandomValues(array) as T,
+}));
+const trustedPhone = {
+  id: 'd1',
+  status: 'TRUSTED',
+  isAttendanceDevice: true,
+  trustRequestedAt: null,
+  revokeReason: null,
+};
 
 const TOKEN_KEY = 'attendsure.refreshToken';
 const inAnHour = () => new Date(Date.now() + 60 * 60_000).toISOString();
@@ -42,7 +54,7 @@ const render = (_element: ReactElement) => renderTree(<AppRoot queryClient={quer
 
 type Route = (body: Record<string, unknown> | undefined) => { status: number; body?: unknown };
 let routes: Record<string, Route>;
-const calls: { path: string; body?: Record<string, unknown> }[] = [];
+const calls: { path: string; body?: Record<string, unknown>; headers?: Record<string, string> }[] = [];
 
 beforeEach(() => {
   queryClient = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity, retry: false } } });
@@ -52,11 +64,13 @@ beforeEach(() => {
   routes = {
     'GET /me/timetable': () => ({ status: 200, body: { as: 'STUDENT', data: [] } }),
     'GET /me/notifications/unread-count': () => ({ status: 200, body: { unread: 0 } }),
+    'POST /me/devices': () => ({ status: 200, body: trustedPhone }),
+    'GET /me/devices/current': () => ({ status: 200, body: trustedPhone }),
   };
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input).replace(/^.*\/api\/v1/, '');
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined;
-    calls.push({ path, body });
+    calls.push({ path, body, headers: (init?.headers ?? {}) as Record<string, string> });
     const method = init?.method ?? 'GET';
     // A route may be registered with or without its query string (dates change every day).
     const route = routes[`${method} ${path}`] ?? routes[`${method} ${path.split('?')[0]}`];
@@ -230,6 +244,66 @@ describe('classes', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Start class' }));
     expect(await screen.findByText('Start class: done.')).toBeTruthy();
     expect(calls.some((c) => c.path === '/class-sessions/c1/start')).toBe(true);
+  });
+});
+
+describe('this phone', () => {
+  function signedInAsStudent() {
+    mockSecureStore.set(TOKEN_KEY, 'refresh-old');
+    routes['POST /auth/refresh'] = () => ({ status: 200, body: session('STUDENT', 'refresh-new') });
+    routes['GET /auth/me'] = () => ({
+      status: 200,
+      body: { ...me('STUDENT'), permissions: ['devices.request_replacement'] },
+    });
+  }
+
+  it('registers the phone with its public key and proves it with a signed request', async () => {
+    signedInAsStudent();
+    await render(<App />);
+    await fireEvent.press(await screen.findByText('Profile'));
+    expect(await screen.findByText(/This is your attendance phone/)).toBeTruthy();
+    const registration = calls.find((c) => c.path === '/me/devices');
+    expect(['ANDROID', 'IOS']).toContain(registration?.body?.platform);
+    expect(String(registration?.body?.publicKey)).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const proof = calls.find((c) => c.path === '/me/devices/current');
+    expect(proof?.headers?.['x-device-id']).toBe('d1');
+    expect(proof?.headers?.['x-device-signature']).toMatch(/^[A-Za-z0-9_-]{86}$/);
+  });
+
+  it('lets a student ask to use a new phone, with a reason', async () => {
+    signedInAsStudent();
+    const pending = { ...trustedPhone, status: 'PENDING_APPROVAL', isAttendanceDevice: false };
+    routes['POST /me/devices'] = () => ({ status: 200, body: pending });
+    routes['GET /me/devices/current'] = () => ({ status: 200, body: pending });
+    routes['POST /me/devices/d1/request-trust'] = () => ({
+      status: 200,
+      body: { ...pending, trustRequestedAt: new Date().toISOString() },
+    });
+    await render(<App />);
+    await fireEvent.press(await screen.findByText('Profile'));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Use this phone for attendance' }));
+    expect(await screen.findByText('Explain briefly, at least 5 characters.')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Why are you changing phones?'), 'My old phone broke');
+    await fireEvent.press(screen.getByRole('button', { name: 'Use this phone for attendance' }));
+    expect(await screen.findByText(/waiting for the Registrar or an administrator/)).toBeTruthy();
+    expect(calls.find((c) => c.path === '/me/devices/d1/request-trust')?.body).toEqual({
+      reason: 'My old phone broke',
+    });
+  });
+
+  it('starts over as a new phone when the server knows this installation with another key', async () => {
+    signedInAsStudent();
+    let attempts = 0;
+    routes['POST /me/devices'] = () =>
+      ++attempts === 1
+        ? { status: 409, body: { code: 'DEVICE_KEY_MISMATCH', detail: 'Key changed' } }
+        : { status: 200, body: trustedPhone };
+    await render(<App />);
+    await fireEvent.press(await screen.findByText('Profile'));
+    expect(await screen.findByText(/This is your attendance phone/)).toBeTruthy();
+    const registrations = calls.filter((c) => c.path === '/me/devices');
+    expect(registrations).toHaveLength(2);
+    expect(registrations[1]?.body?.installationId).not.toBe(registrations[0]?.body?.installationId);
   });
 });
 

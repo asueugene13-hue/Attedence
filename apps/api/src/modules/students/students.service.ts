@@ -188,6 +188,15 @@ export class StudentsService implements OnModuleInit {
     return new Map(rows.map((s) => [s.studentNumber, s]));
   }
 
+  /** Student ID and name by account, for showing whose phone a device is. */
+  async byUserIds(userIds: string[]) {
+    const rows = await this.prisma.studentProfile.findMany({
+      where: { userId: { in: [...new Set(userIds)] } },
+      select: { id: true, userId: true, studentNumber: true },
+    });
+    return new Map(rows.map((s) => [s.userId, { id: s.id, studentNumber: s.studentNumber }]));
+  }
+
   async idForUser(userId: string): Promise<string | null> {
     const row = await this.prisma.studentProfile.findUnique({ where: { userId }, select: { id: true } });
     return row?.id ?? null;

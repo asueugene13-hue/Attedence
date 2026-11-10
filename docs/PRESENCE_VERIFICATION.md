@@ -103,9 +103,9 @@ GPS alone never rejects a student, except as OUTSIDE combined with no beacon evi
 
 ## 5. Trusted device
 
-1. **Registration.** On first sign-in, the app creates a random installation ID and a device secret and keeps them in the phone's secure storage (Keychain on iOS, Keystore-backed on Android). The server stores only a hash of the secret.
+1. **Registration.** On first sign-in, the app creates a random installation ID and an **Ed25519 key pair** and keeps them in the phone's secure storage (Keychain on iOS, Keystore-backed on Android). The server stores only the **public key**. *(Corrected in Phase 4 step 1: the first draft said "a hash of a secret" with an HMAC, but checking an HMAC needs the secret itself. With a key pair the server holds nothing that could forge a phone's signature, even if its database leaked.)*
 2. **Trust.** The first phone a student registers right after activating their account becomes their trusted attendance device. Any later phone starts as `PENDING_APPROVAL` (D-10).
-3. **Signing.** Every check-in carries an HMAC of the request body, a timestamp and a nonce, made with the device secret. The server verifies it, so a request copied off the network cannot be replayed from another phone.
+3. **Signing.** Every check-in carries an Ed25519 signature over the method, path, time, a single-use nonce and the exact body bytes, made with the phone's private key. The server verifies it with the public key, refuses times more than 5 minutes off its own clock, and remembers each nonce for 10 minutes, so a request copied off the network can be neither changed nor replayed.
 4. **Replacement.** The student requests a new phone, and a Registrar or Administrator approves it. The old device becomes `REPLACED`. Until approval, check-ins from the new phone go to lecturer review instead of being rejected.
 5. **Signals:**
    - `SHARED_DEVICE`: one installation ID signed into two student accounts, or two students checking in from one phone in the same class. Both check-ins go to manual review.

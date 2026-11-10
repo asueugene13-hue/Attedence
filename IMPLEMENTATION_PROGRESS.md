@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification) plan proposed, waiting for approval. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; step 1 (trusted phones) in progress. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -91,6 +91,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-09 | D-13 | Thresholds as configurable settings (15 min, 30 min, ≥3 students AND ≥10% of enrolled). Course-rep reports: priority, verified, extra weight, never simply "two students" | Product owner |
 | 2026-11-09 | D-13 (rep rule) | Corroboration: rep + at least 1 other student escalates an UNCONFIRMED class early; a rep alone never does; a rep's report nudges the lecturer and marks the review priority | Product owner |
 | 2026-11-09 | Phase 3 approval | Phase 3 approved after a live review on the web dashboard and a phone (Samsung, Expo Go). Accepted as built, including the judgment call that student reports can send a confirmed but not-started class to review. | Product owner |
+| 2026-11-09 | Phase 4 approval | Plan approved with the recommended decisions: D-10 one trusted phone per student (first trusted automatically, replacements approved by a Registrar or Administrator); native app built in the cloud with a free Expo account; integrity accounts (Google Play Console, Apple Developer) created later, before Phase 8; candidate rotating-ID beacons to be bought for the trial (D-08). | Product owner |
 | 2026-11-09 | Recurrence | Support weekly (default), every other week, selected weeks, one-time classes, recurrence start/end dates, holidays and per-class exceptions | Product owner |
 | 2026-11-09 | Notifications | Channels IN_APP, EMAIL and PUSH designed from the start; PUSH disabled until a university-owned Firebase project exists | Product owner |
 | 2026-11-09 | Rule 8 | Modules never write another module's tables or check its rules (they call its service); read-only joins for display are allowed. CLAUDE.md updated. | Product owner (option 1) |
@@ -1372,7 +1373,7 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 - The product owner reviewed Phase 3 live: the web dashboard as Super Admin and lecturer, and the phone app as a student, with a demo class moved to the current time. A lecturer started the class; the product owner asked why there was no attendance option. Answer: attendance arrives in Phase 5, after classroom verification (Phase 4); no placeholder button was added (CLAUDE.md rule 6).
 - **Approved.** Next: the Phase 4 plan, for approval before any Phase 4 work starts.
 
-## Phase 4: classroom verification (plan proposed 2026-11-09, waiting for approval)
+## Phase 4: classroom verification (plan approved 2026-11-09)
 
 **Goal:** prove a student's phone is in the right classroom, using the layers in [PRESENCE_VERIFICATION.md](docs/PRESENCE_VERIFICATION.md): BLE beacon, GPS, trusted device and platform integrity. The decision table and its policy are built and tested here. Attendance itself (QR codes, check-in, rosters) is Phase 5, which uses this engine.
 
@@ -1409,3 +1410,53 @@ Approved by the product owner 2026-11-09, with decisions D-11, D-13, recurrence 
 ### Order and timing
 
 Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved. Step 4 needs the native build route decided. Step 6 needs the beacons, the classrooms and you on site.
+
+### 2026-11-10 — Phase 4, step 1: trusted phones and risk flags
+
+- **Design correction (explained to the product owner):** the design said the server keeps "a hash of the device secret" and checks an HMAC signature. That cannot work, because checking an HMAC needs the secret itself. Each phone now makes an **Ed25519 key pair**: the private key stays in the phone's secure storage and the server keeps only the public key. Even a leaked server database cannot be used to sign as a phone. PRESENCE_VERIFICATION.md §5 is updated.
+- **Built (API):**
+  - **Phone registration** after each sign-in (D-10):
+    - a student's first phone becomes their trusted attendance phone; any later phone waits for approval;
+    - staff phones are trusted but never attendance phones;
+    - the same installation with a different key is refused, and the app then starts over as a new phone;
+    - a lock and a database rule make sure only one phone can become "the first", even if two register at the same moment.
+  - **Signed requests:** a guard any route can require. It checks the phone belongs to the signed-in person and is not revoked; the time is within 5 minutes of the server's; the single-use nonce is new (kept 10 minutes in Redis); and the signature covers the method, path, time, nonce and the exact body bytes. The API keeps the raw request body for this.
+  - **Trust requests and approvals:** a student gives a reason to switch phones; an approver (Super Admin by default; Registrar or Administrator where the matrix's configurable grant is switched on, with university-wide scope) approves, and the old phone becomes REPLACED. Approvers can also refuse a waiting phone or revoke a lost one, with a reason. After a revocation the next phone still needs approval, so "revoke, then any phone is trusted" is not possible. Everything is audited.
+  - **Risk flags**, a new module that other modules call:
+    - one phone used by several students (SHARED_DEVICE), or a quick switch between accounts within a day (ACCOUNT_SWITCH);
+    - three new-phone requests in 90 days (DEVICE_SWITCH).
+    - Each situation is flagged once while open. A reviewer confirms or dismisses with a note. Flags never block anyone or change anything by themselves.
+- **Built (web):** **Phones** (requests waiting, search by Student ID, name or email, approve, refuse, revoke) and **Risk flags** (review with a note).
+- **Built (phone):**
+  - the phone makes its identity on first use (random installation ID and key pair from `expo-crypto`'s secure random numbers);
+  - it registers after each sign-in and proves its key with one signed request;
+  - **Profile → This phone** shows the status, and lets a student ask to use a new phone with a reason.
+  - The phone's request helper now refreshes the sign-in only when the server says the sign-in ended. A refused signature is not resent, which would be refused as a replay and could sign the person out.
+  - New dependencies: `@noble/ed25519` 3.2.0 and `@noble/hashes` 2.4.0 (audited, pure JavaScript, no dependencies, released over two months ago), and `expo-crypto` 58.0.7.
+  - The no-device exemption already existed (student page, Phase 2).
+- **Proof the key tests bite:**
+  - with the replay check removed, the replay test failed;
+  - with the registration lock removed, the "two phones at the same moment" test failed. The database rule still refused the second trusted phone, so there are two layers of protection.
+  - Both restored.
+- **Interoperability proved by a test:** a signature made by the phone's code is accepted by the server's check (Node's own Ed25519), and refused if the method, path or body changes.
+- **Files:**
+  - API, new:
+    - `modules/devices/` (`devices.service.ts`, `device-signature.guard.ts`, `devices.controller.ts`, `devices.module.ts`);
+    - `modules/risk-flags/` (service, controller, module);
+    - `test/devices.test.ts` (14 tests);
+    - migration `20261110100000_trusted_devices_and_risk_flags`.
+  - API, changed: `main.ts` (raw body), `app.module.ts`, `students.service.ts` (`byUserIds`), `test/fixtures.ts`.
+  - Shared: `packages/shared/src/devices.ts` (request shapes, the signed text, risk types).
+  - Web: `app/(app)/devices/page.tsx`, `app/(app)/risk-flags/page.tsx`, `lib/navigation.ts`, `e2e/01-super-admin.spec.ts` (sidebar).
+  - Phone:
+    - new: `lib/device.ts`, `lib/device-context.tsx`, `components/this-phone.tsx`, `lib/device.test.ts` (3 tests);
+    - changed: `lib/api.ts`, `lib/auth.tsx`, `App.tsx`, `ProfileScreen.tsx`, `App.test.tsx` (3 new tests), `jest.config.js`, `package.json`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA, PRESENCE_VERIFICATION §5, KNOWN_LIMITATIONS (54–56).
+- **Database changes:**
+  - `user_devices`: `public_key`, `trust_requested_at` and `trust_request_reason` added. `credential_hash` dropped (it was never written).
+  - New table `risk_flags` with enums `RiskType` and `FlagStatus`.
+  - SQL rules: one trusted attendance phone per student; public-key format; one open flag per situation; a reviewed flag has its reviewer, time and note.
+  - Applied locally; drift check clean.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **293** (14 new), mobile **17** (6 new), web 13, so **336 passed**. (The first run stopped at lint on one needless assignment in the signature guard; fixed and rerun.)
+- **Known limitations:** KNOWN_LIMITATIONS 54–56. The phone's "This phone" card works in Expo Go; Bluetooth and GPS checks need the development build (step 4).
+- **Next step:** Phase 4, step 2: the verification policy and decision engine.

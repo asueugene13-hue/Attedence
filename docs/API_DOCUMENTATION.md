@@ -101,16 +101,20 @@ Imports have one address per type, `/imports/<type>` with `<type>` = `students` 
 
 ### Places, beacons, devices
 
+**Signed requests (Phase 4 step 1).** Requests that must come from the student's own phone carry four headers: `x-device-id`, `x-device-timestamp` (milliseconds), `x-device-nonce` (single use) and `x-device-signature` (Ed25519, base64url). The signed text is `deviceSigningPayload` in `packages/shared/src/devices.ts`: a fixed label, the method, the full path with query, the time, the nonce and the SHA-256 of the exact body bytes. Refusals: `401 DEVICE_SIGNATURE_REQUIRED`, `DEVICE_SIGNATURE_INVALID`, `DEVICE_UNKNOWN` (not the caller's phone), `DEVICE_CLOCK_SKEW` (more than 5 minutes off), `DEVICE_SIGNATURE_REPLAYED`; `403 DEVICE_REVOKED`.
+
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
 | GET · POST · PATCH | `/campuses`, `/buildings`, `/classrooms` | Read: every role (`timetables.read`; room names are not sensitive). Change: `classrooms.manage` with university-wide scope | Geofence `{ lat, lng, radiusM }` (20–5,000 m) on a campus or a building; `null` clears it. A building's geofence overrides its campus's. `GET /classrooms` returns each room's building, campus and effective geofence; filters `?campusId=&buildingId=&minCapacity=&includeInactive=`. Codes are unique within the parent. Deactivate, never delete. **Built.** |
 | GET · POST · PATCH | `/beacons` | SA (UA where configured) | Register and configure beacons |
 | GET | `/beacons/:id/health` | SA, UA; LE during own class | Health history |
 | POST | `/beacons/:id/calibration` · `/beacons/:id/retire` | SA | Record a site survey; retire |
-| POST | `/devices/register` | Signed-in mobile user | Register this phone |
-| GET | `/me/devices` | Signed in | Own devices |
-| POST | `/me/devices/replacement-requests` | ST | Ask to trust a new phone |
-| GET · POST | `/devices?status=PENDING_APPROVAL` · `/devices/:id/approve` · `/devices/:id/revoke` | SA, RG/UA where configured | Approve or revoke |
+| POST | `/me/devices` | Signed in (the app, after each sign-in) | `{ installationId, platform: ANDROID|IOS, publicKey, model?, osVersion?, appVersion? }`. Registers this phone or recognises it again. A student's first phone becomes their trusted attendance phone; any later phone is `PENDING_APPROVAL` (D-10). Staff phones are trusted but never attendance phones. The same installation with a different key: `409 DEVICE_KEY_MISMATCH` (the app then starts over as a new phone). **Built (Phase 4 step 1).** |
+| GET | `/me/devices` | Signed in | The caller's phones. **Built.** |
+| GET | `/me/devices/current` | Signed in, **signed by the phone** | The phone that signed the request, with its status. Proves the phone holds its key. **Built.** |
+| POST | `/me/devices/:id/request-trust` | Students (`devices.request_replacement`) | `{ reason }`: make this waiting phone my attendance phone. Three requests within 90 days raise a `DEVICE_SWITCH` flag. **Built.** |
+| GET | `/devices?requested=true\|status=&q=` | `devices.approve` with university-wide scope | Requests waiting for a decision (oldest first), or phones by status; `q` searches name, email or Student ID. **Built.** |
+| POST | `/devices/:id/approve` · `/devices/:id/revoke` | Same | Approve `{ note? }`: the phone becomes the attendance phone and the old one `REPLACED`. Revoke `{ reason }`: refuse a waiting phone, or revoke a trusted one (lost or stolen); a revoked student's next phone still needs approval. Audited. **Built.** |
 
 ### Timetables and class sessions
 
@@ -211,7 +215,7 @@ Class actions follow the shared transition table (`packages/shared/src/class-lif
 | GET | `/analytics/classes?metric=cancellations\|delays\|reviews` | UA, SA | Class operations |
 | POST | `/reports/exports` | By report type | `{ reportType, params, format }`; queued and logged |
 | GET | `/reports/exports/:id` · `/reports/exports/:id/download` | Requester | Status; short-lived download link |
-| GET · POST | `/risk-flags` · `/risk-flags/:id/resolve` | UA, SA (scoped) | Review queue |
+| GET · POST | `/risk-flags?status=OPEN\|DISMISSED\|CONFIRMED&type=` · `/risk-flags/:id/review` | `risk_flags.review` (SA, UA) | The review queue (open flags oldest first). Review `{ decision: CONFIRMED|DISMISSED, note }`; a flag never changes attendance or access by itself. `409 ALREADY_REVIEWED`. **Built (Phase 4 step 1).** |
 | GET | `/system/health` · `/system/jobs` · `/system/events` | SA | Health, job failures, alerts |
 | GET | `/me/student-id` | ST | Card data plus a rotating `ASID1` token |
 | POST | `/student-id/verify` | Staff | `{ token }` → name, photo, programme, status |

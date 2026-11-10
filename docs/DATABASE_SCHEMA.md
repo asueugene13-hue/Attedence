@@ -195,7 +195,9 @@ model UserDevice {
   model                String?
   osVersion            String?
   appVersion           String?
-  credentialHash       String?                    // hash of the device secret used to sign check-ins
+  publicKey            String?                    // the phone's Ed25519 public key (base64url); the private key never leaves the phone
+  trustRequestedAt     DateTime?                  // a student's request to make this the attendance phone (D-10)
+  trustRequestReason   String?
   isAttendanceDevice   Boolean        @default(false)
   status               DeviceStatus   @default(PENDING_APPROVAL)
   trustedAt            DateTime?
@@ -978,7 +980,7 @@ model ReportExport {
   downloadedAt         DateTime?
 }
 
-model RiskFlag {                     // for human review only; never changes attendance by itself
+model RiskFlag {                     // Phase 4 step 1; for human review only; never changes attendance by itself
   id
   type                RiskType
   severity            Severity
@@ -1165,6 +1167,8 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | Class history cannot be edited or deleted | `class_events_append_only` trigger |
 | At most one waiting reschedule request per class | `reschedule_requests_one_pending` partial unique index (Phase 3 step 4b, migration `20261109180000_reschedules`) |
 | A decided request says who decided and when; an approved one names its replacement; the new time ends after it starts | `reschedule_requests_decision_complete`, `reschedule_requests_time_order` checks |
+| A student has at most one trusted attendance phone; a public key is 32 bytes in base64url | `user_devices_one_attendance_device` partial unique index, `user_devices_public_key_format` check (Phase 4 step 1, migration `20261110100000_trusted_devices_and_risk_flags`) |
+| The same situation is flagged once while open; a reviewed flag has its reviewer, time and note | `risk_flags_one_open_per_key` partial unique index, `risk_flags_review_complete` check |
 | At most one open review per class; a decided review has its decision, time and note, an open one none | `class_status_reviews_one_open` partial unique index, `class_status_reviews_decision_complete` check (Phase 3 step 5a, migration `20261109200000_class_monitoring`) |
 | One report per person, type and class; notes at most 500 characters | `@@unique([classSessionId, reporterUserId, type])`, `class_issue_reports_note_length` check |
 | Only a replacement session points to the session it replaces, and a session is replaced at most once | `class_sessions_replacement_link` check, unique `rescheduled_from_id` |

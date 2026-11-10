@@ -74,3 +74,6 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 51. **On the phone, lecturers confirm, start, delay, interrupt, resume, end and cancel.** Reschedule requests, holds, voids and review decisions are on the web dashboard. The phone has no "edit preferences" screen yet (the web has one).
 52. **Screens refresh every 30–60 seconds**, not instantly; live updates arrive with the attendance work (Phase 5).
 53. **The class monitor shows every class in the university, one day at a time.** It is not yet narrowed to the administrator's faculty or department; the review queue, reschedule requests and every action already are. A scoped monitor comes with reports.
+54. **Phone approvals need university-wide scope.** The Super Admin approves by default; a Registrar or Administrator can be given `devices.approve` (the matrix allows it), but only with university-wide scope. Faculty-scoped approval can come later if wanted.
+55. **Approvers are not notified of new phone requests yet;** they see them on the Phones screen.
+56. **The phone's private key is in secure storage, not in a hardware key store that refuses to export it.** Hardware-backed keys need a native module; they can come with the development build (step 4). The phone model is not reported yet for the same reason.

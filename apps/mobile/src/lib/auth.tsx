@@ -114,7 +114,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         return await apiFetch<T>(path, { ...request, accessToken: token });
       } catch (error) {
-        if (!(error instanceof ApiError) || error.status !== 401) throw error;
+        // Only an ended sign-in is worth refreshing and retrying. Other 401s, such as a refused phone
+        // signature, are final: resending a signed request would only be refused as a replay.
+        if (!(error instanceof ApiError) || error.status !== 401 || error.code !== 'UNAUTHENTICATED')
+          throw error;
         token = await refresh();
         if (!token) {
           await signOutLocally();

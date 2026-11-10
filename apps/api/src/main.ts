@@ -8,7 +8,8 @@ import { configureApp } from './configure-app.js';
 
 async function bootstrap(): Promise<void> {
   loadLocalEnvFile();
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // rawBody: signed phone requests are checked against the exact bytes sent.
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
   app.useLogger(app.get(Logger));
   configureApp(app);
 
