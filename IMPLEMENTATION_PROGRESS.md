@@ -1502,3 +1502,6 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **334** (41 new), mobile 17, web 13, so **377 passed**.
 - **Known limitations:** the decision is not yet stored (Phase 5, with check-in attempts); one university-wide policy (no per-faculty rules); real beacon thresholds come with step 3 and the field test.
 - **Next step:** Phase 4, step 3: the beacon register and calibration surveys.
+- **CI:**
+  - Clean-clone rehearsal of every CI step: all passed (API 334, mobile 17, web 13, e2e 5, audit clean).
+  - GitHub run 42788302474 on `fd78482`: **success**.
