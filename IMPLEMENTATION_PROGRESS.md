@@ -1582,3 +1582,4 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Not tested yet, honestly:** the Bluetooth scan and the location reading have not run on a real phone with a real beacon. The frame reader is tested with made-up broadcasts, and the server side end to end, but the native scan needs the phone and a beacon (step 6, or sooner with one beacon or a beacon-simulator app).
 - **Known limitations:** KNOWN_LIMITATIONS 56–57, 59–61.
 - **Next step:** install the app on the phone and try "Check this classroom" (any beacon-simulator app broadcasting a registered Eddystone-UID works before real beacons arrive). Then Phase 4, step 5: beacon health and degraded mode.
+- **CI:** clean-clone rehearsal: every step passed (API 357, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43120252328 on `ae8869a`: **success**.
