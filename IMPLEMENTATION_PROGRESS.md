@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–3 done; step 4 (the native app: Bluetooth, GPS, classroom check, survey mode) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–4 done (step 4: the native app build, "Check this classroom" and survey mode); step 5 (beacon health and degraded mode) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1554,3 +1554,31 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
   - Not a project problem. Turning Smart App Control off is the product owner's decision: it is a security setting, and Windows cannot switch it back on without a reset. So it was left alone.
   - GitHub run 43112956376 on `cfa9a69` (Linux, including the bundle check): **success**.
 - **Follow-up (2026-11-11):** the product owner turned Smart App Control off. The mobile bundle check now passes on this PC again (`npm run bundle:check -w @attendsure/mobile`: exported).
+
+### 2026-11-11 — Phase 4, step 4: the native app, "Check this classroom" and survey mode
+
+- **Native build (D-01):** an Expo cloud development build on the product owner's free Expo account (project `@clent_eugene/attendsure`). Android APK built on Expo's servers (build `0a3d12d6-0de2-42a5-9fb0-304865d23c1f`: FINISHED). It includes the Bluetooth (`react-native-ble-plx` 3.5.1), location (`expo-location` 58.0.21) and device (`expo-device` 58.0.5) native modules. Background location is blocked in the app's permissions. The development build loads its screens from this PC, so it is for testing only (limitation 60).
+- **Built (API):**
+  - `GET /me/beacon-scan-list`: what a phone listens for (registered fixed-ID beacons in rooms in use, with the rooms to choose from). Thresholds stay on the server.
+  - `POST /classroom-checks`, **signed by the phone**: runs the phone's Bluetooth readings and one location reading through the real evidence functions and decision engine, with the current policy and the phone's real trust status. It returns the evidence and the decision and **records nothing**. Unregistered identifiers are ignored; an uncalibrated beacon is never strong. QR, session and enrolment gates are treated as passed (they are Phase 5's check-in).
+  - `POST /calibration-surveys/:id/measurements`: each phone can only measure itself, but a threshold needs three phone models, so later phones **add** their readings to an open survey. Readings are only added (the append-only trigger still holds); the result is recomputed and audited. Applying a survey now locks the survey row, so readings arriving at the same moment are either included or refused, never silently missed.
+  - Places gained `geofenceForClassroom` (the building's, else the campus's); beacons gained `scanList`. Verification calls both services (rule 8).
+- **Built (phone):**
+  - `lib/beacon-frames.ts` (pure, tested): reads Eddystone-UID and iBeacon broadcasts into the register's identifier format, keeps only listed beacons (at most 20 readings each, 200 in all), and the median for the survey.
+  - `lib/presence.ts`: asks for permissions only when a scan starts (Android 12+: nearby devices and precise location; without location Android silently returns no beacons), reports Bluetooth OFF or DENIED instead of hiding it, scans for 6 seconds, takes one location reading (15-second limit; a missing reading is sent as "no location", which never counts against anyone).
+  - **Check this classroom** screen (Profile → Classroom tools): explains what is collected and why, then room → Check now → the decision and its evidence (Bluetooth, readings recognised, location and distance, phone status, rules version). A verified result says "would be verified (nothing was recorded)", not the student's "You're checked in".
+  - **Beacon survey** screen (staff with `beacons.manage` only): room, a new or open survey, position, "Measure here", the readings per beacon, save; then the survey's result per beacon. Applying stays on the dashboard.
+- **Judgment calls, for review:**
+  - The scan list is open to every signed-in user. It holds only identifiers and room names, which anyone near a beacon can read from the air anyway. Thresholds are not in it.
+  - In a survey, a beacon **not heard** at an outside position adds no reading (that is the best case), rather than a made-up weakest value.
+- **Files:**
+  - Shared: `beacons.ts` (`AddMeasurementsSchema`), `verification.ts` (`ClassroomCheckSchema`).
+  - API: new `modules/verification/classroom-check.service.ts`, `classroom-check.controller.ts`; `verification.module.ts`, `beacons/beacons.service.ts`, `beacons/beacons.controller.ts`, `places/places.service.ts`; new `test/classroom-check.test.ts` (8 tests), `test/beacons.test.ts` (+1).
+  - Mobile: `app.config.ts`, new `eas.json`, `package.json`; new `lib/beacon-frames.ts` with `beacon-frames.test.ts` (5 tests), `lib/presence.ts`, `lib/rooms.ts`, `components/choice-chips.tsx`, `screens/CheckClassroomScreen.tsx`, `screens/SurveyScreen.tsx`; `navigation/RootNavigator.tsx`, `navigation/types.ts`, `screens/ProfileScreen.tsx`.
+  - Docs: API_DOCUMENTATION, PRESENCE_VERIFICATION §3, KNOWN_LIMITATIONS (58 resolved; 59–61 new).
+- **Database changes:** none (no migration).
+- **Commands run:** `eas init`, `eas build --profile development --platform android` (cloud), `npm run check`, the clean-clone rehearsal.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **357** (9 new), mobile **22** (5 new), web 13, so **405 passed**.
+- **Not tested yet, honestly:** the Bluetooth scan and the location reading have not run on a real phone with a real beacon. The frame reader is tested with made-up broadcasts, and the server side end to end, but the native scan needs the phone and a beacon (step 6, or sooner with one beacon or a beacon-simulator app).
+- **Known limitations:** KNOWN_LIMITATIONS 56–57, 59–61.
+- **Next step:** install the app on the phone and try "Check this classroom" (any beacon-simulator app broadcasting a registered Eddystone-UID works before real beacons arrive). Then Phase 4, step 5: beacon health and degraded mode.

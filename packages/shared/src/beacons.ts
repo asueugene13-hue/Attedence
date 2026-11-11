@@ -110,22 +110,27 @@ export const BeaconQuerySchema = z.strictObject({
   status: z.enum(BEACON_STATUSES).optional(),
 });
 
+const MeasurementsSchema = z
+  .array(
+    z.strictObject({
+      beaconId: z.uuid(),
+      phoneModel: z.string().trim().min(2).max(100),
+      platform: z.enum(['ANDROID', 'IOS']),
+      position: z.enum(SURVEY_POSITIONS),
+      rssi: z.number().int().min(-120).max(0),
+    }),
+  )
+  .min(1)
+  .max(2000);
+
 export const CalibrationSurveySchema = z.strictObject({
   classroomId: z.uuid(),
   notes: z.string().trim().max(500).optional(),
-  measurements: z
-    .array(
-      z.strictObject({
-        beaconId: z.uuid(),
-        phoneModel: z.string().trim().min(2).max(100),
-        platform: z.enum(['ANDROID', 'IOS']),
-        position: z.enum(SURVEY_POSITIONS),
-        rssi: z.number().int().min(-120).max(0),
-      }),
-    )
-    .min(1)
-    .max(2000),
+  measurements: MeasurementsSchema,
 });
+
+/** Another phone's readings, added to a survey that has not been applied yet (each phone measures itself). */
+export const AddMeasurementsSchema = z.strictObject({ measurements: MeasurementsSchema });
 
 export const SurveyQuerySchema = z.strictObject({ classroomId: z.uuid().optional() });
 export const ApplySurveySchema = z.strictObject({ reason: ReasonSchema.optional() });

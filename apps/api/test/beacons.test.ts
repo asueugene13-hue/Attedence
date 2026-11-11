@@ -259,6 +259,48 @@ describe('calibration surveys', () => {
     ]).expect(400);
   });
 
+  it('builds one survey from several phones, each adding its own readings until it is applied', async () => {
+    const beacon = (await uidBeacon().expect(201)).body;
+    const other = (await uidBeacon(rooms.b, UID.replace('0', '1')).expect(201)).body;
+    const phone = (phoneModel: string, values: [string, number][]) =>
+      values.map(([position, rssi]) => ({
+        beaconId: beacon.id,
+        phoneModel,
+        platform: 'ANDROID',
+        position,
+        rssi,
+      }));
+    const values: [string, number][] = [
+      ['INSIDE_BACK_ROW', -70],
+      ['CORRIDOR', -86],
+    ];
+    const created = (await survey(rooms.a, phone(PHONES[0]!, values)).expect(201)).body;
+    expect(created.result[0]).toMatchObject({ phoneModels: 1, problem: 'NOT_ENOUGH_PHONES' });
+    const add = (body: object) =>
+      http.post(`/api/v1/calibration-surveys/${created.id}/measurements`).set(admin).send(body);
+
+    await add({ measurements: phone(PHONES[1]!, values) }).expect(200);
+    const third = (await add({ measurements: phone(PHONES[2]!, values) }).expect(200)).body;
+    expect(third.result[0]).toMatchObject({ phoneModels: 3, thresholdRssi: -78, problem: null });
+    expect(third.measurements).toHaveLength(6);
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      where: { action: 'calibration_surveys.measurements_added', entityId: created.id },
+      orderBy: { occurredAt: 'desc' },
+    });
+    expect(audit.after).toMatchObject({ readingsAdded: 2 });
+
+    // Only this room's beacons, and only while the survey is open.
+    const wrongRoom = await add({
+      measurements: [{ ...phone('Phone D (test)', values)[0], beaconId: other.id }],
+    }).expect(400);
+    expect(wrongRoom.body.code).toBe('BEACON_NOT_IN_ROOM');
+    await http.post(`/api/v1/calibration-surveys/${created.id}/apply`).set(admin).send({}).expect(200);
+    expect((await add({ measurements: phone('Phone D (test)', values) }).expect(409)).body.code).toBe(
+      'ALREADY_APPLIED',
+    );
+    expect((await prisma.beacon.findUniqueOrThrow({ where: { id: beacon.id } })).thresholdRssi).toBe(-78);
+  });
+
   it('refuses to apply a survey after its beacon moved to another room', async () => {
     const beacon = (await uidBeacon().expect(201)).body;
     const created = (

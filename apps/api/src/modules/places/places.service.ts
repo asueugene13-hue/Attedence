@@ -252,6 +252,16 @@ export class PlacesService {
     }));
   }
 
+  /** A room's effective geofence (its building's, else its campus's), for the location check. */
+  async geofenceForClassroom(classroomId: string): Promise<Geofence | null> {
+    const room = await this.prisma.classroom.findUnique({
+      where: { id: classroomId },
+      include: { building: { include: { campus: true } } },
+    });
+    if (!room) return null;
+    return geofenceOf(room.building) ?? geofenceOf(room.building.campus);
+  }
+
   async createClassroom(
     actor: AccessClaims,
     input: z.output<typeof CreateClassroomSchema>,

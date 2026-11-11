@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type {
   BeaconQuerySchema,
+  AddMeasurementsSchema,
   CalibrationSurveySchema,
   CreateBeaconSchema,
   UpdateBeaconSchema,
@@ -52,6 +53,21 @@ export class BeaconsService {
       orderBy: [{ classroomId: 'asc' }, { label: 'asc' }],
     });
     return { data: await this.views(rows) };
+  }
+
+  /**
+   * The beacons phones listen for: active (or suspected faulty) beacons with a fixed identifier.
+   * Rotating-ID beacons are left out until their broadcasts can be resolved (D-08, limitation 57).
+   */
+  async scanList() {
+    const rows = await this.prisma.beacon.findMany({
+      where: {
+        status: { in: ['ACTIVE', 'SUSPECTED_FAULTY'] },
+        protocol: { in: ['EDDYSTONE_UID', 'IBEACON'] },
+      },
+      select: { id: true, classroomId: true, protocol: true, identifier: true, thresholdRssi: true },
+    });
+    return rows;
   }
 
   async get(id: string) {
@@ -167,18 +183,7 @@ export class BeaconsService {
   ) {
     await this.access.assertInstitutionWide(actor);
     await this.assertRoom(input.classroomId);
-    const beaconIds = [...new Set(input.measurements.map((m) => m.beaconId))];
-    const beacons = await this.prisma.beacon.findMany({ where: { id: { in: beaconIds } } });
-    const foreign = beaconIds.filter(
-      (b) => beacons.find((x) => x.id === b)?.classroomId !== input.classroomId,
-    );
-    if (foreign.length > 0) {
-      throw new BadRequestException({
-        code: 'BEACON_NOT_IN_ROOM',
-        message: 'Every reading must be of a beacon registered to the surveyed room.',
-        errors: { beaconIds: foreign },
-      });
-    }
+    const beaconIds = await this.assertBeaconsInRoom(input.classroomId, input.measurements);
     const result = calibrate(input.measurements, beaconIds);
     const now = this.clock.now();
     const survey = await this.prisma.$transaction(async (tx) => {
@@ -205,6 +210,57 @@ export class BeaconsService {
       return created;
     });
     return this.surveyView(survey);
+  }
+
+  /**
+   * Adds another phone's readings to a survey that has not been applied (each phone can only measure
+   * itself, and a threshold needs several phone models). Readings are only ever added; the result is
+   * recomputed from all of them. The survey row is locked so this cannot race with applying it.
+   */
+  async addMeasurements(
+    actor: AccessClaims,
+    id: string,
+    input: z.output<typeof AddMeasurementsSchema>,
+    context: RequestContext,
+  ) {
+    await this.access.assertInstitutionWide(actor);
+    const survey = await this.prisma.calibrationSurvey.findUnique({ where: { id } });
+    if (!survey) throw notFound('survey');
+    await this.assertRoom(survey.classroomId);
+    await this.assertBeaconsInRoom(survey.classroomId, input.measurements);
+    await this.prisma.$transaction(async (tx) => {
+      const open = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM calibration_surveys WHERE id = ${id}::uuid AND applied_at IS NULL FOR UPDATE`;
+      if (open.length !== 1) {
+        throw new ConflictException({
+          code: 'ALREADY_APPLIED',
+          message: 'This survey has already been applied. Start a new survey.',
+        });
+      }
+      await tx.calibrationMeasurement.createMany({
+        data: input.measurements.map((m) => ({ ...m, surveyId: id })),
+      });
+      const all = await tx.calibrationMeasurement.findMany({ where: { surveyId: id } });
+      const result = calibrate(all, [...new Set(all.map((m) => m.beaconId))]);
+      await tx.calibrationSurvey.update({
+        where: { id },
+        data: { result: result as unknown as Prisma.InputJsonValue },
+      });
+      await this.audit.record(
+        auditEntry(
+          actor,
+          'calibration_surveys.measurements_added',
+          { type: 'calibration_survey', id },
+          {
+            before: { result: survey.result },
+            after: { readingsAdded: input.measurements.length, result },
+          },
+          context,
+        ),
+        tx,
+      );
+    });
+    return this.getSurvey(id);
   }
 
   async listSurveys(classroomId?: string) {
@@ -249,27 +305,32 @@ export class BeaconsService {
         message: 'This survey has already been applied.',
       });
     }
-    const result = survey.result as unknown as BeaconCalibration[];
-    const problems = result.filter((r) => r.problem);
-    if (problems.length > 0) {
-      throw new ConflictException({
-        code: 'SURVEY_HAS_PROBLEMS',
-        message: 'Some beacons could not be calibrated from this survey. Fix the placement or measure again.',
-        errors: { beacons: problems.map((p) => ({ beaconId: p.beaconId, problem: p.problem })) },
-      });
-    }
     const now = this.clock.now();
+    let result: BeaconCalibration[] = [];
     await this.prisma.$transaction(async (tx) => {
-      const claimed = await tx.calibrationSurvey.updateMany({
-        where: { id, appliedAt: null },
-        data: { appliedAt: now, appliedById: actor.userId },
-      });
-      if (claimed.count !== 1) {
+      // Locked, so readings added at the same moment are either in this result or refused.
+      const locked = await tx.$queryRaw<{ result: unknown }[]>`
+        SELECT result FROM calibration_surveys WHERE id = ${id}::uuid AND applied_at IS NULL FOR UPDATE`;
+      if (locked.length !== 1) {
         throw new ConflictException({
           code: 'ALREADY_APPLIED',
           message: 'This survey has already been applied.',
         });
       }
+      result = locked[0]!.result as BeaconCalibration[];
+      const problems = result.filter((r) => r.problem);
+      if (problems.length > 0) {
+        throw new ConflictException({
+          code: 'SURVEY_HAS_PROBLEMS',
+          message:
+            'Some beacons could not be calibrated from this survey. Fix the placement or measure again.',
+          errors: { beacons: problems.map((p) => ({ beaconId: p.beaconId, problem: p.problem })) },
+        });
+      }
+      await tx.calibrationSurvey.update({
+        where: { id },
+        data: { appliedAt: now, appliedById: actor.userId },
+      });
       for (const r of result) {
         const updated = await tx.beacon.updateMany({
           where: { id: r.beaconId, classroomId: survey.classroomId },
@@ -299,6 +360,21 @@ export class BeaconsService {
       );
     });
     return this.getSurvey(id);
+  }
+
+  /** Every reading must be of a beacon registered to the surveyed room. Returns the beacons read. */
+  private async assertBeaconsInRoom(classroomId: string, measurements: { beaconId: string }[]) {
+    const beaconIds = [...new Set(measurements.map((m) => m.beaconId))];
+    const beacons = await this.prisma.beacon.findMany({ where: { id: { in: beaconIds } } });
+    const foreign = beaconIds.filter((b) => beacons.find((x) => x.id === b)?.classroomId !== classroomId);
+    if (foreign.length > 0) {
+      throw new BadRequestException({
+        code: 'BEACON_NOT_IN_ROOM',
+        message: 'Every reading must be of a beacon registered to the surveyed room.',
+        errors: { beaconIds: foreign },
+      });
+    }
+    return beaconIds;
   }
 
   private async assertRoom(classroomId: string) {

@@ -4,6 +4,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 export type RootStackParamList = {
   Main: undefined;
   Class: { id: string };
+  CheckClassroom: undefined;
+  Survey: undefined;
   TwoStep: undefined;
   Login: undefined;
 };

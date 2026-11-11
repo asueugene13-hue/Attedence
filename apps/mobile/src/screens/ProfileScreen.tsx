@@ -1,4 +1,5 @@
 import { ROLE_LABELS, type RoleKey } from '@attendsure/shared';
+import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { ThisPhone } from '../components/this-phone';
@@ -6,9 +7,11 @@ import { Button, Card, Heading, Notice, Screen } from '../components/ui';
 import { describeError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
+import type { RootNavigation } from '../navigation/types';
 
 export function ProfileScreen() {
   const auth = useAuth();
+  const navigation = useNavigation<RootNavigation>();
   const { palette } = useTheme();
   const [busy, setBusy] = useState<RoleKey | 'logout' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +46,17 @@ export function ProfileScreen() {
         {row('Acting as', ROLE_LABELS[activeRole])}
       </Card>
       <ThisPhone />
+      <Card>
+        <Text style={{ color: palette.textPrimary, fontWeight: '600' }}>Classroom tools</Text>
+        <Button
+          label="Check this classroom"
+          variant="secondary"
+          onPress={() => navigation.navigate('CheckClassroom')}
+        />
+        {auth.me.permissions.includes('beacons.manage') ? (
+          <Button label="Beacon survey" variant="secondary" onPress={() => navigation.navigate('Survey')} />
+        ) : null}
+      </Card>
       {roles.length > 1 ? (
         <Card>
           <Text style={{ color: palette.textPrimary, fontWeight: '600' }}>Switch role</Text>

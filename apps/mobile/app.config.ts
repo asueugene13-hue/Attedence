@@ -8,6 +8,9 @@ import type { ExpoConfig } from 'expo/config';
  * EXPO_PUBLIC_API_URL (read in src/lib/api.ts): where the app reaches the AttendSure API. The Android emulator reaches this PC as
  * 10.0.2.2; a real phone needs the PC's Wi-Fi address (or, in production, the HTTPS API address).
  */
+/** The Expo project the cloud builds belong to (created with `eas init`, product owner's account). */
+const EAS_PROJECT_ID = '199703bb-8d95-462d-9c7d-3c5daa90c2b7';
+
 const config: ExpoConfig = {
   name: 'AttendSure',
   slug: 'attendsure',
@@ -18,7 +21,8 @@ const config: ExpoConfig = {
   ios: { bundleIdentifier: 'app.attendsure.mobile', supportsTablet: false },
   android: {
     package: 'app.attendsure.mobile',
-    // Phase 1 needs no device permissions. Camera, Bluetooth and location arrive with check-in (Phase 4–5).
+    // Bluetooth scanning and fine location are added by the two plugins below (Android 12+ treats
+    // beacon scanning as location use). Camera arrives with QR check-in (Phase 5).
     permissions: [],
     // Expo's template adds these by default; AttendSure does not need them (data minimisation, Act 843).
     blockedPermissions: [
@@ -27,9 +31,38 @@ const config: ExpoConfig = {
       'android.permission.WRITE_EXTERNAL_STORAGE',
       'android.permission.SYSTEM_ALERT_WINDOW',
       'android.permission.VIBRATE',
+      // No tracking: location is read once, while the app is open (PRESENCE_VERIFICATION.md §4).
+      'android.permission.ACCESS_BACKGROUND_LOCATION',
     ],
   },
-  plugins: ['expo-dev-client', 'expo-secure-store', 'expo-status-bar'],
+  plugins: [
+    'expo-dev-client',
+    'expo-secure-store',
+    'expo-status-bar',
+    [
+      'react-native-ble-plx',
+      {
+        // Scanning only while the app is open, during a check-in or a classroom check (§3).
+        isBackgroundEnabled: false,
+        modes: [],
+        bluetoothAlwaysPermission:
+          'AttendSure uses Bluetooth only while you check in, to hear the classroom’s beacon. It never scans in the background.',
+      },
+    ],
+    [
+      'expo-location',
+      {
+        locationWhenInUsePermission:
+          'AttendSure reads your location once when you check in, to confirm you are on campus. It never tracks you.',
+        isAndroidBackgroundLocationEnabled: false,
+        isIosBackgroundLocationEnabled: false,
+      },
+    ],
+  ],
+  extra: {
+    // Links this app to its Expo project for cloud builds (EAS). Not a secret.
+    eas: { projectId: process.env.EAS_PROJECT_ID ?? EAS_PROJECT_ID },
+  },
 };
 
 export default config;

@@ -114,3 +114,35 @@ export const TryDecisionSchema = z.strictObject({
   degradedMode: z.boolean().default(false),
   retryRejectionsSoFar: z.number().int().min(0).max(20).default(0),
 });
+
+/**
+ * "Check this classroom" from the phone (Phase 4 step 4): what the phone heard and one location
+ * reading. The server runs the real rules and returns the decision; nothing is recorded.
+ */
+export const ClassroomCheckSchema = z.strictObject({
+  classroomId: z.uuid(),
+  /** OFF: Bluetooth switched off; DENIED: the permission was refused. */
+  bluetooth: z.enum(['ON', 'OFF', 'DENIED']),
+  readings: z
+    .array(
+      z.strictObject({
+        /** As broadcast: Eddystone-UID namespace+instance in hex, or iBeacon uuid:major:minor. */
+        identifier: z
+          .string()
+          .trim()
+          .min(3)
+          .max(80)
+          .transform((v) => v.toLowerCase()),
+        rssi: z.number().int().min(-120).max(0),
+      }),
+    )
+    .max(200),
+  location: z
+    .strictObject({
+      latitude: z.number().min(-90).max(90),
+      longitude: z.number().min(-180).max(180),
+      accuracyM: z.number().min(0).max(100_000),
+      isMocked: z.boolean().optional(),
+    })
+    .nullable(),
+});

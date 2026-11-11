@@ -7,11 +7,13 @@ import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
 import { AlertsScreen } from '../screens/AlertsScreen';
+import { CheckClassroomScreen } from '../screens/CheckClassroomScreen';
 import { ClassScreen } from '../screens/ClassScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LoginScreen } from '../screens/LoginScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { ScheduleScreen } from '../screens/ScheduleScreen';
+import { SurveyScreen } from '../screens/SurveyScreen';
 import { TwoStepScreen } from '../screens/TwoStepScreen';
 import { type TabName, tabsForRole } from './tabs';
 import type { RootStackParamList } from './types';
@@ -96,6 +98,18 @@ export function RootNavigator() {
             component={ClassScreen}
             options={{ headerShown: true, title: 'Class' }}
           />
+          <Stack.Screen
+            name="CheckClassroom"
+            component={CheckClassroomScreen}
+            options={{ headerShown: true, title: 'Check this classroom' }}
+          />
+          {auth.me.permissions.includes('beacons.manage') ? (
+            <Stack.Screen
+              name="Survey"
+              component={SurveyScreen}
+              options={{ headerShown: true, title: 'Beacon survey' }}
+            />
+          ) : null}
         </>
       ) : auth.pendingMfa ? (
         <Stack.Screen name="TwoStep" component={TwoStepScreen} />

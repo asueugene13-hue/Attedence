@@ -80,6 +80,14 @@ Eddystone frames are visible to iPhone and Android scanning. The hardware trial 
 
 **Calibration as built (Phase 4 step 3).** A survey records each reading's beacon, phone model, position and signal. Positions INSIDE_FRONT, INSIDE_MIDDLE, INSIDE_BACK_ROW and INSIDE_CORNER count as inside; **DOORWAY**, CORRIDOR, NEIGHBOUR_ROOM and OUTSIDE_BUILDING count as outside (the doorway is treated as outside on purpose, so a student standing at the door is not verified automatically). The threshold is the strongest outside reading plus half the gap to the weakest inside reading, rounded up, so every inside reading counts as inside and every outside reading as outside. Readings from at least three phone models, inside and outside, are required; an overlap means the room needs another beacon or a better placement. A survey is applied once, by an administrator; the readings themselves can never be edited.
 
+**On the phone, as built (Phase 4 step 4).**
+
+- The app fetches the scan list (`GET /me/beacon-scan-list`): the registered fixed-ID beacons and their rooms. Thresholds never leave the server.
+- A 6-second scan reads Eddystone-UID frames (service data 0xFEAA, frame type 0x00: namespace + instance) and iBeacon frames (Apple manufacturer data: UUID, major, minor). It keeps only identifiers on the list, at most 20 readings per beacon and 200 in all, and sends them as they are; the server takes the strongest.
+- Permissions are asked only when a scan starts, after the screen has explained why: on Android 12+ "nearby devices" and precise location (without location, Android silently returns no beacons). Bluetooth off or refused is reported as OFF or DENIED, never hidden.
+- **"Check this classroom"** (`POST /classroom-checks`, signed by the phone) returns the evidence and the decision the current policy would make, and records nothing. A verified result is worded "would be verified", never "you're checked in".
+- **Survey mode** (staff with `beacons.manage`): pick the room and the position, measure for 6 seconds, and the median reading of each of the room's beacons is kept. A beacon not heard at an outside position simply adds no reading. Each phone saves its own readings, to a new survey or to an open one (`POST /calibration-surveys/:id/measurements`), so one survey collects the three phone models it needs. Applying it stays on the dashboard.
+
 **Beacon health and unexpected activity.**
 
 - Every check-in tells us which beacons phones heard, and the worker summarises this every 5 minutes (`BeaconHealthSnapshot`).

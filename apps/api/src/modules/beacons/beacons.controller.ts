@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
+  AddMeasurementsSchema,
   ApplySurveySchema,
   BeaconQuerySchema,
   CalibrationSurveySchema,
@@ -78,6 +79,24 @@ export class BeaconsController {
   @RequirePermissions('beacons.manage')
   createSurvey(@CurrentAuth() auth: AccessClaims, @Body() body: unknown, @Req() req: Request) {
     return this.beacons.createSurvey(auth, parseInput(CalibrationSurveySchema, body), requestContextOf(req));
+  }
+
+  /** `{ measurements: [...] }`: another phone's readings, while the survey is not applied yet. */
+  @Post('calibration-surveys/:id/measurements')
+  @RequirePermissions('beacons.manage')
+  @HttpCode(200)
+  addMeasurements(
+    @CurrentAuth() auth: AccessClaims,
+    @Param('id') param: string,
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    return this.beacons.addMeasurements(
+      auth,
+      id(param),
+      parseInput(AddMeasurementsSchema, body),
+      requestContextOf(req),
+    );
   }
 
   /** Sets each surveyed beacon's threshold. Refused if any beacon could not be calibrated. */
