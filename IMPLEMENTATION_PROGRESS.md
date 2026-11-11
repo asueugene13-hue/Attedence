@@ -1548,3 +1548,8 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **348** (14 new), mobile 17, web 13, so **391 passed**. Browser journeys: **6 passed** (1 new).
 - **Known limitations:** KNOWN_LIMITATIONS 57–58.
 - **Next step:** Phase 4, step 4: the native app build (cloud build with a free Expo account), Bluetooth and GPS on the phone, "Check this classroom" and the survey mode.
+- **CI:**
+  - Clean-clone rehearsal: every step passed (API 348, mobile 17, web 13, e2e 6, audit clean) **except the mobile bundle check, which this PC can no longer run**.
+  - Cause: Windows **Smart App Control** is now on (state "On"). It was off when this check passed earlier in the session, and it blocks the unsigned Hermes compiler that Expo uses ("An Application Control policy has blocked this file").
+  - Not a project problem. Turning Smart App Control off is the product owner's decision: it is a security setting, and Windows cannot switch it back on without a reset. So it was left alone.
+  - GitHub run 43112956376 on `cfa9a69` (Linux, including the bundle check): **success**.
