@@ -1553,3 +1553,4 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
   - Cause: Windows **Smart App Control** is now on (state "On"). It was off when this check passed earlier in the session, and it blocks the unsigned Hermes compiler that Expo uses ("An Application Control policy has blocked this file").
   - Not a project problem. Turning Smart App Control off is the product owner's decision: it is a security setting, and Windows cannot switch it back on without a reset. So it was left alone.
   - GitHub run 43112956376 on `cfa9a69` (Linux, including the bundle check): **success**.
+- **Follow-up (2026-11-11):** the product owner turned Smart App Control off. The mobile bundle check now passes on this PC again (`npm run bundle:check -w @attendsure/mobile`: exported).
