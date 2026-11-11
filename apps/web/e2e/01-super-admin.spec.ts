@@ -74,6 +74,7 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
     'Academic structure',
     'Academic calendar',
     'Places',
+    'Beacons',
     'Accounts',
     'Roles and permissions',
     'Audit log',

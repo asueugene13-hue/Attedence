@@ -33,8 +33,9 @@ enum OfferingStatus      { DRAFT OPEN CLOSED }
 enum EnrollmentStatus    { ENROLLED DROPPED WITHDRAWN }
 enum CalendarExceptionType { PUBLIC_HOLIDAY UNIVERSITY_CLOSURE EXAM_PERIOD OTHER }
 
-enum BeaconProtocol      { EDDYSTONE_EID EDDYSTONE_UID IBEACON VENDOR_SECURE }
-enum BeaconStatus        { ACTIVE INACTIVE FAULTY RETIRED }
+enum BeaconProtocol      { EDDYSTONE_EID VENDOR_ROTATING EDDYSTONE_UID IBEACON }
+enum BeaconStatus        { ACTIVE SUSPECTED_FAULTY INACTIVE }
+enum SurveyPosition      { INSIDE_FRONT INSIDE_MIDDLE INSIDE_BACK_ROW INSIDE_CORNER DOORWAY CORRIDOR NEIGHBOUR_ROOM OUTSIDE_BUILDING }
 
 enum TimetableStatus     { DRAFT PUBLISHED SUPERSEDED ARCHIVED }
 enum Recurrence          { WEEKLY EVERY_OTHER_WEEK SELECTED_WEEKS ONCE }   // decided 2026-11-09; WEEKLY is the default
@@ -425,28 +426,48 @@ model Classroom {
   @@unique([buildingId, code])
 }
 
-model ClassroomBeacon {
+model Beacon {                       // Phase 4 step 3; table beacons
   id
-  classroomId         String         @db.Uuid
-  label               String
-  vendor              String?
-  protocol            BeaconProtocol
-  identifier          String         // namespace+instance, or UUID:major:minor
-  rotatingKeyEnc      String?        // encrypted identity key for rotating-ID beacons
-  rotationExponent    Int?
-  txPowerDbm          Int?
-  rssiThresholdDbm    Int            // calibrated per room during the site survey
-  status              BeaconStatus   @default(ACTIVE)
-  batteryPercent      Int?
-  lastSeenAt          DateTime?
-  installedAt         DateTime?
-  calibratedAt        DateTime?
-  retiredAt           DateTime?
-  notes               String?
+  classroomId       String         @db.Uuid
+  label             String                     // where it hangs
+  protocol          BeaconProtocol
+  identifier        String                     // lower-case: namespace+instance, uuid:major:minor, or the vendor serial
+  rotationKeyEnc    String?                    // encrypted rotating key; never returned by the API
+  rotationExponent  Int?                       // Eddystone-EID: the ID changes every 2^k seconds
+  txPowerDbm        Int?
+  thresholdRssi     Int?                       // set by applying a calibration survey; cleared when the beacon moves room
+  status            BeaconStatus   @default(ACTIVE)
+  batteryPercent    Int?
+  batteryReportedAt DateTime?
+  installedOn       DateTime?      @db.Date
+  calibratedAt      DateTime?
+  notes             String?
+  version           Int            @default(0)
   createdAt
   updatedAt
   @@unique([protocol, identifier])
   @@index([classroomId])
+}
+
+model CalibrationSurvey {            // one walk around a room with several phones (§3)
+  id
+  classroomId  String    @db.Uuid
+  surveyedById String    @db.Uuid
+  surveyedAt   DateTime
+  notes        String?
+  result       Json                            // per beacon: phones, weakest inside, strongest outside, threshold or problem
+  appliedAt    DateTime?                        // set once, when the thresholds are applied
+  appliedById  String?   @db.Uuid
+}
+
+model CalibrationMeasurement {       // append-only (trigger): kept exactly as recorded
+  id
+  surveyId   String         @db.Uuid
+  beaconId   String         @db.Uuid
+  phoneModel String
+  platform   DevicePlatform
+  position   SurveyPosition                    // INSIDE_* count as inside; DOORWAY and beyond as outside
+  rssi       Int                               // dBm, -120 to 0
 }
 
 model BeaconHealthSnapshot {         // built from what students' phones heard, in 5-minute windows
@@ -1164,6 +1185,7 @@ Retention purges of history tables run as a separate, privileged maintenance rol
 | Class history cannot be edited or deleted | `class_events_append_only` trigger |
 | At most one waiting reschedule request per class | `reschedule_requests_one_pending` partial unique index (Phase 3 step 4b, migration `20261109180000_reschedules`) |
 | A decided request says who decided and when; an approved one names its replacement; the new time ends after it starts | `reschedule_requests_decision_complete`, `reschedule_requests_time_order` checks |
+| Rotating beacons have their key (and EID its exponent), fixed ones neither; thresholds, battery and readings stay in range; identifiers are lower-case; survey readings are never edited; an applied survey says who applied it | `beacons_rotation_complete`, `beacons_rotation_exponent_range`, `beacons_threshold_range`, `beacons_battery_range`, `beacons_identifier_lower`, `calibration_measurements_rssi_range` checks, `calibration_measurements_append_only` trigger, `calibration_surveys_applied_complete` check (Phase 4 step 3, migration `20261111090000_beacons_and_calibration`) |
 | Policy versions are never edited or deleted; version numbers start at 1 | `verification_policies_append_only` trigger, `verification_policies_version_positive` check (Phase 4 step 2, migration `20261110120000_verification_policies`) |
 | A student has at most one trusted attendance phone; a public key is 32 bytes in base64url | `user_devices_one_attendance_device` partial unique index, `user_devices_public_key_format` check (Phase 4 step 1, migration `20261110100000_trusted_devices_and_risk_flags`) |
 | The same situation is flagged once while open; a reviewed flag has its reviewer, time and note | `risk_flags_one_open_per_key` partial unique index, `risk_flags_review_complete` check |

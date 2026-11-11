@@ -77,3 +77,5 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 54. **Phone approvals need university-wide scope.** The Super Admin approves by default; a Registrar or Administrator can be given `devices.approve` (the matrix allows it), but only with university-wide scope. Faculty-scoped approval can come later if wanted.
 55. **Approvers are not notified of new phone requests yet;** they see them on the Phones screen.
 56. **The phone's private key is in secure storage, not in a hardware key store that refuses to export it.** Hardware-backed keys need a native module; they can come with the development build (step 4). The phone model is not reported yet for the same reason.
+57. **Rotating-ID beacons are registered (with their encrypted key) but their broadcasts are not resolved yet.** Working out which ID a beacon should be broadcasting right now depends on the beacon type the trial picks (D-08); it is completed then. Fixed-ID beacons work now, for the trial only.
+58. **Calibration surveys are typed in on the dashboard** until the phone's survey mode (step 4) records them on the spot.

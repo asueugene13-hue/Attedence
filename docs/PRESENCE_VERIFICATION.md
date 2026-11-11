@@ -78,6 +78,8 @@ Eddystone frames are visible to iPhone and Android scanning. The hardware trial 
 
 **Calibration (site survey).** For each room, signal strength is measured with at least three phone models in these places: the back row, the corners, the doorway, the corridor and the rooms on either side. The threshold is set between the weakest reading inside and the strongest reading outside. If those overlap, the room needs another beacon or a different placement. Large halls get several beacons. Measurements are repeated each semester and whenever a beacon moves. They are stored with the beacon record.
 
+**Calibration as built (Phase 4 step 3).** A survey records each reading's beacon, phone model, position and signal. Positions INSIDE_FRONT, INSIDE_MIDDLE, INSIDE_BACK_ROW and INSIDE_CORNER count as inside; **DOORWAY**, CORRIDOR, NEIGHBOUR_ROOM and OUTSIDE_BUILDING count as outside (the doorway is treated as outside on purpose, so a student standing at the door is not verified automatically). The threshold is the strongest outside reading plus half the gap to the weakest inside reading, rounded up, so every inside reading counts as inside and every outside reading as outside. Readings from at least three phone models, inside and outside, are required; an overlap means the room needs another beacon or a better placement. A survey is applied once, by an administrator; the readings themselves can never be edited.
+
 **Beacon health and unexpected activity.**
 
 - Every check-in tells us which beacons phones heard, and the worker summarises this every 5 minutes (`BeaconHealthSnapshot`).

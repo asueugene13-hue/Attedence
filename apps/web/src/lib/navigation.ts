@@ -33,6 +33,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/setup/structure', label: 'Academic structure', permission: 'academic_structure.read' },
   { href: '/setup/calendar', label: 'Academic calendar', permission: 'academic_structure.read' },
   { href: '/setup/places', label: 'Places', permission: 'classrooms.manage' },
+  { href: '/beacons', label: 'Beacons', permission: 'beacons.manage' },
   { href: '/admin/users', label: 'Accounts', permission: 'users.manage_admins' },
   { href: '/admin/roles', label: 'Roles and permissions', permission: 'roles.edit_permissions' },
   { href: '/admin/audit', label: 'Audit log', permission: 'audit_logs.read' },

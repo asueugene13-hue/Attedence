@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–2 done; step 3 (beacon register and calibration) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–3 done; step 4 (the native app: Bluetooth, GPS, classroom check, survey mode) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1505,3 +1505,46 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **CI:**
   - Clean-clone rehearsal of every CI step: all passed (API 334, mobile 17, web 13, e2e 5, audit clean).
   - GitHub run 42788302474 on `fd78482`: **success**.
+
+### 2026-11-11 — Phase 4, step 3: beacon register and calibration surveys
+
+- **Built (API):**
+  - **Beacon register:**
+    - beacons per classroom, with protocol (Eddystone-EID or a vendor's rotating ID recommended; Eddystone-UID and iBeacon for trials), identifier, transmit power, threshold, status, battery, and install and calibration dates;
+    - identifiers are checked by protocol and stored lower-case, so the same beacon cannot be registered twice;
+    - rotating beacons need their 16-byte key, which is stored encrypted and never returned or audited;
+    - moving a beacon or switching it off needs a reason, and moving clears its threshold;
+    - changes need university-wide scope and If-Match, and are audited.
+  - **Calibration surveys:**
+    - each reading's beacon, phone model, position and signal is kept exactly as recorded (database trigger);
+    - a pure function computes each beacon's threshold, halfway between the weakest inside reading and the strongest outside reading;
+    - problems reported: fewer than 3 phone models, no inside readings, no outside readings, or an overlap (another beacon or placement needed);
+    - an administrator applies a survey once; a survey with problems, or whose beacon moved room since, is refused.
+  - A shared If-Match helper (`common/if-match.ts`) for new controllers.
+- **Judgment call, for review:** the **doorway counts as outside** the room in a survey, so a student standing at the door is not verified automatically. Recorded in PRESENCE_VERIFICATION §3.
+- **Built (web):**
+  - **Beacons** screen: room picker, the room's beacons (add, edit, move, switch off), and its surveys with results, problems and "Apply thresholds";
+  - surveys can be typed in until the phone's survey mode (step 4).
+- **New browser journey** (`e2e/06-verification.spec.ts`): register a beacon, enter a three-phone survey, apply it (threshold −77 dBm), and try two cases on the Verification policy screen.
+- **Proof the key test bites:** with the "refuse a survey with problems" rule removed, the test failed. Restored.
+- **Incident, fixed:**
+  - Docker had stopped (the computer restarted). The first migration was generated while the database was down: the error was hidden, the SQL file was empty, and the empty migration was recorded as applied on the local development database.
+  - Fix: its record was removed from `_prisma_migrations` on the local development database only (no other database ever saw it), the SQL was regenerated and checked to be non-empty, then applied.
+  - Drift check clean. Lesson saved: never hide errors when generating a migration, and check the file before deploying.
+- **Files:**
+  - Shared: `packages/shared/src/beacons.ts`.
+  - API:
+    - new `modules/beacons/` (`calibration.ts` with `calibration.test.ts` (6 tests), `beacons.service.ts`, `beacons.controller.ts`, `beacons.module.ts`);
+    - `common/if-match.ts`;
+    - `test/beacons.test.ts` (8 tests);
+    - migration `20261111090000_beacons_and_calibration`;
+    - `app.module.ts`, `test/fixtures.ts`.
+  - Web: `app/(app)/beacons/page.tsx`, `lib/navigation.ts`, `e2e/01-super-admin.spec.ts`, `e2e/06-verification.spec.ts`.
+  - Docs: API_DOCUMENTATION, DATABASE_SCHEMA, PRESENCE_VERIFICATION §3, KNOWN_LIMITATIONS (57–58).
+- **Database changes:**
+  - New tables `beacons`, `calibration_surveys` and `calibration_measurements`.
+  - New enums `BeaconProtocol`, `BeaconStatus` and `SurveyPosition`.
+  - Checks for rotation completeness, ranges and lower-case identifiers; an append-only trigger on readings; a check that an applied survey says who applied it.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **348** (14 new), mobile 17, web 13, so **391 passed**. Browser journeys: **6 passed** (1 new).
+- **Known limitations:** KNOWN_LIMITATIONS 57–58.
+- **Next step:** Phase 4, step 4: the native app build (cloud build with a free Expo account), Bluetooth and GPS on the phone, "Check this classroom" and the survey mode.

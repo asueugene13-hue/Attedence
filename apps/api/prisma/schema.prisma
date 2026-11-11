@@ -129,6 +129,8 @@ model User {
   notificationPreferences   NotificationPreference[]
   riskFlagReviews           RiskFlag[]                @relation("RiskFlagReviewedBy")
   verificationPolicies      VerificationPolicy[]
+  calibrationSurveys        CalibrationSurvey[]       @relation("SurveyedBy")
+  calibrationApplications   CalibrationSurvey[]       @relation("SurveyAppliedBy")
 
   @@map("users")
 }
@@ -533,6 +535,8 @@ model Classroom {
   timetableEntries   TimetableEntry[]
   classSessions      ClassSession[]
   rescheduleRequests RescheduleRequest[]
+  beacons            Beacon[]
+  calibrationSurveys CalibrationSurvey[]
 
   @@unique([buildingId, code])
   @@map("classrooms")
@@ -1525,4 +1529,109 @@ model VerificationPolicy {
   createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
 
   @@map("verification_policies")
+}
+
+// ───────────────────────── Beacons and calibration (Phase 4 step 3) ─────────────────────────
+// PRESENCE_VERIFICATION.md §3. The beacon type is chosen by the classroom trial (D-08); the register
+// accepts the candidate protocols, and rotating-ID resolution is completed for the one chosen.
+
+enum BeaconProtocol {
+  /// Rotating identifier (recommended): copies made yesterday are useless today.
+  EDDYSTONE_EID
+  /// A vendor's own secure rotating identifier.
+  VENDOR_ROTATING
+  /// Fixed identifiers: easy to copy; for trials only.
+  EDDYSTONE_UID
+  IBEACON
+}
+
+enum BeaconStatus {
+  ACTIVE
+  /// Phones on campus stopped hearing it during classes (beacon health, step 5).
+  SUSPECTED_FAULTY
+  INACTIVE
+}
+
+/// Where a calibration reading was taken. INSIDE_* count as inside the room; the rest as outside.
+enum SurveyPosition {
+  INSIDE_FRONT
+  INSIDE_MIDDLE
+  INSIDE_BACK_ROW
+  INSIDE_CORNER
+  DOORWAY
+  CORRIDOR
+  NEIGHBOUR_ROOM
+  OUTSIDE_BUILDING
+}
+
+model Beacon {
+  id                String         @id @default(uuid(7)) @db.Uuid
+  classroomId       String         @map("classroom_id") @db.Uuid
+  /// What the person installing it calls it, e.g. "Front wall above the board".
+  label             String
+  protocol          BeaconProtocol
+  /// The broadcast identifier (fixed protocols) or the vendor's serial (rotating protocols), lower-case.
+  identifier        String
+  /// The rotating key, encrypted with the application key. Never returned by the API.
+  rotationKeyEnc    String?        @map("rotation_key_enc")
+  /// Eddystone-EID rotation exponent: the identifier changes every 2^k seconds.
+  rotationExponent  Int?           @map("rotation_exponent")
+  txPowerDbm        Int?           @map("tx_power_dbm")
+  /// Calibrated by a survey: a reading at or above this (dBm) means inside the room.
+  thresholdRssi     Int?           @map("threshold_rssi")
+  status            BeaconStatus   @default(ACTIVE)
+  batteryPercent    Int?           @map("battery_percent")
+  batteryReportedAt DateTime?      @map("battery_reported_at") @db.Timestamptz(3)
+  installedOn       DateTime?      @map("installed_on") @db.Date
+  calibratedAt      DateTime?      @map("calibrated_at") @db.Timestamptz(3)
+  notes             String?
+  version           Int            @default(0)
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  classroom    Classroom                @relation(fields: [classroomId], references: [id], onDelete: Restrict)
+  measurements CalibrationMeasurement[]
+
+  @@unique([protocol, identifier])
+  @@index([classroomId])
+  @@map("beacons")
+}
+
+/// One walk around a room with several phones (§3). Kept as recorded; applying it sets the thresholds.
+model CalibrationSurvey {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  classroomId  String    @map("classroom_id") @db.Uuid
+  surveyedById String    @map("surveyed_by_id") @db.Uuid
+  surveyedAt   DateTime  @map("surveyed_at") @db.Timestamptz(3)
+  notes        String?
+  /// The computed result per beacon (threshold, or why none), stored with the survey.
+  result       Json
+  appliedAt    DateTime? @map("applied_at") @db.Timestamptz(3)
+  appliedById  String?   @map("applied_by_id") @db.Uuid
+
+  classroom    Classroom                @relation(fields: [classroomId], references: [id], onDelete: Restrict)
+  surveyedBy   User                     @relation("SurveyedBy", fields: [surveyedById], references: [id], onDelete: Restrict)
+  appliedBy    User?                    @relation("SurveyAppliedBy", fields: [appliedById], references: [id], onDelete: Restrict)
+  measurements CalibrationMeasurement[]
+
+  @@index([classroomId, surveyedAt])
+  @@map("calibration_surveys")
+}
+
+model CalibrationMeasurement {
+  id         String         @id @default(uuid(7)) @db.Uuid
+  surveyId   String         @map("survey_id") @db.Uuid
+  beaconId   String         @map("beacon_id") @db.Uuid
+  phoneModel String         @map("phone_model")
+  platform   DevicePlatform
+  position   SurveyPosition
+  /// Signal strength in dBm (negative; closer to 0 is stronger).
+  rssi       Int
+
+  survey CalibrationSurvey @relation(fields: [surveyId], references: [id], onDelete: Restrict)
+  beacon Beacon            @relation(fields: [beaconId], references: [id], onDelete: Restrict)
+
+  @@index([surveyId])
+  @@index([beaconId])
+  @@map("calibration_measurements")
 }

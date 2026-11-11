@@ -17,6 +17,7 @@ import { AuditModule } from './modules/audit-logs/audit.module.js';
 import { AccessTokenGuard } from './modules/auth/access-token.guard.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
+import { BeaconsModule } from './modules/beacons/beacons.module.js';
 import { ClassSessionsModule } from './modules/class-sessions/class-sessions.module.js';
 import { DevicesModule } from './modules/devices/devices.module.js';
 import { RiskFlagsModule } from './modules/risk-flags/risk-flags.module.js';
@@ -69,6 +70,7 @@ export const INFRASTRUCTURE_MODULES = [
     DevicesModule,
     RiskFlagsModule,
     VerificationModule,
+    BeaconsModule,
     // Runs background jobs in this process only when RUN_JOBS_IN_API=true; the worker always runs them.
     JobRunnerModule.forRoot('fromConfig'),
   ],

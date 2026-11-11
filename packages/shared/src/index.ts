@@ -16,3 +16,4 @@ export * from './monitoring.js';
 export * from './notifications.js';
 export * from './devices.js';
 export * from './verification.js';
+export * from './beacons.js';
