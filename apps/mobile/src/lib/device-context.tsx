@@ -22,7 +22,10 @@ interface DeviceContextValue {
   device: DeviceView | null;
   error: string | null;
   /** A request signed by this phone (PRESENCE_VERIFICATION.md §5). */
-  callSigned<T>(path: string, request?: { method?: 'GET' | 'POST'; body?: unknown }): Promise<T>;
+  callSigned<T>(
+    path: string,
+    request?: { method?: 'GET' | 'POST'; body?: unknown; headers?: Record<string, string> },
+  ): Promise<T>;
   requestTrust(reason: string): Promise<void>;
   refresh(): Promise<void>;
 }
@@ -42,14 +45,23 @@ export function DeviceProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const callSigned = useCallback(
-    async <T,>(path: string, request: { method?: 'GET' | 'POST'; body?: unknown } = {}, as?: DeviceView) => {
+    async <T,>(
+      path: string,
+      request: { method?: 'GET' | 'POST'; body?: unknown; headers?: Record<string, string> } = {},
+      as?: DeviceView,
+    ) => {
       const current = as ?? device;
       if (!identity.current || !current)
         throw new ApiError(0, 'DEVICE_NOT_READY', 'This phone is not registered yet.');
       const method = request.method ?? 'GET';
       const body = request.body === undefined ? '' : JSON.stringify(request.body);
       const headers = signedHeaders(current.id, identity.current, method, `/api/v1${path}`, body);
-      return call<T>(path, { method, headers, ...(body ? { rawBody: body } : {}) });
+      // Extra headers (such as Idempotency-Key) are not part of the signed text.
+      return call<T>(path, {
+        method,
+        headers: { ...request.headers, ...headers },
+        ...(body ? { rawBody: body } : {}),
+      });
     },
     [call, device],
   );

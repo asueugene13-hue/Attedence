@@ -9,7 +9,7 @@ export interface NavItem {
 
 /**
  * Sidebar items. Only screens that exist are listed: no placeholders, no dead links.
- * Later phases add Attendance, Reports and so on, each behind its permission.
+ * Attendance itself is reached from each class; later phases add Reports and so on, each behind its permission.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/', label: 'Home' },
@@ -17,6 +17,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/notifications', label: 'Notifications' },
   { href: '/classes', label: 'Class monitor', permission: 'class_reviews.decide' },
   { href: '/class-reviews', label: 'Class reviews', permission: 'class_reviews.decide' },
+  { href: '/attendance-corrections', label: 'Attendance corrections', permission: 'attendance.correct' },
   {
     href: '/reschedule-requests',
     label: 'Reschedule requests',

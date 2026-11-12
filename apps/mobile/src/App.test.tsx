@@ -309,7 +309,15 @@ describe('this phone', () => {
 
 describe('navigation', () => {
   it('lists only built screens as tabs', () => {
-    expect(tabsForRole('STUDENT')).toEqual(['Home', 'Schedule', 'Alerts', 'Profile']);
+    expect(tabsForRole('STUDENT')).toEqual([
+      'Home',
+      'CheckIn',
+      'Attendance',
+      'Schedule',
+      'Alerts',
+      'Profile',
+    ]);
+    expect(tabsForRole('COURSE_REP')).toEqual(tabsForRole('STUDENT'));
     expect(tabsForRole('LECTURER')).toEqual(['Home', 'Schedule', 'Alerts', 'Profile']);
     expect(tabsForRole('UNIVERSITY_ADMIN')).toEqual(['Home', 'Alerts', 'Profile']);
   });

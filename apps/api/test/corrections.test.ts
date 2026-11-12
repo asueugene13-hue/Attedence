@@ -226,7 +226,14 @@ describe('late corrections', () => {
       student: { studentNumber: '99000001' },
       requestedBy: { fullName: expect.any(String) },
     });
-    await http.get('/api/v1/attendance-correction-requests').set(c.lecturer.auth).expect(403);
+    // A lecturer follows only their own requests.
+    expect(
+      (await http.get('/api/v1/attendance-correction-requests').set(c.lecturer.auth).expect(200)).body.data,
+    ).toHaveLength(1);
+    expect(
+      (await http.get('/api/v1/attendance-correction-requests').set(c.otherLecturer.auth).expect(200)).body
+        .data,
+    ).toHaveLength(0);
 
     const id = list[0].id;
     await http

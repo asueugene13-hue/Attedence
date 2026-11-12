@@ -557,6 +557,32 @@ describe('closed sessions and attempt limits', () => {
   });
 });
 
+describe('what is open for me', () => {
+  it('a student sees attendance open for their class (and their status), others see nothing', async () => {
+    at('10:01');
+    const before = (await http.get('/api/v1/me/open-attendance').set(students[0]!.auth).expect(200)).body
+      .data;
+    expect(before).toEqual([
+      expect.objectContaining({
+        attendanceSessionId: attendanceId,
+        myStatus: null,
+        course: expect.objectContaining({ code: 'TST101' }),
+      }),
+    ]);
+    await checkIn(students[0]!, inRoom(await qr())).expect(200);
+    expect(
+      (await http.get('/api/v1/me/open-attendance').set(students[0]!.auth).expect(200)).body.data[0].myStatus,
+    ).toBe('PRESENT');
+    expect(
+      (await http.get('/api/v1/me/open-attendance').set(otherCourseStudent.auth).expect(200)).body.data,
+    ).toEqual([]);
+    at('10:30'); // after it closes
+    expect(
+      (await http.get('/api/v1/me/open-attendance').set(students[1]!.auth).expect(200)).body.data,
+    ).toEqual([]);
+  });
+});
+
 describe('toward scenario 25: a class checking in at once', () => {
   it('handles every student at the same moment, each exactly once', async () => {
     at('10:01');

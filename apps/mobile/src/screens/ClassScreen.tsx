@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { StatusPill } from '../components/class-card';
+import { LecturerAttendance } from '../components/lecturer-attendance';
 import { BodyText, Button, Card, Heading, Notice, Screen, TextField } from '../components/ui';
 import { describeError } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -125,6 +126,8 @@ export function ClassScreen() {
           <Notice tone="error">Your class has not started. What is happening? Choose an action below.</Notice>
         ) : null}
       </Card>
+
+      {isOwnLecturer ? <LecturerAttendance classId={s.id} classStatus={s.status} /> : null}
 
       {notice ? <Notice tone="success">{notice}</Notice> : null}
       {error ? <Notice tone="error">{error}</Notice> : null}

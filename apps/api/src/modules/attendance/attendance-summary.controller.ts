@@ -18,6 +18,13 @@ export class AttendanceSummaryController {
     return this.summaries.mine(auth);
   }
 
+  /** Attendance open now for the student's classes, with their own status in each. */
+  @Get('me/open-attendance')
+  @RequirePermissions('attendance.read_own')
+  open(@CurrentAuth() auth: AccessClaims) {
+    return this.summaries.openForMe(auth);
+  }
+
   /** One course, class by class: counted or not, and why. */
   @Get('me/attendance/offerings/:id')
   @RequirePermissions('attendance.read_own')

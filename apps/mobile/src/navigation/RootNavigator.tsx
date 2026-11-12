@@ -7,10 +7,13 @@ import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
 import { AlertsScreen } from '../screens/AlertsScreen';
+import { AttendanceCodeScreen } from '../screens/AttendanceCodeScreen';
+import { CheckInScreen } from '../screens/CheckInScreen';
 import { CheckClassroomScreen } from '../screens/CheckClassroomScreen';
 import { ClassScreen } from '../screens/ClassScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LoginScreen } from '../screens/LoginScreen';
+import { MyAttendanceScreen } from '../screens/MyAttendanceScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { ScheduleScreen } from '../screens/ScheduleScreen';
 import { SurveyScreen } from '../screens/SurveyScreen';
@@ -23,13 +26,25 @@ const Tabs = createBottomTabNavigator();
 
 const SCREENS: Record<TabName, () => React.JSX.Element | null> = {
   Home: HomeScreen,
+  CheckIn: CheckInScreen,
+  Attendance: MyAttendanceScreen,
   Schedule: ScheduleScreen,
   Alerts: AlertsScreen,
   Profile: ProfileScreen,
 };
+const LABELS: Record<TabName, string> = {
+  Home: 'Home',
+  CheckIn: 'Check in',
+  Attendance: 'Attendance',
+  Schedule: 'Schedule',
+  Alerts: 'Alerts',
+  Profile: 'Profile',
+};
 type IconName = ComponentProps<typeof Ionicons>['name'];
 const ICONS: Record<TabName, [IconName, IconName]> = {
   Home: ['home', 'home-outline'],
+  CheckIn: ['qr-code', 'qr-code-outline'],
+  Attendance: ['stats-chart', 'stats-chart-outline'],
   Schedule: ['calendar', 'calendar-outline'],
   Alerts: ['notifications', 'notifications-outline'],
   Profile: ['person-circle', 'person-circle-outline'],
@@ -48,6 +63,7 @@ function SignedInTabs() {
     <Tabs.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
+        tabBarLabel: LABELS[route.name as TabName],
         tabBarActiveTintColor: palette.primary,
         tabBarInactiveTintColor: palette.textMuted,
         tabBarStyle: { backgroundColor: palette.surface, borderTopColor: palette.border },
@@ -97,6 +113,11 @@ export function RootNavigator() {
             name="Class"
             component={ClassScreen}
             options={{ headerShown: true, title: 'Class' }}
+          />
+          <Stack.Screen
+            name="AttendanceCode"
+            component={AttendanceCodeScreen}
+            options={{ headerShown: true, title: 'Attendance code' }}
           />
           <Stack.Screen
             name="CheckClassroom"

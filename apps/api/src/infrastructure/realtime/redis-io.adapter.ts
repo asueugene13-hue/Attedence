@@ -6,6 +6,9 @@ import type { Server, ServerOptions } from 'socket.io';
 import { AppConfig } from '../../config/app-config.js';
 import { RedisService } from '../redis/redis.service.js';
 
+/** Where live connections are served (Socket.IO's `path`). */
+export const LIVE_PATH = '/api/v1/live';
+
 /**
  * Live connections (Socket.IO) that share events through Redis, so a lecturer's screen connected to
  * one API server still hears check-ins handled by another. Connections are accepted only from the
@@ -27,6 +30,9 @@ export class RedisIoAdapter extends IoAdapter {
     const config = this.app.get(AppConfig);
     const server = super.createIOServer(port, {
       ...options,
+      // Under /api/v1 (no trailing slash), so the dashboard reaches it through its own /api/v1 proxy.
+      path: LIVE_PATH,
+      addTrailingSlash: false,
       cors: { origin: config.webAppUrl, credentials: true },
     } as ServerOptions) as Server;
 

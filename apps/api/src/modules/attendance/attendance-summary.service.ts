@@ -62,6 +62,47 @@ export class AttendanceSummaryService {
     return { lateWeight: policy.lateWeight, minimumPercent: policy.minimumPercent, data };
   }
 
+  /**
+   * Attendance open right now for the student's current classes (ATTENDANCE_FLOW §3): the phone
+   * shows the scanner only when there is something to check in to.
+   */
+  async openForMe(actor: AccessClaims) {
+    const studentId = await this.studentOf(actor);
+    const now = this.clock.now();
+    const sectionIds = await this.enrollments.activeSectionIds(studentId);
+    const open = await this.prisma.attendanceSession.findMany({
+      where: { status: 'OPEN', closesAt: { gt: now } },
+      select: { id: true, classSessionId: true, closesAt: true, lateAfter: true },
+    });
+    const classes = await this.classSessions.facts(open.map((s) => s.classSessionId));
+    const mine = open.filter((s) =>
+      classes.get(s.classSessionId)?.sectionIds.some((id) => sectionIds.includes(id)),
+    );
+    const sections = await this.courses.sectionSummaries(
+      mine.flatMap((s) => classes.get(s.classSessionId)!.sectionIds.filter((id) => sectionIds.includes(id))),
+    );
+    const records = await this.prisma.attendanceRecord.findMany({
+      where: { studentId, classSessionId: { in: mine.map((s) => s.classSessionId) } },
+      select: { classSessionId: true, status: true },
+    });
+    return {
+      data: mine.map((s) => {
+        const section = classes
+          .get(s.classSessionId)!
+          .sectionIds.map((id) => sections.get(id))
+          .find(Boolean);
+        return {
+          attendanceSessionId: s.id,
+          classSessionId: s.classSessionId,
+          course: section?.course ?? null,
+          closesAt: s.closesAt,
+          lateAfter: s.lateAfter,
+          myStatus: records.find((r) => r.classSessionId === s.classSessionId)?.status ?? null,
+        };
+      }),
+    };
+  }
+
   /** One of the student's courses, class by class: what counted, what did not, and why. */
   async mineForOffering(actor: AccessClaims, offeringId: string) {
     const studentId = await this.studentOf(actor);

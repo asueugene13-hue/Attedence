@@ -213,10 +213,12 @@ export class CorrectionsService implements OnModuleInit {
 
   // ───────── Administrators decide late corrections ─────────
 
+  /** Administrators: requests in their scope. Lecturers: only the requests they made, to follow them. */
   async listRequests(actor: AccessClaims, status: 'PENDING' | 'APPROVED' | 'REJECTED') {
-    this.assertAdmin(actor);
+    const own = actor.role === 'LECTURER';
+    if (!own) this.assertAdmin(actor);
     const rows = await this.prisma.attendanceCorrectionRequest.findMany({
-      where: { status },
+      where: { status, ...(own ? { requestedById: actor.userId } : {}) },
       orderBy: { requestedAt: 'asc' },
       take: 500,
       include: { record: true, requestedBy: { select: { fullName: true } } },

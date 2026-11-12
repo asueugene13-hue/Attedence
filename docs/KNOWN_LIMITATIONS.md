@@ -87,7 +87,7 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 64. **A class stays in degraded mode until it ends**, even if its beacon is heard again part-way. Check-ins then wait for the lecturer's approval for the rest of that class. This is the safer side for students.
 65. **Raw phone coordinates in beacon reports are kept until the retention rules exist (D-18)**, which will reduce them to a distance band after 30 days.
 66. **Beacon health is visible to every lecturer**, not only for their own classes, and **platform integrity always reports "not available"** (no Play Integrity or App Attest token is sent until the accounts exist).
-67. **Check-in works through the API, but the phone has no scan screen yet** (Phase 5 step 6), and the roster, approvals and assisted check-in have no screens yet (step 6; the API is built). Attendance must not be used for real classes until those exist.
+67. ~~No screens for check-in and the roster.~~ **Built in Phase 5 step 6** (web and phone). Real use still waits for the Phase 4 field test, the exit check (step 7) and a phone test of the camera build.
 68. **Attendance closes up to a minute after its closing time** (the sweeper runs every minute). Check-in (step 2) checks the closing time itself, so no late check-in is accepted in that minute.
 69. **Attendance cannot be extended past 30 minutes after the scheduled end** (the point where a running class is ended automatically), and reopening ends at the scheduled end.
 70. **A student who enrolled after a class started cannot check in to it** (NOT_ENROLLED): only students eligible at the scheduled start are counted for a class (ATTENDANCE_FLOW §5). The lecturer can check them in by hand once assisted check-in exists (step 3).
@@ -103,3 +103,7 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 80. **Percentages are worked out on every request** from the records (always current, nothing to go stale). For very large sections this may need a cached summary later; the pilot sizes are small.
 81. **"How many more absences" assumes the student attends every other remaining class** and counts classes still scheduled, confirmed, delayed or unconfirmed. A class cancelled later is simply no longer counted.
 82. **Excuse requests and disputes are Phase 6.** Until then EXCUSED is reached only through those workflows, so no record is excused yet.
+83. **The lecturer's phone refreshes the roster every 5 seconds**; the web dashboard's roster is live. Rejecting a check-in (a note is needed) and hand check-ins are on the dashboard; the phone approves.
+84. **The phone does not keep the screen awake while showing the code.** Set the phone's screen timeout longer, or use the projector page.
+85. **Students have six tabs** (Home, Check in, Attendance, Schedule, Alerts, Profile). If that is too crowded on small phones, Schedule can move into Home later.
+86. **The browser journey for attendance inserts its "class happening now" straight into the e2e database**, because the earlier journeys' classes are in 2030 and attendance opens only near a class's time. Everything after that goes through the real API and screens.

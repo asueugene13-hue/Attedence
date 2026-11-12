@@ -84,7 +84,13 @@ const line = async (s: Student) =>
 
 /** A live connection, as the lecturer's screen makes it. */
 function connect(token: string): Promise<Socket> {
-  const socket = io(`${baseUrl}/attendance`, { auth: { token }, transports: ['websocket'], forceNew: true });
+  const socket = io(`${baseUrl}/attendance`, {
+    auth: { token },
+    path: '/api/v1/live',
+    addTrailingSlash: false,
+    transports: ['websocket'],
+    forceNew: true,
+  });
   sockets.push(socket);
   return new Promise((resolve, reject) => {
     socket.on('connect', () => resolve(socket));
@@ -161,6 +167,8 @@ describe('live updates', () => {
     expect((await join(student)).ok).toBe(false);
     const bad = io(`${baseUrl}/attendance`, {
       auth: { token: 'not-a-token' },
+      path: '/api/v1/live',
+      addTrailingSlash: false,
       transports: ['websocket'],
       forceNew: true,
     });

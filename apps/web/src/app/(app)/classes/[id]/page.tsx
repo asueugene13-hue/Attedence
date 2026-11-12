@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { use } from 'react';
+import { AttendancePanel } from '@/components/attendance-panel';
 import { ClassActions } from '@/components/class-actions';
 import { StatusBadge } from '@/components/records';
 import { Alert, LoadingState, PageHeader } from '@/components/ui';
@@ -86,6 +87,8 @@ export default function ClassPage({ params }: { params: Promise<{ id: string }> 
           <ClassActions session={s} onChanged={refresh} />
         </div>
       </section>
+
+      <AttendancePanel session={s} />
 
       <section className="card" aria-labelledby="class-reports">
         <div className="card-header">

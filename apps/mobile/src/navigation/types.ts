@@ -6,6 +6,7 @@ export type RootStackParamList = {
   Class: { id: string };
   CheckClassroom: undefined;
   Survey: undefined;
+  AttendanceCode: { attendanceSessionId: string };
   TwoStep: undefined;
   Login: undefined;
 };

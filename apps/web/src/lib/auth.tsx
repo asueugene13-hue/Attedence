@@ -29,6 +29,8 @@ interface AuthContextValue {
   switchRole(role: RoleKey): Promise<void>;
   /** Calls the API as the signed-in user, renewing the access token once if it has expired. */
   call<T>(path: string, request?: Omit<ApiRequest, 'accessToken'>): Promise<T>;
+  /** A valid access token (renewed if needed), for live connections, which cannot use `call`. */
+  liveToken(): Promise<string | null>;
   can(permission: string): boolean;
 }
 
@@ -172,9 +174,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadMe(result.accessToken);
       },
       call,
+      liveToken: validToken,
       can: (permission) => me?.permissions.includes(permission) ?? false,
     }),
-    [status, me, pendingMfa, call, loadMe, signOutLocally, storeSession],
+    [status, me, pendingMfa, call, validToken, loadMe, signOutLocally, storeSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

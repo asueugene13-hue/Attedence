@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–5 done, step 6 (screens) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–6 done (the camera build still to be tried on a phone), step 7 (exit check) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1757,3 +1757,29 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Known limitations:** KNOWN_LIMITATIONS 80–82.
 - **Next step:** Phase 5, step 6: the screens (lecturer web and phone, student phone) and a new app build with the camera.
 - **CI:** clean-clone rehearsal: every step passed (API 443, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43241482734 on `1a66352`: **success**.
+
+### 2026-11-12 — Phase 5, step 6: the screens
+
+- **Built (web):**
+  - **Attendance panel** on each class page: "Start class and open attendance" (or "Open attendance" for a running class), times and counts, links to the live roster and the projector code; extend and close (with a reason where needed); reopen once.
+  - **Live roster** (`/attendance/:id`): counts, waiting check-ins first with their reason and evidence summary ("Beacon weak · Location unsure · Phone ✓"), approve, reject (a note is required), approve together in degraded mode, check in by hand (how and why), correct (with a reason; after the window it becomes a request). Live through Socket.IO: numbered events update one line; a gap or reconnect reloads; a "Live · updated n s ago" line, and "Reconnecting…" when offline.
+  - **Projector page** (`/attendance-code/:id`, D-19): full screen, the code drawn as an SVG from its own grid, fetched again just as it changes (allowing for clock difference); says when attendance is closed.
+  - **Attendance corrections** page (new menu item): administrators decide late corrections; lecturers follow their own.
+  - The access token is given to the live connection through a new `liveToken()` (renewed on every reconnect); it is still never stored outside memory.
+- **Built (phone):**
+  - **Students:** a **Check in** tab (only when attendance is open for one of their classes; camera reads attendance codes only; steps shown; signed by the phone; the same idempotency key kept while retrying for up to two minutes offline; "Checked in" only on the server's answer) and an **Attendance** tab (each course's percentage, counts, cancelled classes, and the warning once a minimum is set).
+  - **Lecturers:** on the class screen, start and open attendance, show the code full screen, counts, approve waiting check-ins, close. The roster refreshes every 5 seconds on the phone.
+- **Built (API):** `GET /me/open-attendance`; live connections moved to the path `/api/v1/live` (no trailing slash) so the dashboard reaches them through its own `/api/v1` proxy; lecturers can list their own correction requests.
+- **New dependencies (exact versions):** phone: `expo-camera` 58.0.14 (camera only, no microphone, permission text in plain words), `react-native-svg` 15.16.0, `qrcode` 1.5.4; web: `qrcode` 1.5.4, `socket.io-client` 4.8.4; `@types/qrcode` 1.5.6. Audit: no high or critical findings.
+- **New browser journey** (`e2e/07-attendance.spec.ts`), on the real clock: a lecturer starts a class and opens attendance, shows the projector code, sees a student's check-in arrive on the roster **without reloading**, approves it and closes attendance; the projector page then says it is closed. Its class "happening now" is inserted into the e2e database (the earlier journeys' classes are in 2030); everything after goes through the real API and screens.
+- **Fixed while testing:** journey 01's expected menu (new item); the panel's "Closed" label made two matches on the page and now reads "Closed at".
+- **Phone build:** a new Android development build with the camera was started on Expo (`a99777af-0021-40a3-989f-4e584eada550`); at the time of writing it was still queued on Expo's free tier, so the camera screens have **not yet run on a phone**.
+- **Files:**
+  - API: `attendance/attendance-summary.service.ts`, `attendance-summary.controller.ts`, `corrections.service.ts`; `infrastructure/realtime/redis-io.adapter.ts`; tests `check-in.test.ts` (+1), `corrections.test.ts`, `roster.test.ts`.
+  - Web: new `lib/attendance.tsx`, `components/attendance-panel.tsx`, `app/(app)/attendance/[id]/page.tsx`, `app/attendance-code/[id]/page.tsx`, `app/(app)/attendance-corrections/page.tsx`; `lib/auth.tsx`, `lib/navigation.ts`, `app/(app)/classes/[id]/page.tsx`, `package.json`; new `e2e/07-attendance.spec.ts`; `e2e/01-super-admin.spec.ts`.
+  - Phone: new `lib/attendance.ts` with `attendance.test.ts` (5 tests), `screens/CheckInScreen.tsx`, `MyAttendanceScreen.tsx`, `AttendanceCodeScreen.tsx`, `components/lecturer-attendance.tsx`; `lib/device-context.tsx`, `navigation/*`, `screens/ClassScreen.tsx`, `App.test.tsx`, `app.config.ts`, `package.json`.
+  - Docs: API_DOCUMENTATION, ATTENDANCE_FLOW §3 and §6, KNOWN_LIMITATIONS (67 resolved; 83–86).
+- **Database changes:** none.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **444** (1 new), mobile **27** (5 new), web 13, so **497 passed**. Browser journeys: **7 passed** (1 new; the first run had the two failures above, fixed).
+- **Known limitations:** KNOWN_LIMITATIONS 83–86.
+- **Next step:** install the camera build on the phone and try a real check-in; then Phase 5, step 7: the exit check (scenarios and the 500-check-in load test).

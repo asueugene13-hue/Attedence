@@ -61,7 +61,9 @@ These screens match the check-in boards on the design canvas.
    - *Waiting for lecturer*, when pending.
    - *Not verified*, with the reason and the next step.
 
-The app shows "Confirmed" only after the server says so. Attendance reminders stop once a check-in is confirmed.
+The app shows "Confirmed" only after the server says so.
+
+**As built (Phase 5 step 6):** the phone's "Check in" tab asks the server whether attendance is open for the student's classes, and opens the camera only then; it accepts attendance codes only. It then shows each step (code read, listening for the classroom, location, sending), signs the request with the phone's key and keeps the same idempotency key while retrying for up to two minutes without a connection ("Waiting for a connection…"). The "Attendance" tab shows each course's percentage from the server. Attendance reminders stop once a check-in is confirmed.
 
 ## 4. Attendance statuses
 
@@ -105,6 +107,8 @@ The roster screen (design canvas board "Lecturer · Live attendance") shows:
 - a connection indicator: "Live · synced 2 s ago", or "Reconnecting…" with the last sync time.
 
 **As built (Phase 5 step 3):** the roster endpoint, live events with `seq`, approving and rejecting waiting check-ins (one by one, or together in degraded mode) and assisted check-in are built; the screens come in step 6. Details in API_DOCUMENTATION §3 and §4.
+
+**Screens as built (Phase 5 step 6):** on the web, a class page has an Attendance panel (start the class and open attendance in one step; extend, close, reopen once), the live roster (`/attendance/:id`: counts, waiting check-ins first, approve, reject with a note, approve together in degraded mode, check in by hand, correct), a full-screen projector page (`/attendance-code/:id`, D-19) and the "Attendance corrections" page. On the lecturer's phone, the class screen opens attendance, shows the code full screen, shows the counts and approves waiting check-ins; its roster refreshes every 5 seconds.
 
 **Realtime protocol.** The lecturer's screen joins the room `attendance:<sessionId>` after the server checks that they may see it. Each event carries an increasing `seq`. The client keeps the last `seq` it applied. On a gap, or on reconnect, it reloads the full roster from `GET /attendance-sessions/:id/roster` and continues. The full event list is in [API_DOCUMENTATION.md](API_DOCUMENTATION.md) §4.
 

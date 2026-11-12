@@ -62,6 +62,7 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
     'Notifications',
     'Class monitor',
     'Class reviews',
+    'Attendance corrections',
     'Reschedule requests',
     'Timetables',
     'Students',
