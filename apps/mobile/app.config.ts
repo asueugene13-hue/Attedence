@@ -22,7 +22,7 @@ const config: ExpoConfig = {
   android: {
     package: 'app.attendsure.mobile',
     // Bluetooth scanning and fine location are added by the two plugins below (Android 12+ treats
-    // beacon scanning as location use). Camera arrives with QR check-in (Phase 5).
+    // beacon scanning as location use). The camera is added by the expo-camera plugin (QR check-in).
     permissions: [],
     // Expo's template adds these by default; AttendSure does not need them (data minimisation, Act 843).
     blockedPermissions: [
@@ -39,6 +39,15 @@ const config: ExpoConfig = {
     'expo-dev-client',
     'expo-secure-store',
     'expo-status-bar',
+    [
+      'expo-camera',
+      {
+        // The camera reads the attendance QR on the lecturer's screen; nothing is recorded or kept.
+        cameraPermission: 'AttendSure uses the camera only to scan the attendance code shown in class.',
+        microphonePermission: false,
+        recordAudioAndroid: false,
+      },
+    ],
     [
       'react-native-ble-plx',
       {
