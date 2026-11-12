@@ -7,6 +7,8 @@ import type { PrismaClient, UserStatus } from '../src/generated/prisma/client.js
 export const TEST_PASSWORD = 'river-mango-lantern-42';
 
 const TABLES = [
+  'verification_decisions',
+  'attendance_attempts',
   'attendance_corrections',
   'attendance_records',
   'attendance_sessions',

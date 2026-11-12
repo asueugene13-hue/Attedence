@@ -20,7 +20,7 @@ The lecturer starts the class and opens attendance. Students scan the rotating Q
 | 10. Decide on the backend | Verification engine |
 | 11. Update the live roster | WebSocket event to the lecturer and any administrator watching |
 
-**As built (Phase 5 step 1).** Steps 1–6 are built: `POST /class-sessions/:id/attendance/open` checks the lecturer and the class, starts the class in the same transaction when needed, creates the attendance session with its encrypted QR secret and the current verification policy version, and writes `ATTENDANCE_OPENED`, which notifies enrolled students and reps. Check-in (steps 7–11) is step 2.
+**As built (Phase 5 step 1).** Steps 1–6 are built: `POST /class-sessions/:id/attendance/open` checks the lecturer and the class, starts the class in the same transaction when needed, creates the attendance session with its encrypted QR secret and the current verification policy version, and writes `ATTENDANCE_OPENED`, which notifies enrolled students and reps. Check-in (steps 7–10) is built in step 2 (`POST /check-ins`, see API_DOCUMENTATION); the live roster (step 11) is step 3.
 
 Starting the class and opening attendance are one tap by default. A lecturer can also start the class first and open attendance later, for example at the end of a lecture.
 

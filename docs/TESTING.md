@@ -28,18 +28,18 @@ Rules:
 
 | # | Scenario | Main level | Phase | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Student checks in from the correct classroom | Unit + integration + field | 5 | Not written |
-| 2 | Student tries to check in from home | Unit + integration | 5 | Not written |
-| 3 | Student scans an expired QR | Unit + integration | 5 | Not written |
-| 4 | Student shares a QR screenshot | Integration | 5 | Not written |
-| 5 | Unregistered student attempts attendance | Integration | 5 | Not written |
-| 6 | Student from another course attempts attendance | Integration | 5 | Not written |
-| 7 | Duplicate attendance request | Integration (same idempotency key, and parallel requests) | 5 | Not written |
-| 8 | Bluetooth disabled | Mobile + integration | 4–5 | Not written |
-| 9 | Beacon failure (degraded mode) | Integration + field | 4–5 | Not written |
-| 10 | GPS inaccuracy | Unit | 4 | Not written |
-| 11 | Student changes devices | Integration | 4 | Not written |
-| 12 | Internet connection failure (offline grace) | Mobile + integration | 5 | Not written |
+| 1 | Student checks in from the correct classroom | Unit + integration + field | 5 | **Integration done** (`test/check-in.test.ts` → "scenario 1": verified, present, attempt, evidence and rule trace kept; late after the late time). Field part: Phase 4 step 6. |
+| 2 | Student tries to check in from home | Unit + integration | 5 | **Done.** Engine rows in `verification.test.ts`; `test/check-in.test.ts` → "scenarios 2 and 4" (rejected, retry allowed, records only move up, wrong room). |
+| 3 | Student scans an expired QR | Unit + integration | 5 | **Done.** `attendance/qr.test.ts`; `test/check-in.test.ts` → "scenarios 3 and 12" (expired, no record; forged or edited codes invalid). |
+| 4 | Student shares a QR screenshot | Integration | 5 | **Done.** `test/check-in.test.ts`: a live code used at home is rejected (no classroom evidence); a later screenshot is expired. |
+| 5 | Unregistered student attempts attendance | Integration | 5 | **Done.** `test/check-in.test.ts` → "scenarios 5 and 6" (a non-student is refused, 403 NOT_A_STUDENT; scenario 24 covers anyone signed out). |
+| 6 | Student from another course attempts attendance | Integration | 5 | **Done.** `test/check-in.test.ts`: NOT_ENROLLED, no record. |
+| 7 | Duplicate attendance request | Integration (same idempotency key, and parallel requests) | 5 | **Done.** `test/check-in.test.ts` → "scenario 7" (same key twice and five at once: one attempt, same answer; different requests at once: one record). |
+| 8 | Bluetooth disabled | Mobile + integration | 4–5 | **Integration done** (`test/check-in.test.ts` → "scenario 8"); tried on a real phone in Phase 4 step 4 ("Check this classroom"). |
+| 9 | Beacon failure (degraded mode) | Integration + field | 4–5 | **Integration done** (`test/beacon-health.test.ts`; `test/check-in.test.ts` → "scenario 9": check-ins wait for the lecturer). Field part: Phase 4 step 6. |
+| 10 | GPS inaccuracy | Unit | 4 | **Done.** `verification/verification.test.ts` (accuracy limits, error circles, uncertain readings never held against the student). |
+| 11 | Student changes devices | Integration | 4 | **Done.** `test/devices.test.ts` (approval of a replacement); `test/check-in.test.ts` → "scenario 11" (an unapproved phone waits for the lecturer; one phone for two students goes to review and is flagged). |
+| 12 | Internet connection failure (offline grace) | Mobile + integration | 5 | **Integration done** (`test/check-in.test.ts`: accepted within the offline grace, at most pending). Mobile part: step 6. |
 | 13 | Lecturer cancels a class | Integration | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day" (students told in the app and by email); `test/class-lifecycle.test.ts` (reasons, who may cancel). |
 | 14 | Lecturer delays a class | Integration + jobs | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day" (students told; monitoring waits for the new start); "a delay moves the checkpoints". |
 | 15 | Lecturer reschedules a class | Integration (including a conflicting replacement) | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day"; `test/reschedules.test.ts` (blockers, warnings, re-check at approval, two approvals racing). |
@@ -52,7 +52,7 @@ Rules:
 | 22 | Lecturer's device crashes during attendance | Integration + realtime | 5 | Not written |
 | 23 | Background job fails and recovers | Jobs | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day" (an email outage recovers on retry); "a failed email is retried, then recorded as failed and reported to system health"; `test/jobs-and-settings.test.ts`. |
 | 24 | Unauthorised user tries another role's dashboard or API | Integration: every discovered endpoint × every role (`test/scenario-24-unauthorised-access.test.ts`) + web end-to-end (sign-out redirect) | 1 onward | **Done.** New endpoints are covered automatically. |
-| 25 | Many students check in at once | Integration (parallel) + load | 5 | Not written |
+| 25 | Many students check in at once | Integration (parallel) + load | 5 | **Started.** `test/check-in.test.ts`: the whole class at the same moment, each exactly once. The 500-check-in load test is step 7. |
 
 ## 3. Results log
 

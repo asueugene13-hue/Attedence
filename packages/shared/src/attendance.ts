@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ReasonSchema } from './admin.js';
+import { ClassroomCheckSchema } from './verification.js';
 
 /**
  * Attendance (Phase 5, ATTENDANCE_FLOW.md). The server decides; clients only collect evidence and
@@ -35,6 +36,15 @@ export const RECORD_RANK: Record<AttendanceStatus, number> = {
 
 /** Dynamic QR (PRESENCE_VERIFICATION §2): attendance tokens start with this; student ID codes do not. */
 export const ATTENDANCE_QR_PREFIX = 'AS1';
+
+/**
+ * A check-in (ATTENDANCE_FLOW §2), signed by the phone, with an `Idempotency-Key` header (a UUID).
+ * The same evidence as "Check this classroom", plus the scanned QR text; the room comes from the QR.
+ */
+export const CheckInSchema = ClassroomCheckSchema.omit({ classroomId: true }).extend({
+  qrToken: z.string().trim().min(1).max(200),
+  appVersion: z.string().trim().max(40).optional(),
+});
 
 /** Opening attendance: the class can be started in the same tap (§1). Times default to the settings. */
 export const OpenAttendanceSchema = z.strictObject({

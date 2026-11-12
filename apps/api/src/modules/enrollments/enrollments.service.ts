@@ -316,6 +316,20 @@ export class EnrollmentsService {
     return [...new Set(rows.map((r) => r.studentId))];
   }
 
+  /** Was this student eligible for a class meeting (enrolled in one of its sections at `at`)? */
+  async isEligible(studentId: string, sectionIds: string[], at: Date): Promise<boolean> {
+    return (
+      (await this.prisma.courseEnrollment.count({
+        where: {
+          studentId,
+          sectionId: { in: sectionIds },
+          enrolledAt: { lte: at },
+          OR: [{ endedAt: null }, { endedAt: { gt: at } }],
+        },
+      })) > 0
+    );
+  }
+
   async isEnrolled(studentId: string, sectionId: string, tx: Tx = this.prisma): Promise<boolean> {
     return (await tx.courseEnrollment.count({ where: { studentId, sectionId, status: 'ENROLLED' } })) > 0;
   }

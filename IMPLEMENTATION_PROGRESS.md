@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; step 1 done, step 2 (check-in) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–2 done, step 3 (live roster) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1669,3 +1669,23 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Known limitations:** KNOWN_LIMITATIONS 67–69. Above all: students cannot check in yet (step 2), so attendance must not be used for real classes yet.
 - **Next step:** Phase 5, step 2: check-in.
 - **CI:** clean-clone rehearsal: every step passed (API 390, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43185887089 on `1359a07`: **success**.
+
+### 2026-11-12 — Phase 5, step 2: check-in
+
+- **Built (API):** `POST /check-ins`, signed by the student's phone, with a required `Idempotency-Key`:
+  - **Gates:** the QR (signature, window, one window of grace, and a delayed upload within the offline grace, which is at most PENDING), the session open and before its closing time, the student **eligible at the scheduled start**, a revoked phone, and at most 5 attempts per class. A gate failure never creates or changes a record.
+  - **Evidence and decision:** the same evidence code as "Check this classroom" (now one shared `EvidenceService`), degraded mode from beacon health, a shared physical phone (same installation, another student, same class), and the decision engine with the **policy version stored when attendance opened**.
+  - **Saved in one transaction:** every attempt (with its evidence and the answer given) and the engine's decision with its full rule trace, both append-only; the record moves only up (VERIFIED → PRESENT, or LATE after the late time by server receipt time; PENDING; UNDER_REVIEW; REJECTED). Concurrent requests: the same key gets the first answer; different first check-ins are settled by the record's unique key.
+  - **After the commit:** the phone's report goes to beacon health (a failure there is logged and never changes the student's result), and engine flags become risk flags.
+  - A per-student limit of 20 requests a minute; `GET /check-ins/:id` for the student's own result.
+- **Fixed before it shipped:** the shared-phone check first compared device records, but each account registers its own record even on one physical phone. It now compares the installation.
+- **Proof the key tests bite:** with "records only move up" removed, and separately with the delayed-upload cap removed, the matching test failed each time. Restored.
+- **Scenarios now covered by tests:** 2, 3, 4, 5, 6, 7, 10 and 11 done; 1, 8, 9 and 12 done at the integration level (their field or phone parts come later); 25 started (a whole class at once). See TESTING.md.
+- **Files:**
+  - Shared: `attendance.ts` (`CheckInSchema`), `verification.ts` (`DELAYED_UPLOAD`).
+  - API: new `attendance/check-in.service.ts`, `check-in.controller.ts`; `attendance.module.ts`; new `verification/evidence.service.ts` (shared with the classroom check); `classroom-check.service.ts`, `verification.module.ts`; `enrollments/enrollments.service.ts` (`isEligible`); new `test/check-in.test.ts` (21 tests); `test/fixtures.ts`; migration `20261112150000_check_ins`.
+  - Docs: API_DOCUMENTATION, ATTENDANCE_FLOW, TESTING (scenario table), KNOWN_LIMITATIONS (67 updated; 70–72).
+- **Database changes:** new tables `attendance_attempts` (unique per student and idempotency key) and `verification_decisions`; new enums `VerificationOutcome`, `DeciderType`; `attendance_records.attempt_id`; append-only triggers on attempts and decisions; a check that only a person's decision names who decided. Generated with errors visible, checked non-empty, applied; drift clean.
+- **Tests run:** first full check failed at lint (an unused import in the new test file); fixed, then `npm run check` exit 0: design-tokens 3, shared 10, API **411** (21 new), mobile 22, web 13, so **459 passed**.
+- **Known limitations:** KNOWN_LIMITATIONS 67, 70–72.
+- **Next step:** Phase 5, step 3: the live roster and lecturer decisions.

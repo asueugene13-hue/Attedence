@@ -136,6 +136,8 @@ model User {
   attendanceClosed      AttendanceSession[]    @relation("AttendanceClosedBy")
   attendanceCorrections AttendanceCorrection[] @relation("AttendanceCorrectedBy")
 
+  verificationDecisions VerificationDecision[] @relation("VerificationDecidedBy")
+
   @@map("users")
 }
 
@@ -296,6 +298,7 @@ model UserDevice {
   sessions           AuthSession[]
   riskFlags          RiskFlag[]
   beaconObservations BeaconObservation[]
+  attendanceAttempts AttendanceAttempt[]
 
   @@unique([userId, installationId])
   /// Spots one phone used by several accounts.
@@ -710,6 +713,7 @@ model StudentProfile {
   courseRepAssignments CourseRepAssignment[]
   riskFlags            RiskFlag[]
   attendanceRecords    AttendanceRecord[]
+  attendanceAttempts   AttendanceAttempt[]
 
   @@index([programmeId, levelId])
   @@index([status])
@@ -1789,10 +1793,11 @@ model AttendanceSession {
   createdAt                 DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                 DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  classSession ClassSession       @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
-  openedBy     User               @relation("AttendanceOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
-  closedBy     User?              @relation("AttendanceClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
+  classSession ClassSession        @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
+  openedBy     User                @relation("AttendanceOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  closedBy     User?               @relation("AttendanceClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
   records      AttendanceRecord[]
+  attempts     AttendanceAttempt[]
 
   @@index([status, closesAt])
   @@map("attendance_sessions")
@@ -1808,6 +1813,8 @@ model AttendanceRecord {
   status              AttendanceStatus
   source              RecordSource
   /// Server receipt time of the check-in that counted.
+  /// The check-in attempt that set the current status, if one did.
+  attemptId           String?          @map("attempt_id") @db.Uuid
   checkedInAt         DateTime?        @map("checked_in_at") @db.Timestamptz(3)
   version             Int              @default(0)
   createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -1816,6 +1823,7 @@ model AttendanceRecord {
   classSession      ClassSession           @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
   attendanceSession AttendanceSession      @relation(fields: [attendanceSessionId], references: [id], onDelete: Restrict)
   student           StudentProfile         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  attempt           AttendanceAttempt?     @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   corrections       AttendanceCorrection[]
 
   @@unique([classSessionId, studentId])
@@ -1842,4 +1850,75 @@ model AttendanceCorrection {
 
   @@index([recordId, correctedAt])
   @@map("attendance_corrections")
+}
+
+enum VerificationOutcome {
+  VERIFIED
+  PENDING_VERIFICATION
+  MANUAL_REVIEW_REQUIRED
+  REJECTED
+}
+
+enum DeciderType {
+  ENGINE
+  LECTURER
+  ADMINISTRATOR
+}
+
+/// Every check-in try, including rejected ones (ATTENDANCE_FLOW.md §2), kept as received. `receivedAt`
+/// is server time, the only time that counts. The response is stored so a repeated request (same
+/// idempotency key) gets the same answer.
+model AttendanceAttempt {
+  id                  String              @id @default(uuid(7)) @db.Uuid
+  attendanceSessionId String              @map("attendance_session_id") @db.Uuid
+  studentId           String              @map("student_id") @db.Uuid
+  deviceId            String              @map("device_id") @db.Uuid
+  idempotencyKey      String              @map("idempotency_key") @db.Uuid
+  receivedAt          DateTime            @map("received_at") @db.Timestamptz(3)
+  /// The QR rotation window scanned, when the token was valid.
+  qrWindow            Int?                @map("qr_window")
+  /// Accepted within the offline grace after its QR window: at most PENDING_VERIFICATION.
+  delayedUpload       Boolean             @default(false) @map("delayed_upload")
+  outcome             VerificationOutcome
+  reason              String?
+  retryAllowed        Boolean             @map("retry_allowed")
+  canAskForReview     Boolean             @map("can_ask_for_review")
+  /// What the evidence was: Bluetooth result and strongest signal, location result and distance, device, integrity, degraded mode.
+  evidence            Json
+  policyVersion       Int                 @map("policy_version")
+  /// The answer the student got (replayed for a repeated idempotency key).
+  response            Json
+  appVersion          String?             @map("app_version")
+
+  attendanceSession AttendanceSession      @relation(fields: [attendanceSessionId], references: [id], onDelete: Restrict)
+  student           StudentProfile         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  device            UserDevice             @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  decisions         VerificationDecision[]
+  records           AttendanceRecord[]
+
+  @@unique([studentId, idempotencyKey])
+  @@index([attendanceSessionId, studentId])
+  @@index([attendanceSessionId, outcome])
+  @@index([deviceId, receivedAt])
+  @@map("attendance_attempts")
+}
+
+/// The engine's decision on an attempt with its full rule trace, then any reviewer's decision
+/// (append-only), so every outcome can be explained in a dispute.
+model VerificationDecision {
+  id            String              @id @default(uuid(7)) @db.Uuid
+  attemptId     String              @map("attempt_id") @db.Uuid
+  outcome       VerificationOutcome
+  decidedBy     DeciderType         @map("decided_by")
+  decidedById   String?             @map("decided_by_id") @db.Uuid
+  policyVersion Int                 @map("policy_version")
+  ruleTrace     Json                @map("rule_trace")
+  note          String?
+  decidedAt     DateTime            @map("decided_at") @db.Timestamptz(3)
+
+  attempt       AttendanceAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  decidedByUser User?             @relation("VerificationDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@index([attemptId, decidedAt])
+  @@map("verification_decisions")
 }

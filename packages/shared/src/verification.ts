@@ -38,6 +38,7 @@ export const VERIFICATION_REASONS = [
   'INTEGRITY_FAILED',
   'SHARED_DEVICE',
   'DEGRADED_MODE',
+  'DELAYED_UPLOAD',
 ] as const;
 export type VerificationReason = (typeof VERIFICATION_REASONS)[number];
 
@@ -62,6 +63,8 @@ export const STUDENT_MESSAGES: Record<VerificationReason | 'VERIFIED', string> =
   INTEGRITY_FAILED: 'Waiting for your lecturer to confirm.',
   SHARED_DEVICE: 'Your check-in needs review.',
   DEGRADED_MODE: 'Waiting for your lecturer to confirm.',
+  DELAYED_UPLOAD:
+    'Your check-in arrived late because of the connection. Waiting for your lecturer to confirm.',
 };
 
 /** After a second rejection that allows a retry, the student may ask the lecturer to review instead. */

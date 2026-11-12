@@ -2,11 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { ClassroomCheckSchema } from '@attendsure/shared';
 import type { z } from 'zod';
 import type { UserDevice } from '../../generated/prisma/client.js';
-import { BeaconsService } from '../beacons/beacons.service.js';
 import { PlacesService } from '../places/places.service.js';
 import { decide } from './decision-engine.js';
-import { IntegrityVerifier } from './integrity.js';
-import { evaluateBle, evaluateGps, type RegisteredBeacon } from './evidence.js';
+import { EvidenceService } from './evidence.service.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
 
 /**
@@ -17,49 +15,17 @@ import { VerificationPolicyService } from './verification-policy.service.js';
 @Injectable()
 export class ClassroomCheckService {
   constructor(
-    private readonly beacons: BeaconsService,
     private readonly places: PlacesService,
     private readonly policies: VerificationPolicyService,
-    private readonly integrity: IntegrityVerifier,
+    private readonly evidence: EvidenceService,
   ) {}
 
   async check(device: UserDevice, input: z.output<typeof ClassroomCheckSchema>) {
     const room = (await this.places.classroomFacts([input.classroomId])).get(input.classroomId);
     if (!room?.isActive)
       throw new BadRequestException({ code: 'INVALID_CLASSROOM', message: 'No such room in use.' });
-    const [policy, scanList, geofence, integrity] = await Promise.all([
-      this.policies.current(),
-      this.beacons.scanList(),
-      this.places.geofenceForClassroom(input.classroomId),
-      // No platform token is sent yet; the real checks arrive with the integrity accounts.
-      this.integrity.verify({ platform: device.platform, token: null }),
-    ]);
-
-    // What the phone heard, matched to registered beacons by identifier. An uncalibrated beacon can
-    // be heard, but never counts as strong.
-    const byIdentifier = new Map(scanList.map((b) => [b.identifier, b]));
-    const registered: RegisteredBeacon[] = scanList.map((b) => ({
-      id: b.id,
-      classroomId: b.classroomId,
-      thresholdRssi: b.thresholdRssi ?? Number.POSITIVE_INFINITY,
-    }));
-    const heard = input.readings.flatMap((r) => {
-      const beacon = byIdentifier.get(r.identifier);
-      return beacon ? [{ beaconId: beacon.id, rssi: r.rssi }] : [];
-    });
-    const ble = evaluateBle(heard, registered, input.classroomId, input.bluetooth !== 'ON');
-    const gps = evaluateGps(
-      input.location
-        ? {
-            latitude: input.location.latitude,
-            longitude: input.location.longitude,
-            accuracyM: input.location.accuracyM,
-            isMocked: input.location.isMocked,
-          }
-        : null,
-      geofence ? { latitude: geofence.lat, longitude: geofence.lng, radiusM: geofence.radiusM } : null,
-      policy.rules,
-    );
+    const policy = await this.policies.current();
+    const e = await this.evidence.collect(device, input, policy.rules);
     const decision = decide(
       {
         // A classroom check has no QR or attendance session: those gates are for check-in (Phase 5).
@@ -70,28 +36,27 @@ export class ClassroomCheckService {
         device: device.status,
         attemptsSoFar: 0,
         retryRejectionsSoFar: 0,
-        ble: ble.result,
-        gps: gps.result,
-        integrity,
+        ble: e.ble,
+        gps: e.gps,
+        integrity: e.integrity,
         sharedDeviceInSession: false,
         degradedMode: false,
       },
       policy.rules,
     );
-    const roomBeacons = scanList.filter((b) => b.classroomId === input.classroomId);
     return {
       policyVersion: policy.version,
       classroom: { id: room.id, code: room.code, name: room.name },
       evidence: {
-        ble: ble.result,
-        strongestOwnRssi: ble.strongestOwnRssi,
-        roomBeacons: roomBeacons.map((b) => ({ id: b.id, thresholdRssi: b.thresholdRssi })),
-        recognisedReadings: heard.length,
-        gps: gps.result,
-        distanceM: gps.distanceM === null ? null : Math.round(gps.distanceM),
-        hasGeofence: geofence !== null,
+        ble: e.ble,
+        strongestOwnRssi: e.strongestOwnRssi,
+        roomBeacons: e.roomBeacons,
+        recognisedReadings: e.heard.length,
+        gps: e.gps,
+        distanceM: e.distanceM,
+        hasGeofence: e.hasGeofence,
         device: device.status,
-        integrity,
+        integrity: e.integrity,
       },
       decision,
     };
