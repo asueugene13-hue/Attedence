@@ -1756,3 +1756,4 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **443** (13 new), mobile 22, web 13, so **491 passed**.
 - **Known limitations:** KNOWN_LIMITATIONS 80–82.
 - **Next step:** Phase 5, step 6: the screens (lecturer web and phone, student phone) and a new app build with the camera.
+- **CI:** clean-clone rehearsal: every step passed (API 443, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43241482734 on `1a66352`: **success**.
