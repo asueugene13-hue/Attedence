@@ -1783,3 +1783,4 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **444** (1 new), mobile **27** (5 new), web 13, so **497 passed**. Browser journeys: **7 passed** (1 new; the first run had the two failures above, fixed).
 - **Known limitations:** KNOWN_LIMITATIONS 83–86.
 - **Next step:** install the camera build on the phone and try a real check-in; then Phase 5, step 7: the exit check (scenarios and the 500-check-in load test).
+- **CI:** clean-clone rehearsal: every step passed (API 444, mobile 27, web 13, mobile bundle check, migrations, drift, e2e 7, audit clean). GitHub run 43253029629 on `dacfe84`: **success**.
