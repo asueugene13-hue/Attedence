@@ -20,6 +20,8 @@ The lecturer starts the class and opens attendance. Students scan the rotating Q
 | 10. Decide on the backend | Verification engine |
 | 11. Update the live roster | WebSocket event to the lecturer and any administrator watching |
 
+**As built (Phase 5 step 1).** Steps 1–6 are built: `POST /class-sessions/:id/attendance/open` checks the lecturer and the class, starts the class in the same transaction when needed, creates the attendance session with its encrypted QR secret and the current verification policy version, and writes `ATTENDANCE_OPENED`, which notifies enrolled students and reps. Check-in (steps 7–11) is step 2.
+
 Starting the class and opening attendance are one tap by default. A lecturer can also start the class first and open attendance later, for example at the end of a lecture.
 
 **Times:** `lateAfter` is the later of the scheduled start and the moment attendance opened, plus 15 min. `closesAt` is the opening time plus 20 min. The lecturer can change both when opening, close early, extend, or reopen once before the scheduled end, with a reason. All of these are audited. The defaults depend on D-09.
@@ -85,6 +87,8 @@ At `closesAt`, or when the lecturer closes it, one transaction:
 - writes the class event.
 
 Pending and under-review check-ins stay as they are. The lecturer is reminded at class end and the next morning. After 72 hours, any still undecided are escalated to the administrator. They are never silently converted to absent.
+
+**As built (Phase 5 step 1):** closing, the sweeper (every minute: time up, or the class ended) and voiding are built. Records are never deleted (database trigger) and corrections are append-only. A class voided after attendance started has every record set to VOIDED, each with a correction (source VOID). Reminders and the 72-hour escalation come with step 4.
 
 A student is **eligible** for a session if they were enrolled in one of its sections at the scheduled start: `enrolledAt` on or before the start, and not dropped before it. Students who join a course late are not marked absent for classes before they joined.
 

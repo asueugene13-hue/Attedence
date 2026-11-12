@@ -306,6 +306,33 @@ export class ClassEventService {
     });
   }
 
+  /**
+   * Writes an attendance event in the attendance module's transaction (no status change), so the
+   * class history shows when attendance opened, closed, reopened or was voided.
+   */
+  async recordAttendanceEvent(
+    tx: Prisma.TransactionClient,
+    sessionId: string,
+    type: 'ATTENDANCE_OPENED' | 'ATTENDANCE_CLOSED' | 'ATTENDANCE_REOPENED' | 'ATTENDANCE_VOIDED',
+    actorUserId: string | null,
+    payload: Prisma.InputJsonValue,
+    occurredAt: Date,
+  ): Promise<void> {
+    const session = await tx.classSession.findUniqueOrThrow({ where: { id: sessionId } });
+    await writeClassEvent(tx, this.outbox, {
+      data: {
+        classSessionId: sessionId,
+        type,
+        fromStatus: session.status,
+        toStatus: session.status,
+        actorType: actorUserId ? 'USER' : 'SYSTEM',
+        actorUserId,
+        payload,
+        occurredAt,
+      },
+    });
+  }
+
   /** Is this class in degraded mode (its room's beacon was not heard during it)? For check-in (Phase 5). */
   async isBeaconDegraded(sessionId: string): Promise<boolean> {
     return (

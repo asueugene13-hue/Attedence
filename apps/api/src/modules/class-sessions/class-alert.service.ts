@@ -192,6 +192,17 @@ export class ClassAlertService implements OnModuleInit {
         });
         break;
       }
+      case 'ATTENDANCE_OPENED': {
+        const until = typeof payload.closesAt === 'string' ? this.when(new Date(payload.closesAt)) : null;
+        await send(classPeople, {
+          category: 'ATTENDANCE_OPEN',
+          priority: 'HIGH',
+          title: `${label}: attendance is open`,
+          body: `Check in now with the QR code shown in class${until ? `, until ${until}` : ''}.`,
+          data: { actions: ['check-in'] },
+        });
+        break;
+      }
       case 'BEACON_DEGRADED': {
         const room = (await this.roomName(session.classroomId)) ?? 'the room';
         await send(who.lecturer, {

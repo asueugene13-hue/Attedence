@@ -40,6 +40,21 @@ export const SETTINGS = {
     schema: z.number().int().min(1).max(20),
     default: 1,
   },
+  // Attendance (ATTENDANCE_FLOW §1, §9). Interim defaults until Knutsford's regulations are known (D-09).
+  'attendance.lateAfterMinutes': {
+    label: 'Check-ins count as late after (minutes)',
+    description:
+      'Minutes after the later of the scheduled start and the moment attendance opened. Interim default until Knutsford’s rules are set (D-09).',
+    schema: z.number().int().min(0).max(120),
+    default: 15,
+  },
+  'attendance.closeAfterMinutes': {
+    label: 'Attendance closes after (minutes)',
+    description:
+      'Minutes after attendance opens; the lecturer can close early or extend. Interim default until Knutsford’s rules are set (D-09).',
+    schema: z.number().int().min(5).max(240),
+    default: 20,
+  },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

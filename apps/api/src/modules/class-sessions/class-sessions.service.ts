@@ -92,6 +92,29 @@ export class ClassSessionsService {
   }
 
   /** Session views by id, for other parts of this module (reschedule requests). */
+  /** The facts other modules need about classes (attendance): status, lecturer, times, sections. */
+  async facts(ids: string[], tx: Prisma.TransactionClient = this.prisma) {
+    const rows = await tx.classSession.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      include: sessionInclude,
+    });
+    return new Map(
+      rows.map((r) => [
+        r.id,
+        {
+          id: r.id,
+          status: r.status,
+          lecturerId: r.lecturerId,
+          classroomId: r.classroomId,
+          scheduledStart: r.scheduledStart,
+          scheduledEnd: r.scheduledEnd,
+          actualStart: r.actualStart,
+          sectionIds: r.sections.map((s) => s.sectionId),
+        },
+      ]),
+    );
+  }
+
   /**
    * The class running in a room at a moment, if any: started by then and still ACTIVE (classes left
    * running are ended by the class monitor). Used by beacon health.

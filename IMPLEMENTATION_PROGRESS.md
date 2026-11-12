@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; step 1 done, step 2 (check-in) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1618,3 +1618,53 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Known limitations:** KNOWN_LIMITATIONS 62–66.
 - **Next step:** Phase 4, step 6: the field test in two real classrooms (needs beacons, rooms and the product owner on site). The beacon-heard test on the phone is still open (step 4).
 - **CI:** clean-clone rehearsal: every step passed (API 372, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43135467342 on `9019598`: **success**.
+
+## Phase 5: attendance (started 2026-11-12, approved by the product owner before Phase 4's field test)
+
+**Decision (product owner, 2026-11-12):** start Phase 5 now. Phase 4's exit check, the field test in two real classrooms (step 6), stays open until the beacons, rooms and phones are ready. Phase 4 is not marked done until it passes.
+
+**Goal:** students check in with the rotating QR plus their phone's classroom evidence; the server decides each check-in with the Phase 4 engine; lecturers see a live roster; records are corrected only with a reason and an audit entry; attendance percentages follow ATTENDANCE_FLOW §9.
+
+**Exit criteria (unchanged):** TESTING.md scenarios 1–12, 22 and 25 pass; a load test of 500 check-ins arriving within one minute.
+
+### Steps
+
+| # | Step | Needs you? |
+| --- | --- | --- |
+| 1 | **Attendance sessions and the dynamic QR.** Open attendance (with the class start in one tap, or later), close, extend, reopen once with a reason; `lateAfter` and `closesAt`; per-session QR secret (encrypted), signed tokens rotating every 15 s, current token for the lecturer's screen; automatic close (job plus sweeper) that marks eligible students without a record ABSENT; class events; "attendance is open" message to enrolled students; voiding a class voids its records. | No |
+| 2 | **Check-in.** `POST /check-ins`, signed by the phone, with an idempotency key: QR, session, enrolment, account and attempt-limit gates; Bluetooth and location evidence; degraded mode from beacon health; the decision engine; every attempt and its full rule trace saved; the record only moves up; offline grace; beacon reports to beacon health; risk flags (repeated rejections, mock location, shared phone); per-student rate limit. | No |
+| 3 | **Live roster and lecturer decisions.** WebSocket room per attendance session with numbered events (reload on a gap); roster endpoint; approve or reject pending check-ins (one by one or all, e.g. in degraded mode); lecturer-assisted check-in with a reason; QR pushed to the screen. | No |
+| 4 | **Corrections.** Lecturer corrections within 14 days (later ones need an administrator), every change with from, to, reason, who and an audit entry; version checks; undecided check-ins reminded and escalated after 72 h, never silently made absent. | No |
+| 5 | **History and percentages.** Per student and course, as in ATTENDANCE_FLOW §9; student history; lecturer and administrator course summaries; low-attendance warning once the minimum is set. | The real rules (D-09) |
+| 6 | **Screens.** Lecturer web: open attendance, full-screen QR for a projector, live roster. Lecturer phone: open attendance, QR, roster. Student phone: scan, "verifying" steps, result, history. A new app build (camera). | Phone test |
+| 7 | **Exit check.** Scenarios 1–12, 22 and 25 as automated tests; the 500-check-ins load test; a simulated class end to end. | No |
+
+### Decisions with this plan (recommended defaults; change any of them)
+
+- **D-09 attendance rules:** interim defaults as settings: late after 15 minutes, attendance closes 20 minutes after opening, late counts as attended (weight 1.0). **No minimum percentage until the Registrar enters Knutsford's real figure**, so no low-attendance warning is shown before then (CLAUDE.md rule 2: no invented rules).
+- **D-19 where the QR is shown:** both: the lecturer's phone and a full-screen web page for a projector.
+- **D-18 retention:** decided later; until then attempts and evidence are kept (already listed as limitation 65).
+- **Live updates:** WebSockets (Socket.IO through NestJS, with Redis so several API servers share events).
+- **QR scanning on the phone:** the Expo camera module, so one more cloud app build in step 6.
+
+### 2026-11-12 — Phase 5, step 1: attendance sessions and the dynamic QR
+
+- **Built (API, new `attendance` module, which owns the attendance tables):**
+  - **Opening:** the class's own lecturer opens attendance; by default the class is started in the **same transaction** (through the class-sessions module's own start action, so its timing rules apply), or attendance opens later for a running class. `lateAfter` is the later of the scheduled start and the opening, plus 15 minutes; attendance closes 20 minutes after opening. Both numbers are settings (D-09 interim defaults) and can be set per opening. Once per class (database unique key, so two devices opening at once get a clear answer). The current verification policy version is stored with the session.
+  - **"Attendance is open"** reaches enrolled students and course reps (new notification category, through the class alerts).
+  - **The QR:** a random secret per session, encrypted, never returned. Tokens `AS1.<session>.<window>.<mac>` (HMAC-SHA-256 cut to 128 bits), changing every 15 seconds (policy), checked in constant time; the current and one previous window are accepted. `GET /attendance-sessions/:id/qr` for the lecturer's screen.
+  - **Closing:** by the lecturer, or force-closed by an administrator in scope with a reason. Every student **eligible at the scheduled start** (enrolled by then and not dropped before it) without a record is marked ABSENT, safely repeatable. A sweeper every minute closes sessions whose time is up, or whose class ended.
+  - **Extending** (with a reason, never past the scheduled end + 30 minutes) and **reopening** (once, with a reason, while the class runs and before its scheduled end). Version-checked, audited, written to the class history.
+  - **Voiding:** a class voided after attendance started has every record set to VOIDED, each with a correction row (reason, source VOID); the session closes as CLASS_VOIDED.
+  - **Records** are never deleted (database trigger); **corrections** are append-only.
+  - Small additions in their own modules (rule 8): class facts and `recordAttendanceEvent` (class sessions), `eligibleAt` (enrolments), the "attendance is open" alert (class alerts).
+- **Proof the key test bites:** with the "enrolled by the scheduled start" condition removed, five tests failed. Restored.
+- **Files:**
+  - Shared: new `attendance.ts`; `settings.ts` (two attendance settings), `notifications.ts` (ATTENDANCE_OPEN), `index.ts`.
+  - API: new `modules/attendance/` (`qr.ts` with `qr.test.ts` (5 tests), `attendance-sessions.service.ts`, `attendance-sessions.controller.ts`, `attendance.module.ts`); `app.module.ts`; `class-sessions/class-sessions.service.ts`, `class-event.service.ts`, `class-event-log.ts`, `class-alert.service.ts`; `enrollments/enrollments.service.ts`; new `test/attendance-sessions.test.ts` (13 tests); `test/fixtures.ts`; migration `20261112120000_attendance_sessions`.
+  - Web: `lib/classes.ts` (event labels).
+  - Docs: API_DOCUMENTATION, ATTENDANCE_FLOW §1 and §5, KNOWN_LIMITATIONS (67–69).
+- **Database changes:** new tables `attendance_sessions`, `attendance_records`, `attendance_corrections`; new enums `AttendanceSessionStatus`, `AttendanceCloseReason`, `AttendanceStatus`, `RecordSource`, `CorrectionSource`; append-only trigger on corrections, no-delete trigger on records; checks on session times, closing completeness, rotation range and correction reasons. Generated with errors visible, checked non-empty, applied; drift clean.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **390** (18 new), mobile 22, web 13, so **438 passed**.
+- **Known limitations:** KNOWN_LIMITATIONS 67–69. Above all: students cannot check in yet (step 2), so attendance must not be used for real classes yet.
+- **Next step:** Phase 5, step 2: check-in.

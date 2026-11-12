@@ -14,6 +14,7 @@ export const ALERTED_EVENTS: readonly ClassEventType[] = [
   'VENUE_CHANGED',
   'AUTO_ENDED',
   'BEACON_DEGRADED',
+  'ATTENDANCE_OPENED',
 ];
 
 /**

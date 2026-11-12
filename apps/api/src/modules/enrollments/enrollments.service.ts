@@ -299,6 +299,23 @@ export class EnrollmentsService {
     return bySection;
   }
 
+  /**
+   * Students eligible for a class meeting (ATTENDANCE_FLOW §5): enrolled in one of its sections at
+   * the scheduled start. Someone who enrolled later is not marked absent for it; someone who has
+   * since dropped still was enrolled then.
+   */
+  async eligibleAt(sectionIds: string[], at: Date, tx: Tx = this.prisma): Promise<string[]> {
+    const rows = await tx.courseEnrollment.findMany({
+      where: {
+        sectionId: { in: [...new Set(sectionIds)] },
+        enrolledAt: { lte: at },
+        OR: [{ endedAt: null }, { endedAt: { gt: at } }],
+      },
+      select: { studentId: true },
+    });
+    return [...new Set(rows.map((r) => r.studentId))];
+  }
+
   async isEnrolled(studentId: string, sectionId: string, tx: Tx = this.prisma): Promise<boolean> {
     return (await tx.courseEnrollment.count({ where: { studentId, sectionId, status: 'ENROLLED' } })) > 0;
   }

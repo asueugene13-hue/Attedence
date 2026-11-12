@@ -87,3 +87,6 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 64. **A class stays in degraded mode until it ends**, even if its beacon is heard again part-way. Check-ins then wait for the lecturer's approval for the rest of that class. This is the safer side for students.
 65. **Raw phone coordinates in beacon reports are kept until the retention rules exist (D-18)**, which will reduce them to a distance band after 30 days.
 66. **Beacon health is visible to every lecturer**, not only for their own classes, and **platform integrity always reports "not available"** (no Play Integrity or App Attest token is sent until the accounts exist).
+67. **Attendance can be opened, but students cannot check in yet** (Phase 5 step 2). Until then, closing attendance marks every eligible student ABSENT, so attendance must not be used for real classes before check-in and the screens exist.
+68. **Attendance closes up to a minute after its closing time** (the sweeper runs every minute). Check-in (step 2) checks the closing time itself, so no late check-in is accepted in that minute.
+69. **Attendance cannot be extended past 30 minutes after the scheduled end** (the point where a running class is ended automatically), and reopening ends at the scheduled end.

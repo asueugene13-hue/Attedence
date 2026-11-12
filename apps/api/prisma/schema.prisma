@@ -132,6 +132,10 @@ model User {
   calibrationSurveys        CalibrationSurvey[]       @relation("SurveyedBy")
   calibrationApplications   CalibrationSurvey[]       @relation("SurveyAppliedBy")
 
+  attendanceOpened      AttendanceSession[]    @relation("AttendanceOpenedBy")
+  attendanceClosed      AttendanceSession[]    @relation("AttendanceClosedBy")
+  attendanceCorrections AttendanceCorrection[] @relation("AttendanceCorrectedBy")
+
   @@map("users")
 }
 
@@ -705,6 +709,7 @@ model StudentProfile {
   courseEnrollments    CourseEnrollment[]
   courseRepAssignments CourseRepAssignment[]
   riskFlags            RiskFlag[]
+  attendanceRecords    AttendanceRecord[]
 
   @@index([programmeId, levelId])
   @@index([status])
@@ -1219,6 +1224,8 @@ model ClassSession {
   replacementFor     RescheduleRequest?    @relation("RescheduleReplacement")
   issueReports       ClassIssueReport[]
   reviews            ClassStatusReview[]
+  attendanceSession  AttendanceSession?
+  attendanceRecords  AttendanceRecord[]
 
   @@unique([timetableEntryId, scheduledStart])
   @@index([status, scheduledStart])
@@ -1711,4 +1718,128 @@ model BeaconHealthSnapshot {
 
   @@unique([beaconId, windowStart])
   @@map("beacon_health_snapshots")
+}
+
+enum AttendanceSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum AttendanceCloseReason {
+  /// The lecturer closed it.
+  MANUAL
+  /// Its closing time passed.
+  AUTO
+  /// The class ended (or was interrupted and ended) while attendance was open.
+  CLASS_ENDED
+  /// The class was voided after attendance started: every record is VOIDED.
+  CLASS_VOIDED
+  /// An administrator closed it.
+  FORCED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  PENDING
+  UNDER_REVIEW
+  REJECTED
+  ABSENT
+  EXCUSED
+  VOIDED
+}
+
+enum RecordSource {
+  CHECK_IN
+  ASSISTED
+  /// Created as ABSENT when attendance closed.
+  CLOSE
+}
+
+enum CorrectionSource {
+  LECTURER
+  ADMINISTRATOR
+  REVIEW
+  DISPUTE
+  EXCUSE
+  VOID
+}
+
+/// Attendance taken for one class meeting (ATTENDANCE_FLOW.md §1). At most one per class session.
+/// The QR secret is per session, encrypted, and never sent to any device (PRESENCE_VERIFICATION §2).
+model AttendanceSession {
+  id                        String                  @id @default(uuid(7)) @db.Uuid
+  classSessionId            String                  @unique @map("class_session_id") @db.Uuid
+  status                    AttendanceSessionStatus @default(OPEN)
+  openedById                String                  @map("opened_by_id") @db.Uuid
+  openedAt                  DateTime                @map("opened_at") @db.Timestamptz(3)
+  /// A verified check-in received after this is LATE.
+  lateAfter                 DateTime                @map("late_after") @db.Timestamptz(3)
+  closesAt                  DateTime                @map("closes_at") @db.Timestamptz(3)
+  closedAt                  DateTime?               @map("closed_at") @db.Timestamptz(3)
+  closedById                String?                 @map("closed_by_id") @db.Uuid
+  closeReason               AttendanceCloseReason?  @map("close_reason")
+  /// Reopened once at most, with a reason.
+  reopenedAt                DateTime?               @map("reopened_at") @db.Timestamptz(3)
+  qrSecretEnc               String                  @map("qr_secret_enc")
+  qrRotationSeconds         Int                     @map("qr_rotation_seconds")
+  /// The verification policy version in force when attendance opened (0 = the defaults).
+  verificationPolicyVersion Int                     @map("verification_policy_version")
+  version                   Int                     @default(0)
+  createdAt                 DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  classSession ClassSession       @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
+  openedBy     User               @relation("AttendanceOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  closedBy     User?              @relation("AttendanceClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
+  records      AttendanceRecord[]
+
+  @@index([status, closesAt])
+  @@map("attendance_sessions")
+}
+
+/// One student's attendance for one class meeting: at most one (unique), and it only moves up
+/// (ATTENDANCE_FLOW.md §4). Any later change is an AttendanceCorrection with a reason.
+model AttendanceRecord {
+  id                  String           @id @default(uuid(7)) @db.Uuid
+  classSessionId      String           @map("class_session_id") @db.Uuid
+  attendanceSessionId String           @map("attendance_session_id") @db.Uuid
+  studentId           String           @map("student_id") @db.Uuid
+  status              AttendanceStatus
+  source              RecordSource
+  /// Server receipt time of the check-in that counted.
+  checkedInAt         DateTime?        @map("checked_in_at") @db.Timestamptz(3)
+  version             Int              @default(0)
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  classSession      ClassSession           @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
+  attendanceSession AttendanceSession      @relation(fields: [attendanceSessionId], references: [id], onDelete: Restrict)
+  student           StudentProfile         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  corrections       AttendanceCorrection[]
+
+  @@unique([classSessionId, studentId])
+  @@index([studentId, status])
+  @@index([attendanceSessionId, status])
+  @@map("attendance_records")
+}
+
+/// Every change to a record after it was created, with why and who (append-only, CLAUDE.md rule 5).
+model AttendanceCorrection {
+  id            String           @id @default(uuid(7)) @db.Uuid
+  recordId      String           @map("record_id") @db.Uuid
+  fromStatus    AttendanceStatus @map("from_status")
+  toStatus      AttendanceStatus @map("to_status")
+  reason        String
+  source        CorrectionSource
+  /// The dispute, excuse or review that caused it, if any.
+  sourceId      String?          @map("source_id") @db.Uuid
+  correctedById String?          @map("corrected_by_id") @db.Uuid
+  correctedAt   DateTime         @map("corrected_at") @db.Timestamptz(3)
+
+  record      AttendanceRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+  correctedBy User?            @relation("AttendanceCorrectedBy", fields: [correctedById], references: [id], onDelete: Restrict)
+
+  @@index([recordId, correctedAt])
+  @@map("attendance_corrections")
 }

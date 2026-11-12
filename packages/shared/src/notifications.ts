@@ -39,6 +39,11 @@ export const NOTIFICATION_CATEGORIES = {
   CLASS_AUTO_ENDED: { label: 'Class ended automatically', mandatory: false, defaultChannels: ['IN_APP'] },
   REVIEW_OPENED: { label: 'A class needs review', mandatory: false, defaultChannels: ['IN_APP', 'PUSH'] },
   REVIEW_DECIDED: { label: 'Review decided', mandatory: false, defaultChannels: ['IN_APP'] },
+  ATTENDANCE_OPEN: {
+    label: 'Attendance is open',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'PUSH'],
+  },
   BEACON_FAULT: {
     label: 'Classroom beacon not detected',
     mandatory: false,
