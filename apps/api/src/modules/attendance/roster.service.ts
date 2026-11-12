@@ -8,7 +8,7 @@ import {
 import type { z } from 'zod';
 import { auditEntry } from '../../common/audit-entry.js';
 import type { RequestContext } from '../../common/request-context.js';
-import type { AttendanceRecord, Prisma } from '../../generated/prisma/client.js';
+import type { AttendanceRecord } from '../../generated/prisma/client.js';
 import { Clock } from '../../infrastructure/clock/clock.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
@@ -18,9 +18,9 @@ import { EnrollmentsService } from '../enrollments/enrollments.service.js';
 import { StudentsService } from '../students/students.service.js';
 import { AttendanceEventsService } from './attendance-events.service.js';
 import { AttendanceSessionsService } from './attendance-sessions.service.js';
+import { changeRecordStatus } from './record-changes.js';
 
 const conflict = (code: string, message: string) => new ConflictException({ code, message });
-type Tx = Prisma.TransactionClient;
 
 /**
  * The live roster and the lecturer's decisions (ATTENDANCE_FLOW §6–§7, Phase 5 step 3): who is here,
@@ -143,10 +143,14 @@ export class RosterService {
     const to: AttendanceStatus = input.decision === 'APPROVE' ? (late ? 'LATE' : 'PRESENT') : 'REJECTED';
     const reason = input.note ?? (asAdmin ? 'Approved by an administrator.' : 'Approved by the lecturer.');
     await this.prisma.$transaction(async (tx) => {
-      await this.change(tx, record, input.version, to, {
+      await changeRecordStatus(tx, {
+        record: record,
+        expectedVersion: input.version,
+        to: to,
         reason,
         source: asAdmin ? 'ADMINISTRATOR' : 'LECTURER',
-        actor,
+        correctedById: actor.userId,
+        at: this.clock.now(),
       });
       if (record.attemptId) {
         await tx.verificationDecision.create({
@@ -208,10 +212,14 @@ export class RosterService {
     await this.prisma.$transaction(async (tx) => {
       for (const record of waiting) {
         const late = record.checkedInAt !== null && record.checkedInAt > session.lateAfter;
-        await this.change(tx, record, record.version, late ? 'LATE' : 'PRESENT', {
+        await changeRecordStatus(tx, {
+          record: record,
+          expectedVersion: record.version,
+          to: late ? 'LATE' : 'PRESENT',
           reason,
           source: asAdmin ? 'ADMINISTRATOR' : 'LECTURER',
-          actor,
+          correctedById: actor.userId,
+          at: this.clock.now(),
         });
         await tx.verificationDecision.create({
           data: {
@@ -299,14 +307,16 @@ export class RosterService {
           );
         }
         const record = await tx.attendanceRecord.findUniqueOrThrow({ where: { id: existing.id } });
-        await this.change(
-          tx,
-          record,
-          record.version,
-          to,
-          { reason: input.reason, source: 'LECTURER', actor },
-          { source: 'ASSISTED', checkedInAt: now },
-        );
+        await changeRecordStatus(tx, {
+          record: record,
+          expectedVersion: record.version,
+          to: to,
+          reason: input.reason,
+          source: 'LECTURER',
+          correctedById: actor.userId,
+          at: this.clock.now(),
+          extra: { source: 'ASSISTED', checkedInAt: now },
+        });
         recordId = existing.id;
       }
       await tx.assistedCheckIn.create({
@@ -337,37 +347,5 @@ export class RosterService {
     });
     await this.events.publish(session.id, 'record.updated', await this.entry(session.id, input.studentId));
     return this.entry(session.id, input.studentId);
-  }
-
-  /** Changes a record's status only if nobody changed it first, with its correction row. */
-  private async change(
-    tx: Tx,
-    record: AttendanceRecord,
-    expectedVersion: number,
-    to: AttendanceStatus,
-    why: { reason: string; source: 'LECTURER' | 'ADMINISTRATOR'; actor: AccessClaims },
-    extra: Prisma.AttendanceRecordUncheckedUpdateManyInput = {},
-  ) {
-    const claimed = await tx.attendanceRecord.updateMany({
-      where: { id: record.id, version: expectedVersion },
-      data: { ...extra, status: to, version: { increment: 1 } },
-    });
-    if (claimed.count !== 1) {
-      throw conflict(
-        'RECORD_CHANGED',
-        'Someone else changed this record a moment ago. Reload and try again.',
-      );
-    }
-    await tx.attendanceCorrection.create({
-      data: {
-        recordId: record.id,
-        fromStatus: record.status,
-        toStatus: to,
-        reason: why.reason,
-        source: why.source,
-        correctedById: why.actor.userId,
-        correctedAt: this.clock.now(),
-      },
-    });
   }
 }

@@ -109,3 +109,32 @@ export const AssistedCheckInSchema = z.strictObject({
 /** Live roster events (ATTENDANCE_FLOW §6): each carries an increasing `seq`; on a gap, reload the roster. */
 export const ATTENDANCE_EVENT = 'attendance';
 export type AttendanceEventType = 'record.updated' | 'session.updated';
+
+/**
+ * Correcting a record (ATTENDANCE_FLOW §7) with a reason. Only these outcomes are set by a
+ * correction: excuses (EXCUSED) and voided classes (VOIDED) have their own workflows, and waiting
+ * check-ins are approved or rejected instead.
+ */
+export const CORRECTABLE_STATUSES = ['PRESENT', 'LATE', 'ABSENT', 'REJECTED'] as const;
+export const CorrectRecordSchema = z.strictObject({
+  status: z.enum(CORRECTABLE_STATUSES),
+  reason: ReasonSchema,
+  version: z.number().int().min(0),
+});
+
+/** An administrator's decision on a lecturer's late correction: a note is required to reject. */
+export const DecideCorrectionRequestSchema = z
+  .strictObject({ decision: z.enum(['APPROVE', 'REJECT']), note: ReasonSchema.optional() })
+  .refine((v) => v.decision === 'APPROVE' || v.note !== undefined, {
+    path: ['note'],
+    message: 'Say why the correction is rejected.',
+  });
+
+export const CorrectionRequestQuerySchema = z.strictObject({
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED']).default('PENDING'),
+});
+
+/** §5: check-ins still undecided this long after attendance closed go to an administrator. */
+export const UNDECIDED_ESCALATE_AFTER_HOURS = 72;
+/** §5: the lecturer is reminded at the class's end and at this hour (local time) the next morning. */
+export const UNDECIDED_MORNING_REMINDER_HOUR = 8;

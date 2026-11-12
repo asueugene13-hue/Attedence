@@ -55,6 +55,13 @@ export const SETTINGS = {
     schema: z.number().int().min(5).max(240),
     default: 20,
   },
+  'attendance.lecturerCorrectionDays': {
+    label: 'Lecturers correct records directly for (days)',
+    description:
+      'Days after a class during which its lecturer corrects attendance directly, with a reason. Later corrections wait for an administrator (ATTENDANCE_FLOW §7).',
+    schema: z.number().int().min(1).max(90),
+    default: 14,
+  },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

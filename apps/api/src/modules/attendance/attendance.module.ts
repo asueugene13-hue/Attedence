@@ -5,6 +5,7 @@ import { ClassSessionsModule } from '../class-sessions/class-sessions.module.js'
 import { CoursesModule } from '../courses/courses.module.js';
 import { DevicesModule } from '../devices/devices.module.js';
 import { EnrollmentsModule } from '../enrollments/enrollments.module.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 import { RiskFlagsModule } from '../risk-flags/risk-flags.module.js';
 import { SettingsModule } from '../settings/settings.module.js';
 import { StudentsModule } from '../students/students.module.js';
@@ -15,6 +16,8 @@ import { AttendanceSessionsController } from './attendance-sessions.controller.j
 import { AttendanceSessionsService } from './attendance-sessions.service.js';
 import { CheckInController } from './check-in.controller.js';
 import { CheckInService } from './check-in.service.js';
+import { CorrectionsController } from './corrections.controller.js';
+import { CorrectionsService } from './corrections.service.js';
 import { RosterController } from './roster.controller.js';
 import { RosterService } from './roster.service.js';
 
@@ -27,18 +30,20 @@ import { RosterService } from './roster.service.js';
     CoursesModule,
     DevicesModule,
     EnrollmentsModule,
+    NotificationsModule,
     RiskFlagsModule,
     SettingsModule,
     StudentsModule,
     VerificationModule,
   ],
-  controllers: [AttendanceSessionsController, CheckInController, RosterController],
+  controllers: [AttendanceSessionsController, CheckInController, RosterController, CorrectionsController],
   providers: [
     AttendanceSessionsService,
     CheckInService,
     RosterService,
     AttendanceEventsService,
     AttendanceGateway,
+    CorrectionsService,
   ],
   exports: [AttendanceSessionsService],
 })

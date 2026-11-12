@@ -44,6 +44,26 @@ export const NOTIFICATION_CATEGORIES = {
     mandatory: false,
     defaultChannels: ['IN_APP', 'PUSH'],
   },
+  ATTENDANCE_DECISIONS_WAITING: {
+    label: 'Check-ins waiting for your decision',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
+  ATTENDANCE_DECISIONS_ESCALATED: {
+    label: 'Undecided check-ins passed to administrators',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
+  CORRECTION_REQUESTED: {
+    label: 'Attendance correction to approve',
+    mandatory: false,
+    defaultChannels: ['IN_APP'],
+  },
+  CORRECTION_DECIDED: {
+    label: 'Attendance correction decided',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
   BEACON_FAULT: {
     label: 'Classroom beacon not detected',
     mandatory: false,

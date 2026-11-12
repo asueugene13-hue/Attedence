@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–3 done, step 4 (corrections) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–4 done, step 5 (history and percentages) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1714,3 +1714,22 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Known limitations:** KNOWN_LIMITATIONS 67, 73–76.
 - **Next step:** Phase 5, step 4: corrections (lecturer corrections within 14 days, administrator approval for later ones, reminders and escalation of undecided check-ins).
 - **CI:** clean-clone rehearsal: every step passed (API 423, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43203518780 on `a03850a`: **success**.
+
+### 2026-11-12 — Phase 5, step 4: corrections
+
+- **Built (API):**
+  - **Correcting a record** (`POST /attendance-records/:id/correct`): the class's lecturer corrects directly, with a reason, for 14 days after the class (a setting); an administrator in scope corrects directly at any time. Allowed results: present, late, absent, rejected. Excused and voided records have their own workflows, and waiting check-ins are approved or rejected instead. Version-checked; a correction row, an audit entry and a live roster update every time. Corrections may also lower a record; that is what an audited correction is for.
+  - **Late corrections:** after the window, a lecturer's correction becomes a request (one per record at a time). Administrators in scope see them oldest first and approve or reject (a note is required to reject); the lecturer is told. Approval applies only to the record as the lecturer saw it: if it changed since, the approval is refused and nothing is half-done.
+  - **History** (`GET /attendance-records/:id/history`): every correction, every check-in attempt with each decision and its rule trace, hand check-ins and correction requests.
+  - **Undecided check-ins** (a job every 15 minutes): for closed attendance with waiting check-ins, the lecturer is reminded once the class has ended and at 08:00 the next morning; 72 hours after closing the responsible administrators are told, once. Nothing is decided automatically, and nothing becomes an absence.
+  - One shared helper (`record-changes.ts`) now changes a record's status for decisions, hand check-ins, corrections and approved requests, so the version check and the correction row can never be skipped.
+- **Proof the key test bites:** with the correction window removed, both late-correction tests failed. Restored.
+- **Scenario 20 done** (`test/corrections.test.ts`).
+- **Files:**
+  - Shared: `attendance.ts` (correction schemas, statuses, reminder constants), `settings.ts` (`attendance.lecturerCorrectionDays`), `notifications.ts` (4 categories).
+  - API: new `attendance/corrections.service.ts`, `corrections.controller.ts`, `record-changes.ts`; `roster.service.ts` (uses the shared helper), `attendance.module.ts`; new `test/corrections.test.ts` (7 tests); `test/fixtures.ts`; migration `20261112190000_attendance_corrections`.
+  - Docs: API_DOCUMENTATION, ATTENDANCE_FLOW §5 and §7, TESTING (scenario 20), KNOWN_LIMITATIONS (77–79).
+- **Database changes:** new table `attendance_correction_requests` (one waiting request per record, a partial unique index; decided requests say who and when) and enum `CorrectionRequestStatus`; `attendance_sessions.undecided_escalated_at`. Generated with errors visible, checked non-empty, applied; drift clean.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **430** (7 new), mobile 22, web 13, so **478 passed**.
+- **Known limitations:** KNOWN_LIMITATIONS 77–79.
+- **Next step:** Phase 5, step 5: history and attendance percentages.

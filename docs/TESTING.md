@@ -47,7 +47,7 @@ Rules:
 | 17 | Course rep reports a class problem, and status does not change | Integration | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day"; "course rep rule" (unit and integration; D-13 corroboration). |
 | 18 | Administrator reviews a class | Integration + web end-to-end | 3 | **Done.** "review decisions" tests; `test/class-monitoring.test.ts` → "a simulated teaching day"; `apps/web/e2e/05-classes.spec.ts` (publish a timetable, open a review, decide it in the browser). |
 | 19 | Student disputes attendance | Integration + mobile | 6 | Not written |
-| 20 | Lecturer makes an authorised correction | Integration | 5–6 | Not written |
+| 20 | Lecturer makes an authorised correction | Integration | 5–6 | **Done.** `test/corrections.test.ts` → "scenario 20" (reason, correction row, audit, live update; refusals), "late corrections" (waits for an administrator; never applied to a record that changed since). |
 | 21 | Cancelled class excluded from absence calculation | Unit (calculation) + integration | 5 | Not written |
 | 22 | Lecturer's device crashes during attendance | Integration + realtime | 5 | **Done.** `test/roster.test.ts` → "scenario 22": live events stop when the phone dies; another device joins, sees from `seq` what it missed, reloads the full roster, and the QR carries on. |
 | 23 | Background job fails and recovers | Jobs | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day" (an email outage recovers on retry); "a failed email is retried, then recorded as failed and reported to system health"; `test/jobs-and-settings.test.ts`. |

@@ -97,3 +97,6 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 74. **Only the class's lecturer can check a student in by hand.** Administrators correct records instead (step 4), so every hand check-in is made by someone who was in the room.
 75. **Live roster numbering lives in Redis.** If Redis is unavailable, events carry no number and screens reload the full roster each time: slower, never wrong.
 76. **If Redis is down when the API starts, live events reach only the screens connected to the same API server** until Redis is back. Then the screens already connected are asked to reconnect (and reload the roster), so none silently misses events. With one API server, as in the pilot, nothing changes for users.
+77. **The correction window counts from the class's scheduled start** (default 14 days, a setting). It is the same for every faculty until Knutsford's rules say otherwise (D-09).
+78. **A late correction approved by an administrator is recorded as the administrator's change** (with the lecturer's reason and a link to the request), because the administrator applied it.
+79. **Reminders about undecided check-ins go to the lecturer and to University Administrators in scope**, not to Super Admins, and only for classes whose attendance has closed.
