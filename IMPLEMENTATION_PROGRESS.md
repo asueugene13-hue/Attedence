@@ -1733,3 +1733,4 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **430** (7 new), mobile 22, web 13, so **478 passed**.
 - **Known limitations:** KNOWN_LIMITATIONS 77–79.
 - **Next step:** Phase 5, step 5: history and attendance percentages.
+- **CI:** clean-clone rehearsal: every step passed (API 430, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43230040518 on `015ae80`: **success**.
