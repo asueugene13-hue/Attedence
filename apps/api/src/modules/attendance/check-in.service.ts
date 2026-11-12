@@ -269,13 +269,16 @@ export class CheckInService {
     }
     if (passedGates) {
       try {
-        await this.beaconHealth.recordObservation({
-          deviceId: device.id,
-          classroomId: cls.classroomId,
-          bluetooth: input.bluetooth,
-          location: input.location,
-          heard: e.heard,
-        });
+        await this.beaconHealth.recordObservation(
+          {
+            deviceId: device.id,
+            classroomId: cls.classroomId,
+            bluetooth: input.bluetooth,
+            location: input.location,
+            heard: e.heard,
+          },
+          e.room,
+        );
       } catch (error) {
         this.logger.error(`Beacon health report failed for attempt ${response.attemptId}: ${String(error)}`);
       }

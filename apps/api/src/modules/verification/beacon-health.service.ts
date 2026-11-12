@@ -7,16 +7,18 @@ import { ClassEventService } from '../class-sessions/class-event.service.js';
 import { ClassSessionsService } from '../class-sessions/class-sessions.service.js';
 import { PlacesService } from '../places/places.service.js';
 import { RiskFlagsService } from '../risk-flags/risk-flags.service.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import {
-  assessRoom,
   CONFLICT_WINDOW_MINUTES,
   findConflict,
   HEALTH_WINDOW_MINUTES,
   isUnexpectedSighting,
+  judgeRoom,
   summarise,
   windowStart,
 } from './beacon-health.js';
-import { evaluateGps, type Geofence, type GpsReading } from './evidence.js';
+import { EARTH_RADIUS_M, evaluateGps, type Geofence, type GpsReading } from './evidence.js';
+import type { RoomFacts } from './evidence.service.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
 
 export interface ObservationInput {
@@ -29,6 +31,8 @@ export interface ObservationInput {
 }
 
 const SUMMARY_EVERY_MS = HEALTH_WINDOW_MINUTES * 60_000;
+/** Metres per degree of latitude on the sphere `distanceM` uses. */
+const METRES_PER_DEGREE = (EARTH_RADIUS_M * Math.PI) / 180;
 
 /**
  * Beacon health (PRESENCE_VERIFICATION.md §3, Phase 4 step 5). Check-in (Phase 5) reports what each
@@ -66,13 +70,17 @@ export class BeaconHealthService implements OnModuleInit {
     this.jobs.every('monitoring', 'beacon-health-summary', SUMMARY_EVERY_MS);
   }
 
-  /** Records one phone's report and acts on it. Returns what was concluded, for check-in to use. */
-  async recordObservation(input: ObservationInput) {
+  /**
+   * Records one phone's report and acts on it. Returns what was concluded, for check-in to use.
+   * `room`: the beacon list and site the caller already loaded for this same request (check-in's
+   * evidence), so they are not loaded again; without it they are loaded here.
+   */
+  async recordObservation(input: ObservationInput, room?: RoomFacts) {
     const now = this.clock.now();
     const [policy, scanList, geofence, running] = await Promise.all([
       this.policies.current(),
-      this.beacons.scanList(),
-      this.places.geofenceForClassroom(input.classroomId),
+      room?.scanList ?? this.beacons.scanList(),
+      room ? room.geofence : this.places.geofenceForClassroom(input.classroomId),
       this.classSessions.runningInRoom(input.classroomId, now),
     ]);
     const rules = policy.rules;
@@ -105,7 +113,10 @@ export class BeaconHealthService implements OnModuleInit {
       },
     });
 
-    await this.checkAnomalies(observation.id, input.deviceId, usable, [...strongest.keys()], now, rules);
+    await this.checkAnomalies(observation.id, input.deviceId, usable, [...strongest.keys()], now, rules, {
+      scanList,
+      sites: new Map([[input.classroomId, geofence]]),
+    });
 
     // Heard again: a suspected-faulty beacon is broadcasting, so it is working.
     const recovered = await this.beacons.markHeardAgain(
@@ -118,29 +129,11 @@ export class BeaconHealthService implements OnModuleInit {
     let degraded = false;
     let suspectedNow: string[] = [];
     if (running && roomBeacons.length > 0) {
-      const roomIds = new Set(roomBeacons.map((b) => b.id));
-      const since = new Date(now.getTime() - rules.beaconFaultWindowMinutes * 60_000);
-      const recent = await this.prisma.beaconObservation.findMany({
-        where: { classroomId: input.classroomId, observedAt: { gte: since, lte: now } },
-        select: {
-          deviceId: true,
-          observedAt: true,
-          bluetooth: true,
-          gps: true,
-          sightings: { select: { beaconId: true } },
-        },
-      });
-      const assessment = assessRoom(
-        recent.map((r) => ({
-          deviceId: r.deviceId,
-          observedAt: r.observedAt,
-          bluetooth: r.bluetooth,
-          gps: r.gps,
-          heardRoomBeacon: r.sightings.some((s) => roomIds.has(s.beaconId)),
-        })),
-        now,
-        rules,
-      );
+      const roomIds = roomBeacons.map((b) => b.id);
+      // This phone heard a room beacon, so the beacon is working: nothing to count.
+      const assessment = roomIds.some((id) => strongest.has(id))
+        ? judgeRoom({ heardInWindow: true, silentDevices: 0 }, rules)
+        : judgeRoom(await this.roomWindow(input.classroomId, roomIds, now, rules), rules);
       const stillSuspected = roomBeacons.every(
         (b) => b.status === 'SUSPECTED_FAULTY' && !recovered.includes(b.id),
       );
@@ -174,6 +167,34 @@ export class BeaconHealthService implements OnModuleInit {
     };
   }
 
+  /**
+   * The two numbers the fault rule needs (see `assessRoom`), counted by the database over this room's
+   * reports in the window: did any report hear one of the room's beacons, and how many different
+   * phones on site with Bluetooth on heard none of them.
+   */
+  private async roomWindow(
+    classroomId: string,
+    roomBeaconIds: string[],
+    now: Date,
+    rules: { beaconFaultWindowMinutes: number },
+  ): Promise<{ heardInWindow: boolean; silentDevices: number }> {
+    const since = new Date(now.getTime() - rules.beaconFaultWindowMinutes * 60_000);
+    const ids = Prisma.join(roomBeaconIds.map((id) => Prisma.sql`${id}::uuid`));
+    const [row] = await this.prisma.$queryRaw<{ heard: boolean; silent: number }[]>`
+      WITH recent AS (
+        SELECT o.device_id, o.bluetooth, o.gps,
+               EXISTS (SELECT 1 FROM beacon_sightings s
+                       WHERE s.observation_id = o.id AND s.beacon_id IN (${ids})) AS heard
+        FROM beacon_observations o
+        WHERE o.classroom_id = ${classroomId}::uuid AND o.observed_at >= ${since} AND o.observed_at <= ${now}
+      )
+      SELECT COALESCE(bool_or(heard), false) AS heard,
+             (COUNT(DISTINCT device_id) FILTER (
+               WHERE bluetooth = 'ON' AND gps = 'INSIDE' AND NOT heard))::int AS silent
+      FROM recent`;
+    return { heardInWindow: row!.heard, silentDevices: row!.silent };
+  }
+
   /** Risk flags for a person to review; they change nothing by themselves. */
   private async checkAnomalies(
     observationId: string,
@@ -182,14 +203,17 @@ export class BeaconHealthService implements OnModuleInit {
     beaconIds: string[],
     now: Date,
     rules: Awaited<ReturnType<VerificationPolicyService['current']>>['rules'],
+    loaded: { scanList: RoomFacts['scanList']; sites: Map<string, RoomFacts['geofence']> },
   ) {
     if (!location || beaconIds.length === 0) return;
-    const scan = new Map((await this.beacons.scanList()).map((b) => [b.id, b]));
+    const scan = new Map(loaded.scanList.map((b) => [b.id, b]));
     const since = new Date(now.getTime() - CONFLICT_WINDOW_MINUTES * 60_000);
     for (const beaconId of beaconIds) {
       const beacon = scan.get(beaconId);
       if (!beacon) continue;
-      const fence = await this.places.geofenceForClassroom(beacon.classroomId);
+      const fence = loaded.sites.has(beacon.classroomId)
+        ? loaded.sites.get(beacon.classroomId)!
+        : await this.places.geofenceForClassroom(beacon.classroomId);
       const unexpected = isUnexpectedSighting(
         location,
         fence ? { latitude: fence.lat, longitude: fence.lng, radiusM: fence.radiusM } : null,
@@ -210,12 +234,24 @@ export class BeaconHealthService implements OnModuleInit {
           dedupeKey: `unexpected-beacon:${beaconId}:${deviceId}`,
         });
       }
+      // Only sightings that could be a conflict: anything within (conflict distance + this reading's
+      // error) of here cannot be, so a square safely inside that circle is left out. A full class in
+      // one room is all inside it, so check-ins do not reload every classmate's sighting.
+      const near = (0.9 * (rules.beaconConflictDistanceM + location.accuracyM)) / Math.SQRT2;
+      const dLat = near / METRES_PER_DEGREE;
+      const dLng = near / (METRES_PER_DEGREE * Math.cos((location.latitude * Math.PI) / 180));
       const others = await this.prisma.beaconSighting.findMany({
         where: {
           beaconId,
           observedAt: { gte: since, lte: now },
           observationId: { not: observationId },
-          observation: { latitude: { not: null } },
+          observation: {
+            latitude: { not: null },
+            NOT: {
+              latitude: { gte: location.latitude - dLat, lte: location.latitude + dLat },
+              longitude: { gte: location.longitude - dLng, lte: location.longitude + dLng },
+            },
+          },
         },
         select: {
           observation: {

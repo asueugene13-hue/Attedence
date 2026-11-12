@@ -2,8 +2,8 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–6 done (the camera build still to be tried on a phone), step 7 (exit check) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
-**Last updated:** 2026-11-09
+**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–7 done, including the exit check (2026-11-12); **waiting for the product owner to approve Phase 5 as complete** (the camera build is still to be tried on a phone). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Last updated:** 2026-11-12
 
 ### Phase 1 steps
 
@@ -28,7 +28,7 @@ Read this first in every session, and update it after every implementation step.
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Done; approved by the product owner 2026-11-09 |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Done; approved by the product owner 2026-11-09 (CI run 42695433225) |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
-| 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Not started |
+| 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Exit check done 2026-11-12; awaiting approval |
 | 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Not started |
 | 7 Reports and administration | Admin dashboards, analytics, CSV/Excel/PDF exports, system monitoring, audit views | Every report respects role scope; exports are logged | Not started |
 | 8 Production readiness | Security testing, load testing, device testing, backup and restore drill, deployment, user acceptance testing | Knutsford staff sign off on UAT; a restore drill succeeds | Not started |
@@ -1784,3 +1784,41 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Known limitations:** KNOWN_LIMITATIONS 83–86.
 - **Next step:** install the camera build on the phone and try a real check-in; then Phase 5, step 7: the exit check (scenarios and the 500-check-in load test).
 - **CI:** clean-clone rehearsal: every step passed (API 444, mobile 27, web 13, mobile bundle check, migrations, drift, e2e 7, audit clean). GitHub run 43253029629 on `dacfe84`: **success**.
+
+### 2026-11-12 — Phase 5, step 7: exit check
+
+- **Built (tests):**
+  - **A simulated class** (`test/simulated-class.test.ts`): one class of 12 made-up students run end to end through the real API, from opening attendance to each student's percentage, with scenarios 1–12 and 22 happening in it as they would in a lecture: on time, from home, a screenshot, a triple request, Bluetooth off, a vague location, a new phone, a lost connection, a student of another course, a non-student, the lecturer's device crashing and another device catching up, the beacon failing mid-class and the waiting check-ins approved together, a late arrival when the beacon is heard again, the server closing on time, an absence corrected with a reason, the class ended. At the end the roster, the correction rows (each with a reason and the person), the audit log, the class event log and the students' own percentages all agree.
+  - **The load test** (`test/load-check-ins.test.ts`, scenario 25): **500 students check in at the same instant**, each from their own signed phone over real HTTP, with the lecturer's live roster connected; then every phone retries with the same idempotency key. Required: all 500 confirmed exactly once, the retries get the same answers, one record and one attempt each, the roster agrees, and the live roster receives every event, numbered with no gap. Result: **passed**; 500 confirmed in **15–21 s** across runs on the development laptop (KNOWN_LIMITATIONS 87–88).
+- **Found and fixed by the exit check:**
+  - **Beacon health got slower as a class filled up:** after every check-in it reloaded every phone report from the room in the last 10 minutes, and every sighting of the beacon in the last 5 (about 125,000 rows for one class of 500). Now the database counts the two numbers the fault rule needs (one row back), the rule is skipped when the phone heard the beacon, and the conflict check leaves out sightings too close to be a conflict. The rule itself is unchanged: `assessRoom` still defines it and its unit tests still run, through a new `judgeRoom`.
+  - **Repeated loading:** the beacon list and the room's location were loaded three times per check-in; now once, then passed along. The phone's "last seen" time is written at most once a minute (the shared-phone check looks back a day). Database statements per check-in: about 41 → 33.
+  - **"Approve together" missed exactly the students who showed the fault:** their silent check-ins waited as "no classroom signal" before the fault was known, and a retry cannot move a waiting record. It now also includes those check-ins from the window of reports that showed the fault; an earlier one, from while the beacon worked, is still decided on its own.
+  - **A misleading message:** a check-in waiting because no beacon was heard on site told the student to "try again", with no retry button. It now says the lecturer will confirm.
+- **Measured, not changed:** one API process confirms about 25 check-ins a second here; the limit is processor time in the process (half in the database client), not the database (a bigger connection pool made no difference). Production should run at least two API processes; Phase 8 measures again on the real servers.
+- **Proof the new tests bite (each restored after):**
+  - Conflict prefilter too wide: 1 failed.
+  - Fault count not by distinct phone: 1 failed.
+  - Fault window without its start: 2 failed.
+  - Approve-together without the window: 1 failed.
+  - Approve-together with the old rule: 1 failed.
+- **Files:**
+  - API: `verification/beacon-health.ts` (`judgeRoom`), `beacon-health.service.ts`, `evidence.service.ts` (`RoomFacts`), `evidence.ts`, `decision-engine.ts`; `attendance/check-in.service.ts`, `roster.service.ts`; `class-sessions/class-event.service.ts` (`beaconDegradedSince`); `devices/device-signature.guard.ts`.
+  - Shared: `verification.ts` (waiting message).
+  - Tests: new `test/simulated-class.test.ts` and `test/load-check-ins.test.ts`; `test/beacon-health.test.ts` (+2), `test/roster.test.ts` (+1), `verification/verification.test.ts`.
+  - Docs: TESTING (scenarios 1–12, 22, 25), API_DOCUMENTATION, ATTENDANCE_FLOW, KNOWN_LIMITATIONS (87–89).
+- **Database changes:** none.
+- **Tests run:**
+  - `npm run check` exit 0: design-tokens 3, shared 10, API **449** (5 new), mobile 27, web 13, so **502 passed**.
+  - The load test inside that run: 500 confirmed in 15.2 s.
+- **Phase 5 exit criteria:**
+  - Scenarios 1–12, 22 and 25 pass as automated tests.
+  - The 500-check-in load test passes.
+  - The field parts of scenarios 1 and 9 belong to Phase 4's field test.
+  - The camera build has not yet been tried on a phone.
+- **Known limitations:** KNOWN_LIMITATIONS 87–89.
+- **Next step:**
+  - The product owner decides whether to approve Phase 5 as complete.
+  - Try the camera build on a phone.
+  - Phase 4's field test is still open.
+

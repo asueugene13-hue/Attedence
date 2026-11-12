@@ -101,11 +101,16 @@ describe('the decision table (§6 step 3)', () => {
     expect(run({ ble: 'OTHER_ROOM', retryRejectionsSoFar: 1 }).canAskForReview).toBe(true);
   });
 
-  it('NONE + INSIDE + trusted → pending', () => {
+  it('NONE + INSIDE + trusted → pending, told the lecturer will confirm (not to try again)', () => {
     expect(run({ ble: 'NONE', gps: 'INSIDE' })).toMatchObject({
       outcome: 'PENDING_VERIFICATION',
       reason: 'NO_CLASSROOM_SIGNAL',
+      retryAllowed: false,
+      message: 'We couldn’t detect the classroom, so your lecturer will confirm your check-in.',
     });
+    expect(run({ ble: 'NONE', gps: 'UNCERTAIN' }).message).toBe(
+      'We couldn’t detect the classroom. Move closer to the front and try again.',
+    );
   });
 
   it('NONE + UNCERTAIN + trusted → rejected with a retry', () => {

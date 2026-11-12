@@ -278,6 +278,27 @@ describe('a beacon phones cannot hear', () => {
     expect(await prisma.beaconSighting.count()).toBe(0); // not on the scan list, so not recorded
   });
 
+  it('counts phones, not reports, and any phone hearing the beacon in the last 10 minutes shows it works', async () => {
+    at('10:00');
+    await observe(0, { heard: [{ beaconId: ids.beacon, rssi: -66 }] });
+    at('10:05');
+    // Same phone three times, and a phone that heard only the room next door's beacon: two silent phones.
+    for (let i = 0; i < 3; i++) await observe(1);
+    await observe(2, { heard: [{ beaconId: ids.otherBeacon, rssi: -80 }] });
+    expect(await beaconStatus()).toBe('ACTIVE');
+    // A third silent phone, but phone 0 heard the beacon at 10:00, inside the window: still working.
+    expect((await observe(3)).suspectedFaulty).toEqual([]);
+    expect(await beaconStatus()).toBe('ACTIVE');
+    // At 10:11 the 10:00 report has left the window; four silent phones remain in it.
+    at('10:11');
+    expect((await observe(4)).suspectedFaulty).toEqual([ids.beacon]);
+    expect(
+      await prisma.auditLog.findFirstOrThrow({ where: { action: 'beacons.suspected_faulty' } }),
+    ).toMatchObject({
+      after: { evidence: { silentDevices: 4 } },
+    });
+  });
+
   it('keeps observations exactly as reported', async () => {
     await observe(0, {
       heard: [
@@ -320,6 +341,28 @@ describe('warnings for review', () => {
     at('10:40');
     await observe(3, { location: north(4000), heard: [{ beaconId: ids.otherBeacon, rssi: -60 }] });
     expect(await prisma.riskFlag.count({ where: { type: 'BEACON_LOCATION_CONFLICT' } })).toBe(1);
+  });
+
+  it('finds a conflict just past the distance in any direction, and none just inside it', async () => {
+    // Default conflict distance 1000 m; each reading ±15 m, so more than 1030 m apart is a conflict.
+    const conflicts = () => prisma.riskFlag.count({ where: { type: 'BEACON_LOCATION_CONFLICT' } });
+    const diagonal = (m: number) => ({
+      latitude: north(20).latitude + m / Math.SQRT2 / 111_195,
+      longitude: SITE.lng + m / Math.SQRT2 / (111_195 * Math.cos((SITE.lat * Math.PI) / 180)),
+      accuracyM: 15,
+    });
+    await observe(0, { heard: [{ beaconId: ids.beacon, rssi: -60 }] }); // at north(20)
+    await observe(1, { location: north(20 + 1020), heard: [{ beaconId: ids.beacon, rssi: -60 }] });
+    expect(await conflicts()).toBe(0);
+    await observe(2, { location: north(20 + 1045), heard: [{ beaconId: ids.beacon, rssi: -60 }] });
+    expect(await conflicts()).toBe(1);
+
+    await observe(0, { heard: [{ beaconId: ids.otherBeacon, rssi: -60 }] });
+    await observe(3, { location: diagonal(1045), heard: [{ beaconId: ids.otherBeacon, rssi: -60 }] });
+    const flag = await prisma.riskFlag.findFirstOrThrow({
+      where: { type: 'BEACON_LOCATION_CONFLICT', evidence: { path: ['beaconId'], equals: ids.otherBeacon } },
+    });
+    expect(flag.evidence).toMatchObject({ otherDeviceId: phones[0] });
   });
 });
 

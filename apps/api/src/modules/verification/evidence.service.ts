@@ -13,6 +13,12 @@ export interface PhoneEvidence {
   location: GpsReading | null;
 }
 
+/** What was loaded to judge the room, so the beacon-health report after a check-in need not load it again. */
+export interface RoomFacts {
+  scanList: Awaited<ReturnType<BeaconsService['scanList']>>;
+  geofence: Awaited<ReturnType<PlacesService['geofenceForClassroom']>>;
+}
+
 export interface CollectedEvidence {
   ble: BleResult;
   strongestOwnRssi: number | null;
@@ -23,6 +29,8 @@ export interface CollectedEvidence {
   distanceM: number | null;
   hasGeofence: boolean;
   integrity: IntegrityResult;
+  /** Not evidence: what was loaded to judge it (never stored with an attempt). */
+  room: RoomFacts;
 }
 
 /**
@@ -77,6 +85,7 @@ export class EvidenceService {
       distanceM: gps.distanceM === null ? null : Math.round(gps.distanceM),
       hasGeofence: geofence !== null,
       integrity,
+      room: { scanList, geofence },
     };
   }
 }

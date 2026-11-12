@@ -17,6 +17,7 @@ import type { AccessClaims } from '../auth/token.service.js';
 
 /** How long a used nonce is remembered: longer than the allowed clock difference either way. */
 const NONCE_TTL_SECONDS = Math.ceil((2 * DEVICE_SIGNATURE_MAX_SKEW_MS) / 1000);
+const LAST_SEEN_PRECISION_MS = 60_000;
 
 type SignedRequest = Request & { auth?: AccessClaims; device?: UserDevice; rawBody?: Buffer };
 
@@ -108,7 +109,12 @@ export class DeviceSignatureGuard implements CanActivate {
     );
     if (fresh !== 'OK') throw refused('DEVICE_SIGNATURE_REPLAYED', 'This request was already used.');
 
-    await this.prisma.userDevice.update({ where: { id: device.id }, data: { lastSeenAt: this.clock.now() } });
+    // "Last seen" to the minute is enough (the shared-phone check looks back a day), so a burst of
+    // signed requests does not write the same row each time.
+    const now = this.clock.now();
+    if (!device.lastSeenAt || now.getTime() - device.lastSeenAt.getTime() >= LAST_SEEN_PRECISION_MS) {
+      await this.prisma.userDevice.update({ where: { id: device.id }, data: { lastSeenAt: now } });
+    }
     req.device = device;
     return true;
   }

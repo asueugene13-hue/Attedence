@@ -67,6 +67,13 @@ export const STUDENT_MESSAGES: Record<VerificationReason | 'VERIFIED', string> =
     'Your check-in arrived late because of the connection. Waiting for your lecturer to confirm.',
 };
 
+/**
+ * "No classroom signal" when it waits for the lecturer instead of being rejected (on site, no beacon
+ * heard): nothing to retry, so the rejection's "try again" would mislead.
+ */
+export const NO_CLASSROOM_SIGNAL_WAITING_MESSAGE =
+  'We couldn’t detect the classroom, so your lecturer will confirm your check-in.';
+
 /** After a second rejection that allows a retry, the student may ask the lecturer to review instead. */
 export const ASK_FOR_REVIEW_MESSAGE = 'Still not working? Ask your lecturer to review your check-in.';
 

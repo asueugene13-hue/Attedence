@@ -20,7 +20,7 @@ export interface Geofence {
   radiusM: number;
 }
 
-const EARTH_RADIUS_M = 6_371_008.8;
+export const EARTH_RADIUS_M = 6_371_008.8;
 const toRad = (deg: number) => (deg * Math.PI) / 180;
 
 /** Great-circle distance in metres (haversine). Accurate to well under a metre at campus scale. */

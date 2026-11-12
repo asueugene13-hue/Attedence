@@ -331,6 +331,32 @@ describe('deciding waiting check-ins', () => {
     expect((await line(extra)).status).toBe('PRESENT');
     expect((await line(c.students[0]!)).status).toBe('PENDING'); // still needs its own decision
   });
+
+  it('includes the silent check-ins that showed the fault, but not an earlier one from before it', async () => {
+    // 09:58: one student waits ("no classroom signal") while nothing suggests a fault yet.
+    const early = c.students[0]!;
+    expect(await checkIn(early, silent)).toMatchObject({
+      reason: 'NO_CLASSROOM_SIGNAL',
+      recordStatus: 'PENDING',
+    });
+    // 10:10: three phones on site hear nothing. They wait for the same reason; then the beacon is
+    // suspected and the class degraded, judged on the reports of the last 10 minutes (from 10:00).
+    at('10:10');
+    for (const s of c.students.slice(1, 4)) {
+      expect(await checkIn(s, silent)).toMatchObject({
+        reason: 'NO_CLASSROOM_SIGNAL',
+        recordStatus: 'PENDING',
+      });
+    }
+    expect((await roster()).degraded).toBe(true);
+    await http
+      .post(`/api/v1/attendance-sessions/${attendanceId}/approve-waiting`)
+      .set(c.lecturer.auth)
+      .send({})
+      .expect(200);
+    for (const s of c.students.slice(1, 4)) expect((await line(s)).status).toBe('PRESENT');
+    expect((await line(early)).status).toBe('PENDING'); // before the fault's evidence: decided on its own
+  });
 });
 
 describe('assisted check-in', () => {

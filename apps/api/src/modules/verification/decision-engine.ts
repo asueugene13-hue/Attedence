@@ -4,6 +4,7 @@ import {
   type IntegrityResult,
   type Outcome,
   type RiskType,
+  NO_CLASSROOM_SIGNAL_WAITING_MESSAGE,
   STUDENT_MESSAGES,
   type VerificationReason,
   type VerificationRules,
@@ -174,7 +175,10 @@ export function decide(input: DecisionInput, rules: VerificationRules): Decision
     return {
       outcome,
       reason,
-      message: STUDENT_MESSAGES[reason ?? 'VERIFIED'],
+      message:
+        reason === 'NO_CLASSROOM_SIGNAL' && outcome !== 'REJECTED'
+          ? NO_CLASSROOM_SIGNAL_WAITING_MESSAGE
+          : STUDENT_MESSAGES[reason ?? 'VERIFIED'],
       retryAllowed,
       canAskForReview,
     };

@@ -43,10 +43,22 @@ export function assessRoom(
       .filter((r) => r.bluetooth === 'ON' && r.gps === 'INSIDE' && !r.heardRoomBeacon)
       .map((r) => r.deviceId),
   );
+  return judgeRoom({ heardInWindow, silentDevices: silent.size }, rules);
+}
+
+/**
+ * The same rule from the two numbers it depends on. The service has the database count them (one
+ * row back however many students are in the room), so a full class does not reload every report
+ * after each check-in; `assessRoom` above states exactly what those two numbers mean.
+ */
+export function judgeRoom(
+  window: { heardInWindow: boolean; silentDevices: number },
+  rules: Pick<VerificationRules, 'beaconFaultMinDevices'>,
+): FaultAssessment {
   return {
-    suspected: !heardInWindow && silent.size >= rules.beaconFaultMinDevices,
-    silentDevices: silent.size,
-    heardInWindow,
+    suspected: !window.heardInWindow && window.silentDevices >= rules.beaconFaultMinDevices,
+    silentDevices: window.silentDevices,
+    heardInWindow: window.heardInWindow,
   };
 }
 

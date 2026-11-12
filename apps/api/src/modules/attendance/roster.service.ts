@@ -199,14 +199,25 @@ export class RosterService {
       'attendance.review_pending',
       'attendance.review_pending',
     );
-    if (!(await this.classEvents.isBeaconDegraded(cls.id))) {
+    const degraded = await this.classEvents.beaconDegradedSince(cls.id);
+    if (!degraded) {
       throw conflict(
         'NOT_DEGRADED',
         'Approving all at once is only for a class whose beacon is not working. Decide each check-in.',
       );
     }
+    // Waiting because of the beacon: check-ins in degraded mode, and the "no classroom signal"
+    // check-ins from the reports that showed the beacon had failed (they arrived before the fault was
+    // known, and a retry cannot move a waiting record). Anything else waiting is decided one by one.
     const waiting = await this.prisma.attendanceRecord.findMany({
-      where: { attendanceSessionId: session.id, status: 'PENDING', attempt: { reason: 'DEGRADED_MODE' } },
+      where: {
+        attendanceSessionId: session.id,
+        status: 'PENDING',
+        OR: [
+          { attempt: { reason: 'DEGRADED_MODE' } },
+          { attempt: { reason: 'NO_CLASSROOM_SIGNAL', receivedAt: { gte: degraded.evidenceFrom } } },
+        ],
+      },
     });
     const reason = note ?? 'Approved together: the classroom beacon was not working.';
     await this.prisma.$transaction(async (tx) => {

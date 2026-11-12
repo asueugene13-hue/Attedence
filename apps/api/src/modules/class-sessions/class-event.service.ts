@@ -334,6 +334,21 @@ export class ClassEventService {
   }
 
   /** Is this class in degraded mode (its room's beacon was not heard during it)? For check-in (Phase 5). */
+  /**
+   * When the class entered degraded mode, and the window of phone reports that showed the beacon
+   * had failed (both as recorded at the time); null if it never did.
+   */
+  async beaconDegradedSince(sessionId: string): Promise<{ at: Date; evidenceFrom: Date } | null> {
+    const event = await this.prisma.classEvent.findFirst({
+      where: { classSessionId: sessionId, type: 'BEACON_DEGRADED' },
+      orderBy: { occurredAt: 'asc' },
+      select: { occurredAt: true, payload: true },
+    });
+    if (!event) return null;
+    const minutes = Number((event.payload as { windowMinutes?: unknown } | null)?.windowMinutes ?? 0);
+    return { at: event.occurredAt, evidenceFrom: new Date(event.occurredAt.getTime() - minutes * 60_000) };
+  }
+
   async isBeaconDegraded(sessionId: string): Promise<boolean> {
     return (
       (await this.prisma.classEvent.count({
