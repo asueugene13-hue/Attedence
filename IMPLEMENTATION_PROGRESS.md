@@ -1617,3 +1617,4 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Test-run incident, not a code problem:** the first full check had one Phase 3 test time out (6.4 s against a 5 s limit), and an isolated re-run hung in its setup. Both runs had the development API and Metro servers running alongside (left on for the phone test). With them stopped, the same file passed (29 of 29, 44 s) and the full check passed. Lesson: stop the dev servers before running the full check.
 - **Known limitations:** KNOWN_LIMITATIONS 62–66.
 - **Next step:** Phase 4, step 6: the field test in two real classrooms (needs beacons, rooms and the product owner on site). The beacon-heard test on the phone is still open (step 4).
+- **CI:** clean-clone rehearsal: every step passed (API 372, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43135467342 on `9019598`: **success**.
