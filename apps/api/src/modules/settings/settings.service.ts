@@ -100,6 +100,7 @@ export class SettingsService {
 
   /** Settings that depend on each other must stay sensible together. */
   private async assertConsistent(key: SettingKey, value: number) {
+    if (key !== 'monitoring.unconfirmedAfterMinutes' && key !== 'monitoring.reviewAfterMinutes') return;
     const unconfirmed =
       key === 'monitoring.unconfirmedAfterMinutes'
         ? value

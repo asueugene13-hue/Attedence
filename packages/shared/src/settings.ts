@@ -62,6 +62,20 @@ export const SETTINGS = {
     schema: z.number().int().min(1).max(90),
     default: 14,
   },
+  'attendance.lateWeight': {
+    label: 'A late check-in counts as (share of attended)',
+    description:
+      '1 means late counts as attended; 0.5 as half. Interim default until Knutsford’s rules are set (D-09).',
+    schema: z.number().min(0).max(1),
+    default: 1,
+  },
+  'attendance.minimumPercent': {
+    label: 'Minimum attendance (%)',
+    description:
+      'Students below this see a warning. Not set until the Registrar enters Knutsford’s real figure (D-09): until then no warning is shown.',
+    schema: z.number().min(1).max(100).nullable(),
+    default: null,
+  },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

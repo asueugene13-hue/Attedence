@@ -100,3 +100,6 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 77. **The correction window counts from the class's scheduled start** (default 14 days, a setting). It is the same for every faculty until Knutsford's rules say otherwise (D-09).
 78. **A late correction approved by an administrator is recorded as the administrator's change** (with the lecturer's reason and a link to the request), because the administrator applied it.
 79. **Reminders about undecided check-ins go to the lecturer and to University Administrators in scope**, not to Super Admins, and only for classes whose attendance has closed.
+80. **Percentages are worked out on every request** from the records (always current, nothing to go stale). For very large sections this may need a cached summary later; the pilot sizes are small.
+81. **"How many more absences" assumes the student attends every other remaining class** and counts classes still scheduled, confirmed, delayed or unconfirmed. A class cancelled later is simply no longer counted.
+82. **Excuse requests and disputes are Phase 6.** Until then EXCUSED is reached only through those workflows, so no record is excused yet.

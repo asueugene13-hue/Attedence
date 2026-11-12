@@ -92,6 +92,22 @@ export class ClassSessionsService {
   }
 
   /** Session views by id, for other parts of this module (reschedule requests). */
+  /** Every class meeting of these sections, oldest first, as facts (for attendance percentages). */
+  async forSections(sectionIds: string[]) {
+    const rows = await this.prisma.classSession.findMany({
+      where: { sections: { some: { sectionId: { in: [...new Set(sectionIds)] } } } },
+      include: sessionInclude,
+      orderBy: { scheduledStart: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      status: r.status,
+      scheduledStart: r.scheduledStart,
+      scheduledEnd: r.scheduledEnd,
+      sectionIds: r.sections.map((s) => s.sectionId),
+    }));
+  }
+
   /** The facts other modules need about classes (attendance): status, lecturer, times, sections. */
   async facts(ids: string[], tx: Prisma.TransactionClient = this.prisma) {
     const rows = await tx.classSession.findMany({

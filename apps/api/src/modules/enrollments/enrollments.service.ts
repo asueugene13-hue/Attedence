@@ -316,6 +316,23 @@ export class EnrollmentsService {
     return [...new Set(rows.map((r) => r.studentId))];
   }
 
+  /** A student's enrolments, current and ended, with their dates (for attendance percentages). */
+  async enrolmentsOf(studentId: string) {
+    return this.prisma.courseEnrollment.findMany({
+      where: { studentId },
+      select: { sectionId: true, offeringId: true, enrolledAt: true, endedAt: true, status: true },
+      orderBy: { enrolledAt: 'asc' },
+    });
+  }
+
+  /** A section's enrolments, current and ended, with their dates. */
+  async enrolmentsInSection(sectionId: string) {
+    return this.prisma.courseEnrollment.findMany({
+      where: { sectionId },
+      select: { studentId: true, enrolledAt: true, endedAt: true, status: true },
+    });
+  }
+
   /** Was this student eligible for a class meeting (enrolled in one of its sections at `at`)? */
   async isEligible(studentId: string, sectionIds: string[], at: Date): Promise<boolean> {
     return (

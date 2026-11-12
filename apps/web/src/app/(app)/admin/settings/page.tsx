@@ -65,11 +65,11 @@ function Settings() {
                     <div className="secondary-text">{s.description}</div>
                   </td>
                   <td>
-                    {String(s.value)}
+                    {shown(s.value)}
                     {s.isDefault ? (
                       <span className="muted"> (default)</span>
                     ) : (
-                      <span className="muted"> (default {String(s.default)})</span>
+                      <span className="muted"> (default {shown(s.default)})</span>
                     )}
                   </td>
                   <td>
@@ -97,9 +97,14 @@ function Settings() {
   );
 }
 
+/** A setting with no value yet (for example a minimum Knutsford has not set) shows as "Not set". */
+const shown = (value: unknown) => (value === null ? 'Not set' : String(value));
+
 function EditSetting(props: { setting: Setting; onClose: () => void; onDone: () => Promise<unknown> }) {
   const auth = useAuth();
-  const [value, setValue] = useState(String(props.setting.value));
+  // Settings whose default is "not set" may be cleared again by leaving the value empty.
+  const clearable = props.setting.default === null;
+  const [value, setValue] = useState(props.setting.value === null ? '' : String(props.setting.value));
   const [reason, setReason] = useState('');
   return (
     <FormDialog
@@ -108,23 +113,38 @@ function EditSetting(props: { setting: Setting; onClose: () => void; onDone: () 
       description={props.setting.description}
       submitLabel="Save"
       validate={() =>
-        !/^\d+(\.\d+)?$/.test(value.trim())
-          ? 'Enter a number.'
-          : reason.trim().length < 5
+        clearable && value.trim() === ''
+          ? reason.trim().length < 5
             ? 'Explain the change, at least 5 characters.'
             : null
+          : !/^\d+(\.\d+)?$/.test(value.trim())
+            ? clearable
+              ? 'Enter a number, or leave it empty for "not set".'
+              : 'Enter a number.'
+            : reason.trim().length < 5
+              ? 'Explain the change, at least 5 characters.'
+              : null
       }
       onSubmit={async () => {
         await auth.call(`/settings/${props.setting.key}`, {
           method: 'PUT',
           headers: { 'If-Match': String(props.setting.version) },
-          body: { value: Number(value.trim()), reason: reason.trim() },
+          body: {
+            value: clearable && value.trim() === '' ? null : Number(value.trim()),
+            reason: reason.trim(),
+          },
         });
         await props.onDone();
       }}
       onClose={props.onClose}
     >
-      <Field label="Value" name="value" inputMode="numeric" value={value} onChange={setValue} />
+      <Field
+        label={clearable ? 'Value (leave empty for not set)' : 'Value'}
+        name="value"
+        inputMode="numeric"
+        value={value}
+        onChange={setValue}
+      />
       <Field
         label="Reason (recorded)"
         name="reason"

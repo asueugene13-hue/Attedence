@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–4 done, step 5 (history and percentages) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–5 done, step 6 (screens) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1734,3 +1734,25 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Known limitations:** KNOWN_LIMITATIONS 77–79.
 - **Next step:** Phase 5, step 5: history and attendance percentages.
 - **CI:** clean-clone rehearsal: every step passed (API 430, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43230040518 on `015ae80`: **success**.
+
+### 2026-11-12 — Phase 5, step 5: history and attendance percentages
+
+- **Built (API):**
+  - **The calculation** (ATTENDANCE_FLOW §9) as a pure, tested function: a class counts only if it was held (COMPLETED), attendance was taken, closed and not voided, and the student was enrolled at its start. Cancelled, rescheduled, suspended and voided classes are listed but **never counted** (scenario 21); so are classes held without attendance, classes under review, classes before the student enrolled, and attendance still open. Percentage = (present + late weight × late) ÷ (eligible − excused − undecided), one decimal; undecided check-ins are shown separately until decided. A class that closed with no record for an eligible student shows as "no record" and is never made an absence.
+  - **Settings (D-09 interim):** `attendance.lateWeight` (default 1, so late counts as attended) and `attendance.minimumPercent`, **not set** until the Registrar enters Knutsford's figure. Until then no low-attendance warning is shown. Once set, the warning says whether the student is below it and how many more of the remaining classes they could miss.
+  - **Endpoints:** `GET /me/attendance` (each of the student's courses), `GET /me/attendance/offerings/:id` (class by class: counted or not, and why), `GET /course-sections/:id/attendance-summary` (every student of a section, for its assigned lecturers and administrators in scope). Worked out from the records on each request, so corrections show at once.
+  - Read helpers in their own modules (rule 8): `forSections` (class sessions), `enrolmentsOf` and `enrolmentsInSection` (enrolments).
+- **Built (web):** the settings screen shows "Not set" for a setting with no value, and allows clearing such a setting again.
+- **Fixed:** the settings consistency check ran for every setting (it only concerns the two monitoring times); it now runs only for those.
+- **Test fixture corrected:** the shared attendance fixture now assigns the class's lecturer to its section, as real data does (the section summary checks the assignment).
+- **Proof the key test bites:** with the "cancelled classes never count" rule removed, four tests failed (unit and integration, including both scenario 21 tests). Restored.
+- **Scenario 21 done.**
+- **Files:**
+  - Shared: `settings.ts` (two settings).
+  - API: new `attendance/calculation.ts` with `calculation.test.ts` (6 tests), `attendance-summary.service.ts`, `attendance-summary.controller.ts`; `attendance.module.ts`; `class-sessions/class-sessions.service.ts`; `enrollments/enrollments.service.ts`; `settings/settings.service.ts`; new `test/attendance-summary.test.ts` (7 tests); `test/attendance-fixture.ts`.
+  - Web: `app/(app)/admin/settings/page.tsx`.
+  - Docs: API_DOCUMENTATION, ATTENDANCE_FLOW §9, TESTING (scenario 21), KNOWN_LIMITATIONS (80–82).
+- **Database changes:** none.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **443** (13 new), mobile 22, web 13, so **491 passed**.
+- **Known limitations:** KNOWN_LIMITATIONS 80–82.
+- **Next step:** Phase 5, step 6: the screens (lecturer web and phone, student phone) and a new app build with the camera.

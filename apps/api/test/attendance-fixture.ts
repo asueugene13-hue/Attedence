@@ -132,6 +132,10 @@ export async function buildClass(
   const lecturerProfile = await prisma.lecturerProfile.create({
     data: { userId: lecturerUser.id, staffNumber: 'TL1', departmentId: dept.id },
   });
+  // The class's lecturer teaches its section, as in real data.
+  await prisma.lecturerAssignment.create({
+    data: { lecturerId: lecturerProfile.id, sectionId: section.id, assignedById: adminId },
+  });
   await prisma.lecturerProfile.create({
     data: { userId: otherLecturerUser.id, staffNumber: 'TL2', departmentId: dept.id },
   });

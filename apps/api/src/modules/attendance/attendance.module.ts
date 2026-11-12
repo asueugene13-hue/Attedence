@@ -12,6 +12,8 @@ import { StudentsModule } from '../students/students.module.js';
 import { VerificationModule } from '../verification/verification.module.js';
 import { AttendanceEventsService } from './attendance-events.service.js';
 import { AttendanceGateway } from './attendance.gateway.js';
+import { AttendanceSummaryController } from './attendance-summary.controller.js';
+import { AttendanceSummaryService } from './attendance-summary.service.js';
 import { AttendanceSessionsController } from './attendance-sessions.controller.js';
 import { AttendanceSessionsService } from './attendance-sessions.service.js';
 import { CheckInController } from './check-in.controller.js';
@@ -36,7 +38,13 @@ import { RosterService } from './roster.service.js';
     StudentsModule,
     VerificationModule,
   ],
-  controllers: [AttendanceSessionsController, CheckInController, RosterController, CorrectionsController],
+  controllers: [
+    AttendanceSessionsController,
+    CheckInController,
+    RosterController,
+    CorrectionsController,
+    AttendanceSummaryController,
+  ],
   providers: [
     AttendanceSessionsService,
     CheckInService,
@@ -44,6 +52,7 @@ import { RosterService } from './roster.service.js';
     AttendanceEventsService,
     AttendanceGateway,
     CorrectionsService,
+    AttendanceSummaryService,
   ],
   exports: [AttendanceSessionsService],
 })

@@ -155,6 +155,8 @@ Every route writes an `AttendanceCorrection` (from, to, reason, who, source) and
 - ABSENT and REJECTED both count as absences.
 - The result is rounded to one decimal place.
 
+**As built (Phase 5 step 5):** the rules above are a pure, tested function (`attendance/calculation.ts`). Two settings: `attendance.lateWeight` (default 1) and `attendance.minimumPercent` (**not set** until the Registrar enters Knutsford's figure; until then no warning is shown). Percentages are worked out from the records on each request, so a correction shows at once. A class that closed without a record for an eligible student is shown as "no record" and never counted as an absence.
+
 **Low-attendance warning:** shown when the percentage falls below the minimum. The minimum is configurable; the canvas sample shows 75%, but Knutsford's real figure is pending D-09. The warning also says how many more absences would take the student below the minimum, based on the sessions remaining in the semester.
 
 **Per-course view for students:** eligible classes, attended, late, absences, approved excuses, cancelled classes (shown for information, not counted) and the percentage.
