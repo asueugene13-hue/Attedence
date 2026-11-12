@@ -1689,3 +1689,4 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Tests run:** first full check failed at lint (an unused import in the new test file); fixed, then `npm run check` exit 0: design-tokens 3, shared 10, API **411** (21 new), mobile 22, web 13, so **459 passed**.
 - **Known limitations:** KNOWN_LIMITATIONS 67, 70–72.
 - **Next step:** Phase 5, step 3: the live roster and lecturer decisions.
+- **CI:** clean-clone rehearsal: every step passed (API 411, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43192905457 on `8dd7f1a`: **success**.
