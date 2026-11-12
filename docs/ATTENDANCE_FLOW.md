@@ -104,6 +104,8 @@ The roster screen (design canvas board "Lecturer · Live attendance") shows:
 - beacon health: online or suspected faulty, last heard, battery;
 - a connection indicator: "Live · synced 2 s ago", or "Reconnecting…" with the last sync time.
 
+**As built (Phase 5 step 3):** the roster endpoint, live events with `seq`, approving and rejecting waiting check-ins (one by one, or together in degraded mode) and assisted check-in are built; the screens come in step 6. Details in API_DOCUMENTATION §3 and §4.
+
 **Realtime protocol.** The lecturer's screen joins the room `attendance:<sessionId>` after the server checks that they may see it. Each event carries an increasing `seq`. The client keeps the last `seq` it applied. On a gap, or on reconnect, it reloads the full roster from `GET /attendance-sessions/:id/roster` and continues. The full event list is in [API_DOCUMENTATION.md](API_DOCUMENTATION.md) §4.
 
 ## 7. Correcting attendance

@@ -30,6 +30,7 @@
     "@types/supertest": "7.2.1",
     "pino-pretty": "13.2.0",
     "prisma": "7.10.1",
+    "socket.io-client": "4.8.4",
     "supertest": "7.3.2",
     "unplugin-swc": "2.0.0"
   },
@@ -40,9 +41,12 @@
     "@nestjs/common": "12.4.0",
     "@nestjs/core": "12.4.0",
     "@nestjs/platform-express": "12.4.0",
+    "@nestjs/platform-socket.io": "12.4.0",
     "@nestjs/terminus": "12.1.0",
+    "@nestjs/websockets": "12.4.0",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "@socket.io/redis-adapter": "8.3.0",
     "argon2": "0.45.2",
     "bullmq": "6.4.2",
     "cookie-parser": "1.4.7",
@@ -60,6 +64,7 @@
     "read-excel-file": "9.3.12",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
+    "socket.io": "4.8.4",
     "write-excel-file": "4.1.1",
     "zod": "4.6.7"
   }

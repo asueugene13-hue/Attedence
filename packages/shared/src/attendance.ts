@@ -67,3 +67,45 @@ export const ReopenAttendanceSchema = z.strictObject({
   reason: ReasonSchema,
   minutes: z.number().int().min(1).max(60).default(10),
 });
+
+/** A lecturer's (or administrator's) decision on a waiting check-in: a note is required to reject. */
+export const DecideRecordSchema = z
+  .strictObject({
+    decision: z.enum(['APPROVE', 'REJECT']),
+    note: ReasonSchema.optional(),
+    /** The record's version as shown, so two reviewers cannot overwrite each other. */
+    version: z.number().int().min(0),
+  })
+  .refine((v) => v.decision === 'APPROVE' || v.note !== undefined, {
+    path: ['note'],
+    message: 'Say why the check-in is rejected.',
+  });
+
+/** Degraded mode only: approve every check-in that waits only because the beacon was not working. */
+export const ApproveWaitingSchema = z.strictObject({ note: ReasonSchema.optional() });
+
+export const ASSIST_METHODS = [
+  'PHONE_UNAVAILABLE',
+  'NO_SMARTPHONE',
+  'BEACON_FAILURE',
+  'LATE_ENROLMENT',
+  'OTHER',
+] as const;
+export const ASSIST_METHOD_LABELS: Record<(typeof ASSIST_METHODS)[number], string> = {
+  PHONE_UNAVAILABLE: 'Phone dead, lost or broken',
+  NO_SMARTPHONE: 'No smartphone',
+  BEACON_FAILURE: 'Classroom beacon not working',
+  LATE_ENROLMENT: 'Enrolled after the class started',
+  OTHER: 'Other (explain)',
+};
+
+/** The lecturer checks a student in by hand, with how and why (ATTENDANCE_FLOW §7). */
+export const AssistedCheckInSchema = z.strictObject({
+  studentId: z.uuid(),
+  method: z.enum(ASSIST_METHODS),
+  reason: ReasonSchema,
+});
+
+/** Live roster events (ATTENDANCE_FLOW §6): each carries an increasing `seq`; on a gap, reload the roster. */
+export const ATTENDANCE_EVENT = 'attendance';
+export type AttendanceEventType = 'record.updated' | 'session.updated';

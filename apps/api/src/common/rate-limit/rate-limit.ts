@@ -70,6 +70,8 @@ export class RateLimitGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // HTTP limits only; a live connection is signed in and only joins rosters it may see.
+    if (context.getType() !== 'http') return true;
     const http = context.switchToHttp();
     const req = http.getRequest<Request>();
     const res = http.getResponse<Response>();

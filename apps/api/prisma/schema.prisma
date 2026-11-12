@@ -138,6 +138,8 @@ model User {
 
   verificationDecisions VerificationDecision[] @relation("VerificationDecidedBy")
 
+  assistedCheckIns AssistedCheckIn[] @relation("AssistedCheckInBy")
+
   @@map("users")
 }
 
@@ -714,6 +716,7 @@ model StudentProfile {
   riskFlags            RiskFlag[]
   attendanceRecords    AttendanceRecord[]
   attendanceAttempts   AttendanceAttempt[]
+  assistedCheckIns     AssistedCheckIn[]
 
   @@index([programmeId, levelId])
   @@index([status])
@@ -1793,11 +1796,12 @@ model AttendanceSession {
   createdAt                 DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                 DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  classSession ClassSession        @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
-  openedBy     User                @relation("AttendanceOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
-  closedBy     User?               @relation("AttendanceClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
-  records      AttendanceRecord[]
-  attempts     AttendanceAttempt[]
+  classSession     ClassSession        @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
+  openedBy         User                @relation("AttendanceOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  closedBy         User?               @relation("AttendanceClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
+  records          AttendanceRecord[]
+  attempts         AttendanceAttempt[]
+  assistedCheckIns AssistedCheckIn[]
 
   @@index([status, closesAt])
   @@map("attendance_sessions")
@@ -1825,6 +1829,7 @@ model AttendanceRecord {
   student           StudentProfile         @relation(fields: [studentId], references: [id], onDelete: Restrict)
   attempt           AttendanceAttempt?     @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   corrections       AttendanceCorrection[]
+  assistedCheckIns  AssistedCheckIn[]
 
   @@unique([classSessionId, studentId])
   @@index([studentId, status])
@@ -1921,4 +1926,37 @@ model VerificationDecision {
 
   @@index([attemptId, decidedAt])
   @@map("verification_decisions")
+}
+
+enum AssistMethod {
+  /// The student's phone is dead, lost or broken.
+  PHONE_UNAVAILABLE
+  /// The student has no smartphone.
+  NO_SMARTPHONE
+  /// The classroom beacon is not working.
+  BEACON_FAILURE
+  /// Enrolled after the class started, so not eligible to check in.
+  LATE_ENROLMENT
+  OTHER
+}
+
+/// A lecturer checking a student in by hand, with how and why (ATTENDANCE_FLOW §7). Append-only.
+model AssistedCheckIn {
+  id                  String       @id @default(uuid(7)) @db.Uuid
+  attendanceSessionId String       @map("attendance_session_id") @db.Uuid
+  studentId           String       @map("student_id") @db.Uuid
+  recordId            String       @map("record_id") @db.Uuid
+  method              AssistMethod
+  reason              String
+  performedById       String       @map("performed_by_id") @db.Uuid
+  performedAt         DateTime     @map("performed_at") @db.Timestamptz(3)
+
+  attendanceSession AttendanceSession @relation(fields: [attendanceSessionId], references: [id], onDelete: Restrict)
+  student           StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  record            AttendanceRecord  @relation(fields: [recordId], references: [id], onDelete: Restrict)
+  performedBy       User              @relation("AssistedCheckInBy", fields: [performedById], references: [id], onDelete: Restrict)
+
+  @@index([attendanceSessionId])
+  @@index([studentId])
+  @@map("assisted_check_ins")
 }

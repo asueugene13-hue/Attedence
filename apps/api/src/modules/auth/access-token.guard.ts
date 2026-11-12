@@ -24,6 +24,11 @@ export class AccessTokenGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Live connections (WebSockets) are signed in once, when they connect (the gateway calls
+    // claimsFor); every message on them must come from a connection that passed.
+    if (context.getType() === 'ws') {
+      return Boolean(context.switchToWs().getClient<{ data?: { claims?: AccessClaims } }>().data?.claims);
+    }
     const rule = this.reflector.getAllAndOverride<AccessRule | undefined>(ACCESS_RULE, [
       context.getHandler(),
       context.getClass(),
@@ -34,17 +39,24 @@ export class AccessTokenGuard implements CanActivate {
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) throw signInAgain();
 
-    const claims = await this.tokens.verifyAccess(header.slice('Bearer '.length).trim());
+    const claims = await this.claimsFor(header.slice('Bearer '.length).trim());
     if (!claims) throw signInAgain();
-
-    const session = await this.sessions.findActive(claims.sessionId);
-    if (!session || session.userId !== claims.userId || session.activeRoleKey !== claims.role) {
-      throw signInAgain();
-    }
-    if (MFA_REQUIRED_ROLES.includes(claims.role) && !session.mfaVerifiedAt) throw signInAgain();
-
     req.auth = claims;
     return true;
+  }
+
+  /**
+   * The caller behind an access token, or null: the token must be valid and its session still open,
+   * for the same user and active role, with two-step verification for staff roles. Also used for
+   * live connections (WebSockets), so they follow exactly the same rules as HTTP requests.
+   */
+  async claimsFor(token: string): Promise<AccessClaims | null> {
+    const claims = await this.tokens.verifyAccess(token);
+    if (!claims) return null;
+    const session = await this.sessions.findActive(claims.sessionId);
+    if (!session || session.userId !== claims.userId || session.activeRoleKey !== claims.role) return null;
+    if (MFA_REQUIRED_ROLES.includes(claims.role) && !session.mfaVerifiedAt) return null;
+    return claims;
   }
 }
 

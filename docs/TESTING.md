@@ -49,7 +49,7 @@ Rules:
 | 19 | Student disputes attendance | Integration + mobile | 6 | Not written |
 | 20 | Lecturer makes an authorised correction | Integration | 5–6 | Not written |
 | 21 | Cancelled class excluded from absence calculation | Unit (calculation) + integration | 5 | Not written |
-| 22 | Lecturer's device crashes during attendance | Integration + realtime | 5 | Not written |
+| 22 | Lecturer's device crashes during attendance | Integration + realtime | 5 | **Done.** `test/roster.test.ts` → "scenario 22": live events stop when the phone dies; another device joins, sees from `seq` what it missed, reloads the full roster, and the QR carries on. |
 | 23 | Background job fails and recovers | Jobs | 3 | **Done.** `test/class-monitoring.test.ts` → "a simulated teaching day" (an email outage recovers on retry); "a failed email is retried, then recorded as failed and reported to system health"; `test/jobs-and-settings.test.ts`. |
 | 24 | Unauthorised user tries another role's dashboard or API | Integration: every discovered endpoint × every role (`test/scenario-24-unauthorised-access.test.ts`) + web end-to-end (sign-out redirect) | 1 onward | **Done.** New endpoints are covered automatically. |
 | 25 | Many students check in at once | Integration (parallel) + load | 5 | **Started.** `test/check-in.test.ts`: the whole class at the same moment, each exactly once. The 500-check-in load test is step 7. |

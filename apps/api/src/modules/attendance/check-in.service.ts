@@ -31,7 +31,9 @@ import { BeaconHealthService } from '../verification/beacon-health.service.js';
 import { type Decision, decide } from '../verification/decision-engine.js';
 import { EvidenceService } from '../verification/evidence.service.js';
 import { VerificationPolicyService } from '../verification/verification-policy.service.js';
+import { AttendanceEventsService } from './attendance-events.service.js';
 import { checkToken, parseToken, windowAt, windowEndsAt } from './qr.js';
+import { RosterService } from './roster.service.js';
 
 /** Reasons that stop a check-in before any evidence counts: these never create or change a record. */
 const GATE_REASONS: readonly VerificationReason[] = [
@@ -84,6 +86,8 @@ export class CheckInService {
     private readonly evidence: EvidenceService,
     private readonly beaconHealth: BeaconHealthService,
     private readonly flags: RiskFlagsService,
+    private readonly events: AttendanceEventsService,
+    private readonly roster: RosterService,
   ) {}
 
   async checkIn(
@@ -256,7 +260,13 @@ export class CheckInService {
       });
     }
 
-    // After the commit: beacon health and risk flags never change the student's result.
+    // After the commit: the lecturer's roster, beacon health and risk flags (none of them changes
+    // the student's result).
+    try {
+      await this.events.publish(session.id, 'record.updated', await this.roster.entry(session.id, studentId));
+    } catch (error) {
+      this.logger.error(`Roster event failed for attempt ${response.attemptId}: ${String(error)}`);
+    }
     if (passedGates) {
       try {
         await this.beaconHealth.recordObservation({

@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–2 done, step 3 (live roster) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–3 done, step 4 (corrections) next. Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1690,3 +1690,26 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Known limitations:** KNOWN_LIMITATIONS 67, 70–72.
 - **Next step:** Phase 5, step 3: the live roster and lecturer decisions.
 - **CI:** clean-clone rehearsal: every step passed (API 411, mobile 22, web 13, mobile bundle check, migrations, drift, e2e 6, audit clean). GitHub run 43192905457 on `8dd7f1a`: **success**.
+
+### 2026-11-12 — Phase 5, step 3: live roster and lecturer decisions
+
+- **Built (API):**
+  - **Roster:** `GET /attendance-sessions/:id/roster`: every student eligible at the scheduled start (plus anyone with a record), with status, latest attempt and its evidence summary, counts, degraded mode, and the current event number (`seq`).
+  - **Live updates (Socket.IO, namespace `/attendance`):** a screen connects with its access token, checked **before the connection is accepted** with exactly the HTTP rules (one shared `AccessTokenGuard.claimsFor`). It joins one attendance session only if it may read that roster. Each check-in, decision and hand check-in sends that student's roster line; closing, extending, reopening and voiding send the session. Every event is numbered; a screen that sees a gap, or reconnects, reloads the roster. Events are shared between API servers through Redis.
+  - **Decisions:** approve or reject a waiting check-in (a note is required to reject), version-checked. Approval means PRESENT, or LATE only if the check-in itself arrived late (never judged by when it was approved). In **degraded mode**, "approve waiting" approves together only the check-ins that waited because of the beacon. Each change writes a correction, a reviewer decision on the attempt (after the engine's) and an audit entry.
+  - **Assisted check-in:** the class's lecturer, while the class runs, with a method (phone unavailable, no smartphone, beacon failure, late enrolment, other) and a reason. It also covers a student who enrolled after the start, and raising an absence after closing (with a correction). Kept in `assisted_check_ins` (append-only).
+- **Problems found and fixed during the step:**
+  - The three global HTTP guards also ran on WebSocket messages and failed them. Now: live connections are signed in once, at connection; every message must come from a signed-in connection; permission per roster is checked on join.
+  - A screen could send "join" before its sign-in check had finished. Sign-in moved into Socket.IO middleware, which runs before the connection is accepted.
+  - With Redis down at startup, the live-events adapter left an unhandled error (caught by the health test that runs with Redis unreachable); in production it could have crashed the API. Now the Redis adapter is used only once its connections are ready; until then each server serves its own screens, and screens connected before the switch are asked to reconnect.
+- **Proof the key test bites:** with the roster permission check on "join" removed, the "lets in only people who may see the roster" test failed. Restored.
+- **New dependencies (exact versions, matching NestJS 12.4.0):** `@nestjs/websockets` 12.4.0, `@nestjs/platform-socket.io` 12.4.0, `socket.io` 4.8.4, `@socket.io/redis-adapter` 8.3.0; for tests, `socket.io-client` 4.8.4. `npm audit --audit-level=high`: clean (the moderate findings are in the existing Jest and Expo tooling).
+- **Scenario 22 done** (`test/roster.test.ts`).
+- **Files:**
+  - Shared: `attendance.ts` (decision, approve-waiting and assisted check-in schemas, event names).
+  - API: new `infrastructure/realtime/redis-io.adapter.ts`; new `attendance/attendance-events.service.ts`, `attendance.gateway.ts`, `roster.service.ts`, `roster.controller.ts`; `attendance.module.ts`, `attendance-sessions.service.ts` (`authorize`, announcements), `check-in.service.ts` (live events); `auth/access-token.guard.ts` (`claimsFor`, WebSockets), `authorization/permission.guard.ts`, `common/rate-limit/rate-limit.ts`; `configure-app.ts`; `package.json`; new `test/attendance-fixture.ts` (shared class builder), `test/roster.test.ts` (12 tests); `test/fixtures.ts`; migration `20261112170000_assisted_check_ins`.
+  - Docs: API_DOCUMENTATION (§3 rows, §4 as built), ATTENDANCE_FLOW §6, TESTING (scenario 22), KNOWN_LIMITATIONS (67 updated; 73–76).
+- **Database changes:** new table `assisted_check_ins` and enum `AssistMethod`; append-only trigger and a reason check. Generated with errors visible, checked non-empty, applied; drift clean.
+- **Tests run:** two full checks stopped early (formatting of the new test; then the unhandled Redis error above, with all tests passing). After the fixes, `npm run check` exit 0: design-tokens 3, shared 10, API **423** (12 new), mobile 22, web 13, so **471 passed**.
+- **Known limitations:** KNOWN_LIMITATIONS 67, 73–76.
+- **Next step:** Phase 5, step 4: corrections (lecturer corrections within 14 days, administrator approval for later ones, reminders and escalation of undecided check-ins).

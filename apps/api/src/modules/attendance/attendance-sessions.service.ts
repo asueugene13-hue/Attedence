@@ -27,6 +27,7 @@ import { LecturersService } from '../courses/lecturers.service.js';
 import { EnrollmentsService } from '../enrollments/enrollments.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { VerificationPolicyService } from '../verification/verification-policy.service.js';
+import { AttendanceEventsService } from './attendance-events.service.js';
 import { makeToken, newQrSecret, windowAt, windowEndsAt } from './qr.js';
 
 type ClassFacts = NonNullable<ReturnType<Awaited<ReturnType<ClassSessionsService['facts']>>['get']>>;
@@ -61,6 +62,7 @@ export class AttendanceSessionsService implements OnModuleInit {
     private readonly settings: SettingsService,
     private readonly policies: VerificationPolicyService,
     private readonly permissions: PermissionService,
+    private readonly events: AttendanceEventsService,
   ) {}
 
   onModuleInit(): void {
@@ -214,7 +216,7 @@ export class AttendanceSessionsService implements OnModuleInit {
         context,
       ),
     );
-    return this.view(await this.find(id));
+    return this.announce(await this.find(id));
   }
 
   /** More time to check in, with a reason; never past the point where a running class is auto-ended. */
@@ -247,7 +249,7 @@ export class AttendanceSessionsService implements OnModuleInit {
         tx,
       );
     });
-    return this.view(await this.find(id));
+    return this.announce(await this.find(id));
   }
 
   /** Once, before the scheduled end, with a reason. Records made when it closed can still go up. */
@@ -298,7 +300,7 @@ export class AttendanceSessionsService implements OnModuleInit {
         tx,
       );
     });
-    return this.view(await this.find(id));
+    return this.announce(await this.find(id));
   }
 
   /**
@@ -364,7 +366,10 @@ export class AttendanceSessionsService implements OnModuleInit {
       const reason: AttendanceCloseReason | null =
         cls.status === 'COMPLETED' ? 'CLASS_ENDED' : now >= session.closesAt ? 'AUTO' : null;
       if (!reason) continue;
-      if (await this.prisma.$transaction((tx) => this.closeInTx(tx, session, reason, null, now))) closed++;
+      if (await this.prisma.$transaction((tx) => this.closeInTx(tx, session, reason, null, now))) {
+        closed++;
+        await this.announce(await this.find(session.id));
+      }
     }
     // A class voided after attendance started (only a void cancels a started class).
     const candidates = await this.prisma.attendanceSession.findMany({
@@ -373,7 +378,10 @@ export class AttendanceSessionsService implements OnModuleInit {
     const candidateFacts = await this.classSessions.facts(candidates.map((s) => s.classSessionId));
     for (const session of candidates) {
       if (candidateFacts.get(session.classSessionId)?.status !== 'CANCELLED') continue;
-      if (await this.voidSession(session, now)) voided++;
+      if (await this.voidSession(session, now)) {
+        voided++;
+        await this.announce(await this.find(session.id));
+      }
     }
     return { closed, voided };
   }
@@ -431,6 +439,25 @@ export class AttendanceSessionsService implements OnModuleInit {
   }
 
   // ───────── Reading ─────────
+
+  /**
+   * Who may act on an attendance session: the class's own lecturer holding `lecturerPermission`, or
+   * an administrator in scope holding `adminPermission`. Used by the roster, decisions and the live
+   * connection, so every way in follows one rule.
+   */
+  async authorize(actor: AccessClaims, id: string, lecturerPermission: string, adminPermission: string) {
+    const session = await this.find(id);
+    const cls = await this.classFacts(session.classSessionId);
+    const asAdmin = await this.lecturerOrAdmin(actor, cls, lecturerPermission, adminPermission);
+    return { session, cls, asAdmin };
+  }
+
+  /** The session as screens show it, sent to everyone watching it. */
+  private async announce(session: AttendanceSession) {
+    const view = await this.view(session);
+    await this.events.publish(session.id, 'session.updated', view);
+    return view;
+  }
 
   async get(actor: AccessClaims, id: string) {
     const session = await this.find(id);

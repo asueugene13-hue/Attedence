@@ -28,6 +28,8 @@ export class PermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Live connections: the gateway checks what each one may join (the same rules as the HTTP routes).
+    if (context.getType() === 'ws') return true;
     const rule = this.reflector.getAllAndOverride<AccessRule | undefined>(ACCESS_RULE, [
       context.getHandler(),
       context.getClass(),

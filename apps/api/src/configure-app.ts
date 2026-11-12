@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser';
 import type { Express } from 'express';
 import helmet from 'helmet';
 import { AppConfig } from './config/app-config.js';
+import { RedisIoAdapter } from './infrastructure/realtime/redis-io.adapter.js';
 
 /** HTTP settings applied in main.ts and in tests, so tests exercise the same app users get. */
 export function configureApp(app: INestApplication): void {
@@ -23,5 +24,7 @@ export function configureApp(app: INestApplication): void {
     }),
   );
   app.use(cookieParser());
+  // Live updates (the attendance roster) share events between API servers through Redis.
+  app.useWebSocketAdapter(new RedisIoAdapter(app));
   app.enableShutdownHooks();
 }
