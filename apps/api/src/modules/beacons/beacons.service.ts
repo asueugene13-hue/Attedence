@@ -65,7 +65,14 @@ export class BeaconsService {
         status: { in: ['ACTIVE', 'SUSPECTED_FAULTY'] },
         protocol: { in: ['EDDYSTONE_UID', 'IBEACON'] },
       },
-      select: { id: true, classroomId: true, protocol: true, identifier: true, thresholdRssi: true },
+      select: {
+        id: true,
+        classroomId: true,
+        protocol: true,
+        identifier: true,
+        thresholdRssi: true,
+        status: true,
+      },
     });
     return rows;
   }
@@ -360,6 +367,60 @@ export class BeaconsService {
       );
     });
     return this.getSurvey(id);
+  }
+
+  // ───────── Beacon health (called by verification, Phase 4 step 5) ─────────
+
+  /**
+   * Marks active beacons "suspected faulty" (phones on site could not hear them). A system change,
+   * audited with what was seen. Returns the beacons that changed.
+   */
+  async markSuspectedFaulty(beaconIds: string[], evidence: Prisma.InputJsonValue): Promise<string[]> {
+    return this.systemStatusChange(
+      beaconIds,
+      'ACTIVE',
+      'SUSPECTED_FAULTY',
+      'beacons.suspected_faulty',
+      evidence,
+    );
+  }
+
+  /** A suspected-faulty beacon was heard again by a phone: it is working, so it becomes active again. */
+  async markHeardAgain(beaconIds: string[], evidence: Prisma.InputJsonValue): Promise<string[]> {
+    return this.systemStatusChange(beaconIds, 'SUSPECTED_FAULTY', 'ACTIVE', 'beacons.heard_again', evidence);
+  }
+
+  private async systemStatusChange(
+    beaconIds: string[],
+    from: Beacon['status'],
+    to: Beacon['status'],
+    action: string,
+    evidence: Prisma.InputJsonValue,
+  ): Promise<string[]> {
+    if (beaconIds.length === 0) return [];
+    return this.prisma.$transaction(async (tx) => {
+      const changed: string[] = [];
+      for (const id of beaconIds) {
+        // Only from the expected status, so a person's change (e.g. switching it off) is never undone.
+        const updated = await tx.beacon.updateMany({
+          where: { id, status: from },
+          data: { status: to, version: { increment: 1 } },
+        });
+        if (updated.count !== 1) continue;
+        changed.push(id);
+        await this.audit.record(
+          {
+            action,
+            entityType: 'beacon',
+            entityId: id,
+            before: { status: from },
+            after: { status: to, evidence },
+          },
+          tx,
+        );
+      }
+      return changed;
+    });
   }
 
   /** Every reading must be of a beacon registered to the surveyed room. Returns the beacons read. */

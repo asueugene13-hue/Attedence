@@ -132,5 +132,10 @@ export const CalibrationSurveySchema = z.strictObject({
 /** Another phone's readings, added to a survey that has not been applied yet (each phone measures itself). */
 export const AddMeasurementsSchema = z.strictObject({ measurements: MeasurementsSchema });
 
+/** Beacon health: summaries for the last `hours` (1–168, default 24). */
+export const BeaconHealthQuerySchema = z.strictObject({
+  hours: z.coerce.number().int().min(1).max(168).default(24),
+});
+
 export const SurveyQuerySchema = z.strictObject({ classroomId: z.uuid().optional() });
 export const ApplySurveySchema = z.strictObject({ reason: ReasonSchema.optional() });

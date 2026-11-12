@@ -33,7 +33,9 @@ export class RiskFlagsService {
   ) {}
 
   /** Raises a flag, or does nothing if the same situation already has an open flag. */
-  async raise(flag: RaiseFlag, tx: Prisma.TransactionClient = this.prisma): Promise<void> {
+  async raise(flag: RaiseFlag, tx?: Prisma.TransactionClient): Promise<void> {
+    // The savepoint below needs a transaction: use the caller's, or start one.
+    if (!tx) return this.prisma.$transaction((own) => this.raise(flag, own));
     try {
       // A savepoint keeps a duplicate from aborting the caller's transaction.
       await tx.$executeRaw`SAVEPOINT raise_flag`;

@@ -98,6 +98,7 @@ function Beacons() {
     queryFn: () => auth.call<{ data: Survey[] }>(`/calibration-surveys?classroomId=${roomId}`),
   });
   const [dialog, setDialog] = useState<'add' | 'survey' | { edit: Beacon } | null>(null);
+  const [healthOf, setHealthOf] = useState<Beacon | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const refresh = () =>
@@ -194,9 +195,14 @@ function Beacons() {
                       ) : null}
                     </td>
                     <td>
-                      <Button size="sm" variant="secondary" onClick={() => setDialog({ edit: b })}>
-                        Edit
-                      </Button>
+                      <div className="row">
+                        <Button size="sm" variant="secondary" onClick={() => setHealthOf(b)}>
+                          Health
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => setDialog({ edit: b })}>
+                          Edit
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -205,6 +211,8 @@ function Beacons() {
           </table>
         </div>
       ) : null}
+
+      {healthOf ? <BeaconHealth beacon={healthOf} onClose={() => setHealthOf(null)} /> : null}
 
       {surveys.data && surveys.data.data.length > 0 ? (
         <section className="card" aria-labelledby="surveys-heading">
@@ -266,6 +274,79 @@ function Beacons() {
         />
       ) : null}
     </div>
+  );
+}
+
+interface Health {
+  beacon: { id: string; status: Beacon['status'] };
+  lastHeardAt: string | null;
+  windows: { windowStart: string; sightings: number; distinctDevices: number; medianRssi: number | null }[];
+}
+
+/** What students' phones have heard from one beacon (Phase 4 step 5), in 5-minute summaries. */
+function BeaconHealth(props: { beacon: Beacon; onClose: () => void }) {
+  const auth = useAuth();
+  const health = useQuery({
+    queryKey: ['beacon-health', props.beacon.id],
+    queryFn: () => auth.call<Health>(`/beacons/${props.beacon.id}/health?hours=24`),
+    refetchInterval: 60_000,
+  });
+  return (
+    <section className="card" aria-labelledby="health-heading">
+      <div className="card-header">
+        <h2 id="health-heading">{`Health: ${props.beacon.label}`}</h2>
+        <Button size="sm" variant="secondary" onClick={props.onClose}>
+          Close
+        </Button>
+      </div>
+      {health.isPending ? (
+        <LoadingState label="Loading health" />
+      ) : health.isError ? (
+        <Alert tone="error">{describeError(health.error)}</Alert>
+      ) : (
+        <>
+          {health.data.beacon.status === 'SUSPECTED_FAULTY' ? (
+            <Alert tone="error">
+              During a class, several phones on site heard nothing from this beacon, so it is suspected faulty
+              and that class&apos;s check-ins wait for the lecturer. Check the beacon (battery, position). It
+              becomes active again by itself as soon as a phone hears it, or set it to active with Edit.
+            </Alert>
+          ) : null}
+          <p>
+            {health.data.lastHeardAt
+              ? `Last heard by a phone: ${formatDateTime(health.data.lastHeardAt)}.`
+              : 'No phone has reported hearing this beacon yet. Reports arrive with check-ins.'}
+          </p>
+          {health.data.windows.length === 0 ? (
+            <p className="muted">No reports in the last 24 hours.</p>
+          ) : (
+            <div className="table-wrap">
+              <table className="data">
+                <caption className="muted">Last 24 hours, newest first</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">5 minutes from</th>
+                    <th scope="col">Times heard</th>
+                    <th scope="col">Phones</th>
+                    <th scope="col">Typical signal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {health.data.windows.map((w) => (
+                    <tr key={w.windowStart}>
+                      <td>{formatDateTime(w.windowStart)}</td>
+                      <td>{w.sightings}</td>
+                      <td>{w.distinctDevices}</td>
+                      <td>{w.medianRssi === null ? '—' : `${w.medianRssi} dBm`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

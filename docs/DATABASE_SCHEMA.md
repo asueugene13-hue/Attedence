@@ -470,6 +470,10 @@ model CalibrationMeasurement {       // append-only (trigger): kept exactly as r
   rssi       Int                               // dBm, -120 to 0
 }
 
+// As built (Phase 4 step 5): BeaconObservation (one phone's report: room, running class, device,
+// time, Bluetooth ON/OFF/DENIED, GPS result, raw coordinates and accuracy) and BeaconSighting (a
+// registered beacon heard in it, strongest RSSI, -120..0). Both append-only (block_history_change).
+// Degraded mode is the BEACON_DEGRADED class event, not a column, until AttendanceSession (Phase 5).
 model BeaconHealthSnapshot {         // built from what students' phones heard, in 5-minute windows
   id
   beaconId        String   @db.Uuid

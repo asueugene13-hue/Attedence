@@ -88,7 +88,17 @@ Eddystone frames are visible to iPhone and Android scanning. The hardware trial 
 - **"Check this classroom"** (`POST /classroom-checks`, signed by the phone) returns the evidence and the decision the current policy would make, and records nothing. A verified result is worded "would be verified", never "you're checked in".
 - **Survey mode** (staff with `beacons.manage`): pick the room and the position, measure for 6 seconds, and the median reading of each of the room's beacons is kept. A beacon not heard at an outside position simply adds no reading. Each phone saves its own readings, to a new survey or to an open one (`POST /calibration-surveys/:id/measurements`), so one survey collects the three phone models it needs. Applying it stays on the dashboard.
 
-**Beacon health and unexpected activity.**
+**Beacon health, as built (Phase 4 step 5).** Check-in (Phase 5) hands each phone's report to `BeaconHealthService.recordObservation`: the room, Bluetooth state, location and the registered beacons heard (strongest reading each). Reports are kept as reported (append-only). From them:
+
+- **Suspected fault:** during a running class (status ACTIVE), if within `beaconFaultWindowMinutes` (default 10) at least `beaconFaultMinDevices` (default 3) different phones that were **on site (GPS INSIDE) with Bluetooth on** heard none of the room's beacons, and no phone heard one, the room's active beacons become SUSPECTED_FAULTY (a system change, audited with the evidence). Phones with Bluetooth off, or not shown on site, prove nothing and are not counted. Only fixed-ID beacons are judged; rotating-ID beacons cannot be heard until D-08 is completed, so they are never called silent.
+- **Degraded mode:** that class gets a `BEACON_DEGRADED` class event, once. It alerts the lecturer ("check-ins will wait for your approval") and the responsible administrators. Check-in (Phase 5) asks `isBeaconDegraded`. A class stays degraded until it ends, even if the beacon is heard again (simpler and safer for students). The next class in the room starts degraded while the beacon is still suspected.
+- **Heard again:** a suspected-faulty beacon heard by any phone becomes ACTIVE again (audited). A person's own change (switching a beacon off) is never undone.
+- **Unexpected beacon** (`UNEXPECTED_BEACON`, medium): a phone heard a beacon while its usable, non-mocked location is clearly outside that beacon's site (outside the geofence by more than the margin after allowing for the reading's error). Once per phone and beacon while open.
+- **Location conflict** (`BEACON_LOCATION_CONFLICT`, high): the same beacon heard within 5 minutes at places more than `beaconConflictDistanceM` (default 1,000 m) apart, after subtracting both readings' errors. Once per beacon while open.
+- **Summaries:** every 5 minutes, per beacon and window: times heard, distinct phones, median signal (`beacon_health_snapshots`; re-running replaces the rows). Shown on the Beacons page ("Health").
+- **Platform integrity** is behind one interface (`IntegrityVerifier`); until the accounts exist it answers NOT_AVAILABLE, which is never held against a student.
+
+**Beacon health and unexpected activity (design).**
 
 - Every check-in tells us which beacons phones heard, and the worker summarises this every 5 minutes (`BeaconHealthSnapshot`).
 - **Suspected failure:** during an active class, several phones that checked in with GPS on campus heard nothing from the room's beacon. The beacon is marked *suspected faulty*, the lecturer and administrator are alerted, and the session enters **degraded mode** (§6).

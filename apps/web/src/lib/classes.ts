@@ -145,6 +145,7 @@ export const EVENT_LABELS: Record<string, string> = {
   ENDED: 'Ended',
   AUTO_ENDED: 'Ended automatically',
   REINSTATED: 'Back on',
+  BEACON_DEGRADED: 'Classroom beacon not detected (check-ins wait for the lecturer)',
 };
 
 const TIME_ZONE = 'Africa/Accra';

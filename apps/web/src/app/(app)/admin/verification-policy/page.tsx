@@ -105,6 +105,23 @@ const RULES: { key: RuleKey; label: string; help: string; options?: string[]; un
     help: 'A check-in arriving this late after a lost connection is held for the lecturer.',
     unit: 's',
   },
+  {
+    key: 'beaconFaultMinDevices',
+    label: 'Phones before a beacon is suspected faulty',
+    help: 'During a class, this many different phones on site, with Bluetooth on, all hearing nothing from the room’s beacon.',
+  },
+  {
+    key: 'beaconFaultWindowMinutes',
+    label: 'Within',
+    help: 'How recent those phones’ check-ins must be.',
+    unit: 'min',
+  },
+  {
+    key: 'beaconConflictDistanceM',
+    label: 'Same beacon in two places',
+    help: 'A beacon heard this far apart within 5 minutes is flagged for review (a copied beacon?).',
+    unit: 'm',
+  },
 ];
 
 const show = (key: RuleKey, value: unknown) =>

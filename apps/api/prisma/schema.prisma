@@ -286,11 +286,12 @@ model UserDevice {
   createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user       User          @relation("DeviceOwner", fields: [userId], references: [id])
-  approvedBy User?         @relation("DeviceApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
-  revokedBy  User?         @relation("DeviceRevokedBy", fields: [revokedById], references: [id], onDelete: Restrict)
-  sessions   AuthSession[]
-  riskFlags  RiskFlag[]
+  user               User                @relation("DeviceOwner", fields: [userId], references: [id])
+  approvedBy         User?               @relation("DeviceApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  revokedBy          User?               @relation("DeviceRevokedBy", fields: [revokedById], references: [id], onDelete: Restrict)
+  sessions           AuthSession[]
+  riskFlags          RiskFlag[]
+  beaconObservations BeaconObservation[]
 
   @@unique([userId, installationId])
   /// Spots one phone used by several accounts.
@@ -537,6 +538,7 @@ model Classroom {
   rescheduleRequests RescheduleRequest[]
   beacons            Beacon[]
   calibrationSurveys CalibrationSurvey[]
+  beaconObservations BeaconObservation[]
 
   @@unique([buildingId, code])
   @@map("classrooms")
@@ -1160,6 +1162,8 @@ enum ClassEventType {
   ATTENDANCE_REOPENED
   ATTENDANCE_VOIDED
   REINSTATED
+  /// Phones in the room could not hear its beacon during the class: check-ins wait for the lecturer.
+  BEACON_DEGRADED
 }
 
 enum CancelReason {
@@ -1591,6 +1595,8 @@ model Beacon {
 
   classroom    Classroom                @relation(fields: [classroomId], references: [id], onDelete: Restrict)
   measurements CalibrationMeasurement[]
+  sightings    BeaconSighting[]
+  snapshots    BeaconHealthSnapshot[]
 
   @@unique([protocol, identifier])
   @@index([classroomId])
@@ -1634,4 +1640,75 @@ model CalibrationMeasurement {
   @@index([surveyId])
   @@index([beaconId])
   @@map("calibration_measurements")
+}
+
+enum ObservationBluetooth {
+  ON
+  OFF
+  DENIED
+}
+
+enum ObservationGps {
+  INSIDE
+  OUTSIDE
+  UNCERTAIN
+  MOCKED
+}
+
+/// What one phone reported while checking in to a room (Phase 4 step 5): the beacons it heard and its
+/// location result. Kept as reported (append-only); beacon health and its warnings are worked out from
+/// these. Written by check-in (Phase 5); "Check this classroom" records nothing.
+model BeaconObservation {
+  id             String               @id @default(uuid(7)) @db.Uuid
+  classroomId    String               @map("classroom_id") @db.Uuid
+  /// The class running in that room at the time, if any.
+  classSessionId String?              @map("class_session_id") @db.Uuid
+  deviceId       String               @map("device_id") @db.Uuid
+  observedAt     DateTime             @map("observed_at") @db.Timestamptz(3)
+  bluetooth      ObservationBluetooth
+  gps            ObservationGps
+  /// Raw coordinates, for the "same beacon in two places" check. Reduced after 30 days (D-18).
+  latitude       Float?
+  longitude      Float?
+  accuracyM      Int?                 @map("accuracy_m")
+
+  classroom Classroom        @relation(fields: [classroomId], references: [id], onDelete: Restrict)
+  device    UserDevice       @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  sightings BeaconSighting[]
+
+  @@index([classroomId, observedAt])
+  @@index([observedAt])
+  @@map("beacon_observations")
+}
+
+/// One registered beacon heard in an observation, at its strongest reading.
+model BeaconSighting {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  observationId String   @map("observation_id") @db.Uuid
+  beaconId      String   @map("beacon_id") @db.Uuid
+  rssi          Int
+  /// Copied from the observation, so health can be summarised per beacon and time without a join.
+  observedAt    DateTime @map("observed_at") @db.Timestamptz(3)
+
+  observation BeaconObservation @relation(fields: [observationId], references: [id], onDelete: Restrict)
+  beacon      Beacon            @relation(fields: [beaconId], references: [id], onDelete: Restrict)
+
+  @@unique([observationId, beaconId])
+  @@index([beaconId, observedAt])
+  @@map("beacon_sightings")
+}
+
+/// A beacon's health in one 5-minute window, summarised from sightings (recomputed if re-run).
+model BeaconHealthSnapshot {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  beaconId        String   @map("beacon_id") @db.Uuid
+  windowStart     DateTime @map("window_start") @db.Timestamptz(3)
+  sightings       Int
+  distinctDevices Int      @map("distinct_devices")
+  medianRssi      Int?     @map("median_rssi")
+
+  beacon Beacon @relation(fields: [beaconId], references: [id], onDelete: Restrict)
+
+  @@unique([beaconId, windowStart])
+  @@map("beacon_health_snapshots")
 }

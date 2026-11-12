@@ -92,6 +92,14 @@ export const VerificationRulesSchema = z.strictObject({
   mockLocationAction: outcomeOf('MANUAL_REVIEW_REQUIRED', 'REJECTED').default('MANUAL_REVIEW_REQUIRED'),
   maxAttemptsPerSession: z.number().int().min(1).max(20).default(5),
   offlineGraceSeconds: z.number().int().min(0).max(600).default(120),
+  /**
+   * Beacon health (§3): during a class, this many different phones on site with Bluetooth on, within
+   * the window below, all hearing none of the room's beacons, mark them suspected faulty.
+   */
+  beaconFaultMinDevices: z.number().int().min(2).max(20).default(3),
+  beaconFaultWindowMinutes: z.number().int().min(5).max(30).default(10),
+  /** The same beacon heard this far apart within 5 minutes is flagged (a copied beacon?). */
+  beaconConflictDistanceM: z.number().int().min(200).max(20_000).default(1000),
 });
 export type VerificationRules = z.output<typeof VerificationRulesSchema>;
 

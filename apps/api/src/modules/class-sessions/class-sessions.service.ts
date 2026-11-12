@@ -92,6 +92,18 @@ export class ClassSessionsService {
   }
 
   /** Session views by id, for other parts of this module (reschedule requests). */
+  /**
+   * The class running in a room at a moment, if any: started by then and still ACTIVE (classes left
+   * running are ended by the class monitor). Used by beacon health.
+   */
+  async runningInRoom(classroomId: string, at: Date): Promise<{ id: string } | null> {
+    return this.prisma.classSession.findFirst({
+      where: { classroomId, status: 'ACTIVE', actualStart: { lte: at } },
+      orderBy: { actualStart: 'desc' },
+      select: { id: true },
+    });
+  }
+
   async summaries(ids: string[]) {
     const rows = await this.prisma.classSession.findMany({
       where: { id: { in: [...new Set(ids)] } },

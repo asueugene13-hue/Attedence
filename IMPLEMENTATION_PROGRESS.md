@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–4 done (step 4: the native app build, "Check this classroom" and survey mode); step 5 (beacon health and degraded mode) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-09
 
 ### Phase 1 steps
@@ -1587,3 +1587,33 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
   - **Check with Bluetooth on, no beacon broadcasting:** "No classroom beacon heard", 0 readings, "No site boundary is set for this room", "Approved phone"; decision **not accepted** ("We couldn't detect the classroom…"). Matches the rules.
   - **Check with Bluetooth switched off:** "Bluetooth is off or not allowed"; decision **not accepted** ("Bluetooth is needed to check in. Turn it on and try again."). Matches.
   - **Not yet proven:** that the scan *hears* a beacon. That needs something broadcasting (a beacon, or a simulator app on a second phone); the student account correctly does not see the survey screen.
+
+### 2026-11-12 — Phase 4, step 5: beacon health and degraded mode
+
+- **The dependency, and how it was handled:** beacon health is built from what phones hear at **check-in**, and degraded mode belongs to the **attendance session**. Both arrive in Phase 5. So this step builds the machinery and its rules behind one entry point, `BeaconHealthService.recordObservation`, which Phase 5's check-in will call. "Check this classroom" still records nothing (as promised in step 4). Until Phase 5, the rules are proven by tests (limitation 62).
+- **Built (API, verification module):**
+  - **Reports:** each phone report (room, running class, phone, time, Bluetooth state, GPS result, coordinates) and the registered beacons it heard (strongest reading each), kept exactly as reported (append-only triggers, range checks).
+  - **Suspected fault:** during a running class, at least 3 different phones on site with Bluetooth on hearing none of the room's beacons within 10 minutes, and no phone hearing one, marks the room's active beacons SUSPECTED_FAULTY (system change, audited with the evidence). Phones with Bluetooth off or not shown on site are not counted. Rotating-ID beacons are never judged (they cannot be heard until D-08).
+  - **Degraded mode:** a `BEACON_DEGRADED` class event, once per class, through the class-sessions module's own service (rule 8). It alerts the lecturer ("check-ins will wait for your approval") and the responsible administrators (new notification category "Classroom beacon not detected"). `isBeaconDegraded(classId)` is ready for check-in. The next class in the room starts degraded while the beacon is still suspected.
+  - **Heard again:** a suspected-faulty beacon heard by any phone becomes active again (audited). A person's own change, such as switching a beacon off, is never undone.
+  - **Risk flags for review:** UNEXPECTED_BEACON (heard while the phone is clearly away from that beacon's site; mocked locations never count) and BEACON_LOCATION_CONFLICT (the same beacon heard more than 1 km apart within 5 minutes, after subtracting both readings' errors). Flags change nothing by themselves.
+  - **Summaries:** a background job every 5 minutes (times heard, phones, median signal per beacon and window), safe to re-run; `GET /beacons/:id/health`.
+  - **Policy:** three new settings with defaults (phones before a fault: 3; within: 10 minutes; same beacon in two places: 1,000 m), shown on the Verification policy screen. Older saved versions take the defaults.
+  - **Integrity:** one interface (`IntegrityVerifier`), answering "not available" until the Play Console and Apple accounts exist; the classroom check now uses it.
+- **Bug found and fixed:** `RiskFlagsService.raise()` could only work inside a transaction (it uses a savepoint), although its signature allowed calling it without one. Every caller so far passed a transaction, so it never showed. It now starts its own transaction when given none.
+- **Built (web):** Beacons page: "Health" per beacon (last heard, what "suspected faulty" means and what to do, the last 24 hours of summaries). Risk flags page: beacon flags described in plain words. Class history label for the new event.
+- **Judgment calls, for review:**
+  - A class **stays degraded until it ends**, even if the beacon is heard again part-way (limitation 64).
+  - A suspected beacon **recovers by itself** when any phone hears it; an administrator can also set it active.
+  - Beacon health is readable by every lecturer, not narrowed to their own classes yet (limitation 66).
+- **Proof the key test bites:** with degraded mode switched off in the service, the two degraded-mode tests failed. Restored.
+- **Files:**
+  - Shared: `verification.ts` (3 policy settings), `notifications.ts` (BEACON_FAULT), `beacons.ts` (`BeaconHealthQuerySchema`).
+  - API: new `verification/beacon-health.ts` with `beacon-health.test.ts` (8 tests), `beacon-health.service.ts`, `beacon-health.controller.ts`, `integrity.ts`; `verification.module.ts`, `classroom-check.service.ts`; `beacons/beacons.service.ts` (system status changes, status in scan list); `class-sessions/class-sessions.service.ts` (`runningInRoom`), `class-event.service.ts` (`recordBeaconDegraded`, `isBeaconDegraded`), `class-event-log.ts`, `class-alert.service.ts`; `risk-flags/risk-flags.service.ts`; new `test/beacon-health.test.ts` (7 tests); `test/fixtures.ts`; migration `20261112090000_beacon_health`.
+  - Web: `beacons/page.tsx`, `risk-flags/page.tsx`, `admin/verification-policy/page.tsx`, `lib/classes.ts`.
+  - Docs: API_DOCUMENTATION, PRESENCE_VERIFICATION §3, DATABASE_SCHEMA, KNOWN_LIMITATIONS (62–66).
+- **Database changes:** new tables `beacon_observations`, `beacon_sightings`, `beacon_health_snapshots`; new enums `ObservationBluetooth`, `ObservationGps`; `ClassEventType` gains `BEACON_DEGRADED`; append-only triggers on reports and sightings; checks on signal range, complete coordinates and summary counts. Generated with errors visible, checked non-empty, applied; drift check clean.
+- **Tests run:** `npm run check` exit 0: design-tokens 3, shared 10, API **372** (15 new), mobile 22, web 13, so **420 passed**.
+- **Test-run incident, not a code problem:** the first full check had one Phase 3 test time out (6.4 s against a 5 s limit), and an isolated re-run hung in its setup. Both runs had the development API and Metro servers running alongside (left on for the phone test). With them stopped, the same file passed (29 of 29, 44 s) and the full check passed. Lesson: stop the dev servers before running the full check.
+- **Known limitations:** KNOWN_LIMITATIONS 62–66.
+- **Next step:** Phase 4, step 6: the field test in two real classrooms (needs beacons, rooms and the product owner on site). The beacon-heard test on the phone is still open (step 4).

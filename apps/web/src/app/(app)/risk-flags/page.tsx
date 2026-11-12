@@ -139,6 +139,10 @@ function describeEvidence(f: Flag) {
   const e = f.evidence;
   if (Array.isArray(e.students)) return `${e.students.length} student accounts on one phone.`;
   if (typeof e.requestsIn90Days === 'number') return `${e.requestsIn90Days} new-phone requests in 90 days.`;
+  if (typeof e.separationM === 'number')
+    return `The same beacon was heard ${(e.separationM / 1000).toFixed(1)} km apart within 5 minutes.`;
+  if (typeof e.distanceFromSiteM === 'number')
+    return `Heard about ${Math.round(e.distanceFromSiteM)} m from the beacon’s site.`;
   return '';
 }
 

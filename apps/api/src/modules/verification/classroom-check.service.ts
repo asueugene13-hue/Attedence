@@ -5,6 +5,7 @@ import type { UserDevice } from '../../generated/prisma/client.js';
 import { BeaconsService } from '../beacons/beacons.service.js';
 import { PlacesService } from '../places/places.service.js';
 import { decide } from './decision-engine.js';
+import { IntegrityVerifier } from './integrity.js';
 import { evaluateBle, evaluateGps, type RegisteredBeacon } from './evidence.js';
 import { VerificationPolicyService } from './verification-policy.service.js';
 
@@ -19,16 +20,19 @@ export class ClassroomCheckService {
     private readonly beacons: BeaconsService,
     private readonly places: PlacesService,
     private readonly policies: VerificationPolicyService,
+    private readonly integrity: IntegrityVerifier,
   ) {}
 
   async check(device: UserDevice, input: z.output<typeof ClassroomCheckSchema>) {
     const room = (await this.places.classroomFacts([input.classroomId])).get(input.classroomId);
     if (!room?.isActive)
       throw new BadRequestException({ code: 'INVALID_CLASSROOM', message: 'No such room in use.' });
-    const [policy, scanList, geofence] = await Promise.all([
+    const [policy, scanList, geofence, integrity] = await Promise.all([
       this.policies.current(),
       this.beacons.scanList(),
       this.places.geofenceForClassroom(input.classroomId),
+      // No platform token is sent yet; the real checks arrive with the integrity accounts.
+      this.integrity.verify({ platform: device.platform, token: null }),
     ]);
 
     // What the phone heard, matched to registered beacons by identifier. An uncalibrated beacon can
@@ -68,7 +72,7 @@ export class ClassroomCheckService {
         retryRejectionsSoFar: 0,
         ble: ble.result,
         gps: gps.result,
-        integrity: 'NOT_AVAILABLE',
+        integrity,
         sharedDeviceInSession: false,
         degradedMode: false,
       },
@@ -87,6 +91,7 @@ export class ClassroomCheckService {
         distanceM: gps.distanceM === null ? null : Math.round(gps.distanceM),
         hasGeofence: geofence !== null,
         device: device.status,
+        integrity,
       },
       decision,
     };

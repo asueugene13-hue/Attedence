@@ -192,6 +192,23 @@ export class ClassAlertService implements OnModuleInit {
         });
         break;
       }
+      case 'BEACON_DEGRADED': {
+        const room = (await this.roomName(session.classroomId)) ?? 'the room';
+        await send(who.lecturer, {
+          category: 'BEACON_FAULT',
+          priority: 'HIGH',
+          title: `${label}: classroom beacon not detected`,
+          body: `Students' phones in ${room} cannot detect the classroom beacon during your class at ${when}. Their check-ins will wait for your approval. An administrator has been told.`,
+        });
+        await send(who.admins, {
+          category: 'BEACON_FAULT',
+          priority: 'HIGH',
+          title: `Beacon in ${room} may not be working`,
+          body: `During ${label} at ${when}, several phones on site heard nothing from the room's beacon. It is marked "suspected faulty"; please check it on the Beacons page.`,
+          data: { path: '/beacons' },
+        });
+        break;
+      }
       case 'AUTO_ENDED':
         await send(who.lecturer, {
           category: 'CLASS_AUTO_ENDED',

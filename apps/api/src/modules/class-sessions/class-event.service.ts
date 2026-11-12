@@ -276,6 +276,46 @@ export class ClassEventService {
   }
 
   /**
+   * Records that phones in the room could not hear its beacon during this class (no status change):
+   * the class is in degraded mode from then on, so check-ins wait for the lecturer (PRESENCE_VERIFICATION
+   * §6). Recorded once per class; returns false if it already was.
+   */
+  async recordBeaconDegraded(
+    sessionId: string,
+    payload: { beaconIds: string[]; devices: number; windowMinutes: number },
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'degraded:' + sessionId}))`;
+      const session = await tx.classSession.findUniqueOrThrow({ where: { id: sessionId } });
+      const already = await tx.classEvent.count({
+        where: { classSessionId: sessionId, type: 'BEACON_DEGRADED' },
+      });
+      if (already > 0) return false;
+      await writeClassEvent(tx, this.outbox, {
+        data: {
+          classSessionId: sessionId,
+          type: 'BEACON_DEGRADED',
+          fromStatus: session.status,
+          toStatus: session.status,
+          actorType: 'SYSTEM',
+          payload,
+          occurredAt: this.clock.now(),
+        },
+      });
+      return true;
+    });
+  }
+
+  /** Is this class in degraded mode (its room's beacon was not heard during it)? For check-in (Phase 5). */
+  async isBeaconDegraded(sessionId: string): Promise<boolean> {
+    return (
+      (await this.prisma.classEvent.count({
+        where: { classSessionId: sessionId, type: 'BEACON_DEGRADED' },
+      })) > 0
+    );
+  }
+
+  /**
    * Records that the lecturer was nudged about a class (no status change). Returns false if they
    * already had been, so two checks at the same moment nudge once.
    */
