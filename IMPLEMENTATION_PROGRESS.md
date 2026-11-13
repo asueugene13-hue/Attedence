@@ -2,8 +2,8 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 5 (attendance) started 2026-11-12 with the product owner's approval; steps 1–7 done, including the exit check (2026-11-12); **waiting for the product owner to approve Phase 5 as complete** (the camera build is still to be tried on a phone). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
-**Last updated:** 2026-11-12
+**Current phase:** Phase 6 (user experiences): **plan proposed 2026-11-13, waiting for the product owner's approval**; no Phase 6 work has started. Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Last updated:** 2026-11-13
 
 ### Phase 1 steps
 
@@ -28,8 +28,8 @@ Read this first in every session, and update it after every implementation step.
 | 2 Academic management | Faculties to semesters, calendar exceptions, courses, offerings, sections, students (manual and bulk import), lecturers, enrolments, course reps, basic classrooms | Registrar imports a template file end to end; duplicates and bad rows rejected with a downloadable error report | Done; approved by the product owner 2026-11-09 |
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Done; approved by the product owner 2026-11-09 (CI run 42695433225) |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
-| 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Exit check done 2026-11-12; awaiting approval |
-| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Not started |
+| 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Done; approved by the product owner 2026-11-13 (CI run 43449937698; camera build still to be tried on a phone) |
+| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Plan proposed 2026-11-13; awaiting approval |
 | 7 Reports and administration | Admin dashboards, analytics, CSV/Excel/PDF exports, system monitoring, audit views | Every report respects role scope; exports are logged | Not started |
 | 8 Production readiness | Security testing, load testing, device testing, backup and restore drill, deployment, user acceptance testing | Knutsford staff sign off on UAT; a restore drill succeeds | Not started |
 
@@ -96,6 +96,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-09 | Notifications | Channels IN_APP, EMAIL and PUSH designed from the start; PUSH disabled until a university-owned Firebase project exists | Product owner |
 | 2026-11-09 | Rule 8 | Modules never write another module's tables or check its rules (they call its service); read-only joins for display are allowed. CLAUDE.md updated. | Product owner (option 1) |
 | 2026-11-08 | D-16 (part) | Development and CI file storage: SeaweedFS (S3-compatible, already in Docker). Production storage host still open; switching needs settings only. | Product owner |
+| 2026-11-13 | Phase 5 approval | Phase 5 approved as complete after the exit check ("proceed"); the camera build is to be tried on a phone when one is at hand | Product owner |
 
 ## Session log
 
@@ -1823,3 +1824,38 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
   - Phase 4's field test is still open.
 
 - **CI:** clean-clone rehearsal: every step passed (API 449, mobile 27, web 13, mobile bundle check, migrations, drift, e2e 7, audit clean). GitHub run 43449937698 on `0c64ba6`: **success**.
+
+### 2026-11-13 — Phase 5 approved
+
+- The product owner approved Phase 5 as complete. The phone was not at hand, so the camera build is still to be tried on a phone; that is a check of the build, not new work.
+- Next: the Phase 6 plan, for approval before any Phase 6 work starts.
+
+## Phase 6: user experiences (plan proposed 2026-11-13, awaiting approval)
+
+**Goal:** the everyday screens for students and lecturers: a student home and a lecturer dashboard built only from real numbers, a digital student ID, disputes and excuse requests (the last two ways a record changes, ATTENDANCE_FLOW §7), course announcements, and the notification centre finished on both apps.
+
+**Exit criteria (unchanged):** TESTING.md scenarios 19–21 pass (20 and 21 already pass from Phase 5); the screens match the design canvas.
+
+**Already built, so not repeated:** the notification centre API, in-app and email delivery and preferences (Phase 3); the web notifications page and the phone's Alerts screen; the student's per-course attendance (Phase 5). Push stays off until a university-owned Firebase project exists.
+
+### Steps
+
+| # | Step | Needs you? |
+| --- | --- | --- |
+| 1 | **Designs first.** New boards on the design canvas for every new screen: student home (final), digital ID and the staff ID scanner, dispute and excuse forms and their status, lecturer dashboard, review queues for disputes and excuses, announcements (write, read, report). Sample data only. | Approve the designs |
+| 2 | **Disputes.** A student disputes an ABSENT or REJECTED record with a reason (and optional file); one open dispute per record; the reviewer can ask for more information; approval applies a correction (source DISPUTE) through the attendance service, with an audit entry; withdraw; reminders and hand-over to an administrator if undecided. Scenario 19 (API part). | No |
+| 3 | **Excuse requests.** Category (medical, bereavement, official university duty, other), the dates or classes covered, a reason and optional attachments (PDF, JPG, PNG; type checked from the file's bytes); ask for more information; approval sets each covered record to EXCUSED (one correction each); a later class in the covered dates is excused when its record is created. Attachments readable only by whoever decides. | No |
+| 4 | **Announcements.** Official announcements by lecturers (their sections), administrators (their faculty or department) and institution-wide; course-rep updates, labelled and rate-limited; recipients worked out when sent; in-app plus email (by preference); read receipts and delivery counts; report and hide. Shown as plain text only. | No |
+| 5 | **Digital student ID.** A card with photo, name, Student ID, programme and status; an `ASID1.` QR that refreshes every 30 s and holds only a random reference; staff scan it in the app and the server shows who it is and whether the student is active; each check is logged. | No |
+| 6 | **Dashboards.** Student home: today's classes, open attendance, attendance per course, unread notifications and announcements, open requests. Lecturer dashboard (web and phone): today's classes, what waits for them (check-ins, disputes, excuses, late-correction answers), attendance per section. Every number comes from an API call; nothing is shown until there is data. | No |
+| 7 | **Screens.** Phone and web screens from step 1. A new app build only if a document picker is needed for attachments. | Phone test |
+| 8 | **Exit check.** Scenarios 19–21 as automated tests, browser journeys for the new web screens, the phone screens compared with the canvas. | No |
+
+### Decisions with this plan (recommended defaults; change any of them)
+
+- **D-21 disputes:** a student may dispute within 14 days of the class (a setting, the same as the lecturer's correction window). The class's lecturer decides; if undecided after 72 hours it is passed to the administrators in scope, as for undecided check-ins. Never decided automatically.
+- **D-22 excuse requests:** decided by an **administrator** in the student's faculty or department scope, not by lecturers, because medical and bereavement documents are private. Lecturers see only that the class was excused. This narrows the role matrix row "Review disputes and excuse requests" for lecturers to disputes only. A request may be made up to 14 days after the last class it covers (a setting).
+- **Rep updates:** at most 3 per section per day (a setting).
+- **Digital ID:** shown only while the phone is online (an offline QR could be copied); any signed-in staff member can check one; every check is logged.
+- **How EXCUSED counts:** removed from the total, as ATTENDANCE_FLOW §9 already says (part of D-09; replace with Knutsford's rule when it is known).
+- **D-15 brand colours:** the placeholder navy stays until Knutsford supplies its colours and crest.
