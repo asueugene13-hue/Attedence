@@ -1822,3 +1822,4 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
   - Try the camera build on a phone.
   - Phase 4's field test is still open.
 
+- **CI:** clean-clone rehearsal: every step passed (API 449, mobile 27, web 13, mobile bundle check, migrations, drift, e2e 7, audit clean). GitHub run 43449937698 on `0c64ba6`: **success**.
