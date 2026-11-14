@@ -2186,3 +2186,22 @@ The product owner asked for the rest of Phase 6 in one go, then commit, push, "d
 - **Known limitations:** 108–110 (untrusted local certificate, http download links in the rehearsal, a 1 GB API image).
 - **Database changes:** none.
 - **Next step:** 8.3 security testing.
+
+### 2026-11-14 — Step 8.3: security testing
+
+Results in SECURITY.md §9. In short:
+
+- **Every route:** scenario 24 already swept every route for sign-in and permission refusals (it found the Phase 7 routes by itself). Two gaps closed:
+  - nothing pinned which routes are public; the test now fixes that list, and marking a dashboard route `@Public()` makes it fail (before, it would have passed);
+  - the sweep tried `/metrics` at the wrong address (`/api/v1/metrics`); corrected.
+  - The ~63 routes open to any signed-in user were read one by one; each passes the caller to its service or uses only the caller's own ID.
+- **Secret scan:** gitleaks 8.24.0 over all 100 commits; 8 findings, all deliberate fake values, recorded with reasons in `.gitleaksignore`; a planted fake token was caught. New CI job `secrets` (SECURITY.md said CI did this; now it does).
+- **Dependencies:** `npm audit`: 1 low and 31 moderate, none high or critical, none in the API, dashboard or shipped phone code. Not fixed now: the fix moves about 20 Expo build packages and must be tested on a phone (KNOWN_LIMITATIONS 112).
+- **OWASP ZAP baseline** against the production rehearsal over HTTPS: 0 failures, 58 passed, 9 warnings. Fixed:
+  - **a real bug:** the forms did not say `method="post"`, so a form sent before the page's code loaded would put the password in the address. Every form (18) now posts; a unit test checks them all (checked by removing it from the sign-in form: the test failed).
+  - the content security policy now allows only AttendSure itself, the file store (photos) and `data:` images. Journey 03 now checks the student photo really loads; with the file store removed from the policy it failed, as it should. The dashboard image takes the file store's address as the `FILES_ORIGIN` build argument and refuses to build without it.
+  - HSTS at the proxy (a year; 0 in the rehearsal so local development on `http://localhost` is not affected); `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy` on the dashboard.
+  - The second scan confirmed the fixes. Accepted with reasons: `unsafe-inline` (limitation 111), no `Cross-Origin-Embedder-Policy` (it would block photos), and a CSRF false positive (bearer tokens, a `SameSite=Strict` cookie with an origin check).
+- **Mistake on the way, fixed:** my bulk edit adding `method="post"` doubled the attribute on 4 multi-line forms; the type check caught it before any test ran.
+- **Tests:** full `npm run check` passed: format, lint, types, build; API 490, web 18, mobile 32, shared 10, design tokens 3, all passed. `npm run e2e -w @attendsure/web`: 9 passed (after the policy change, and again after the photo check).
+- **Database changes:** none.

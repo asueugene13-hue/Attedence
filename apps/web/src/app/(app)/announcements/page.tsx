@@ -193,7 +193,7 @@ function Compose({ onSent }: { onSent: () => Promise<unknown> }) {
     (current !== 'DEPARTMENT' || departmentId) &&
     (current !== 'FACULTY' || facultyId);
   return (
-    <form className="card" onSubmit={(e) => void send(e)} aria-label="Write an announcement">
+    <form method="post" className="card" onSubmit={(e) => void send(e)} aria-label="Write an announcement">
       <div className="card-header">
         <h2>Write an announcement</h2>
       </div>

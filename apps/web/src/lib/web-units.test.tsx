@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -182,6 +184,20 @@ describe('sidebar', () => {
       expect(visibleNavItems([permission]).map((i) => i.label)).toEqual(['Home', 'Notifications', 'Reports']);
     }
     expect(visibleNavItems(['attendance.read_own']).map((i) => i.label)).not.toContain('Reports');
+  });
+});
+
+describe('forms', () => {
+  it('every form posts, so a password or code never lands in the address if sent before the page is ready', () => {
+    const root = path.resolve(import.meta.dirname, '..');
+    const files = readdirSync(root, { recursive: true, encoding: 'utf8' }).filter(
+      (f) => f.endsWith('.tsx') && !f.endsWith('.test.tsx'),
+    );
+    const forms = files.flatMap((f) =>
+      [...readFileSync(path.join(root, f), 'utf8').matchAll(/<form\b[^>]*/g)].map((m) => ({ f, tag: m[0] })),
+    );
+    expect(forms.length).toBeGreaterThanOrEqual(18);
+    expect(forms.filter((x) => !x.tag.includes('method="post"')).map((x) => x.f)).toEqual([]);
   });
 });
 

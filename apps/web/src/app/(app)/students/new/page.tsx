@@ -88,7 +88,7 @@ function NewStudentForm() {
           administrator enters them under Academic structure.
         </Alert>
       ) : null}
-      <form className="card card-body stack" onSubmit={submit} noValidate>
+      <form method="post" className="card card-body stack" onSubmit={submit} noValidate>
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <Field
             label="Student ID"

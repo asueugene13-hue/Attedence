@@ -39,7 +39,7 @@ export default function ForgotPasswordPage() {
         {sentMessage ? (
           <Alert tone="success">{sentMessage}</Alert>
         ) : (
-          <form className="stack" onSubmit={submit}>
+          <form method="post" className="stack" onSubmit={submit}>
             <Field
               label="Email"
               name="email"

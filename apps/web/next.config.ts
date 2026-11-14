@@ -4,12 +4,36 @@ import type { NextConfig } from 'next';
 /** Where the dashboard's server forwards /api/v1 requests. In production the load balancer routes /api instead. */
 const apiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:3000';
 
+/**
+ * Where the browser may load student photos from: the file store's public address (S3_PUBLIC_ENDPOINT).
+ * Fixed when the dashboard is built (the image takes it as the FILES_ORIGIN build argument).
+ */
+const filesOrigin = new URL(process.env.FILES_ORIGIN ?? 'http://localhost:8333').origin;
+const isDev = process.env.NODE_ENV !== 'production';
+
+/**
+ * Everything comes from AttendSure itself, except photos (the file store) and the QR code (a data: image).
+ * Inline scripts and styles are still allowed because Next.js adds them; a nonce-based policy that removes
+ * 'unsafe-inline' is a later step (KNOWN_LIMITATIONS). Development also needs 'unsafe-eval' for hot reload.
+ */
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+  "style-src 'self' 'unsafe-inline'",
+  `img-src 'self' data: blob: ${filesOrigin}`,
+  "font-src 'self'",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
+
 const securityHeaders = [
-  // Scripts are not yet restricted by CSP (Next.js injects inline scripts; a nonce-based policy is a later step).
-  {
-    key: 'Content-Security-Policy',
-    value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
-  },
+  { key: 'Content-Security-Policy', value: contentSecurityPolicy },
+  // Keeps other sites' windows and pages from reaching into the dashboard (site isolation).
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'no-referrer' },

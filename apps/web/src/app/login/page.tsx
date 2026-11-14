@@ -49,7 +49,7 @@ export default function LoginPage() {
             Use the email address the university registered for you. Students can also use their Student ID.
           </p>
         </div>
-        <form className="stack" onSubmit={submit}>
+        <form method="post" className="stack" onSubmit={submit}>
           <Field
             label="Email or Student ID"
             name="identifier"

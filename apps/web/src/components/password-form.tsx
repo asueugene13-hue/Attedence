@@ -46,7 +46,7 @@ export function NewPasswordForm(props: {
   }
 
   return (
-    <form className="stack" onSubmit={submit} noValidate>
+    <form method="post" className="stack" onSubmit={submit} noValidate>
       {props.currentPassword ? (
         <Field
           label="Current password"

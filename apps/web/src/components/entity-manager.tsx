@@ -249,7 +249,7 @@ export function EntityDialog(props: {
   const set = (key: string) => (value: string | boolean) => setForm((f) => ({ ...f, [key]: value }));
   return (
     <dialog ref={ref} className="dialog" aria-label={props.title} onClose={props.onClose}>
-      <form className="dialog-body" onSubmit={submit} noValidate>
+      <form method="post" className="dialog-body" onSubmit={submit} noValidate>
         <h2>{props.title}</h2>
         {props.fields.map((f) =>
           f.type === 'select' ? (

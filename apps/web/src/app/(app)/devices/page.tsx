@@ -81,6 +81,7 @@ function Devices() {
         />
         {view !== 'requested' ? (
           <form
+            method="post"
             className="row"
             onSubmit={(e) => {
               e.preventDefault();

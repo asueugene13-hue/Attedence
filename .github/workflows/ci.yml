@@ -101,7 +101,7 @@ jobs:
       - name: Release job image
         run: docker build -f apps/api/Dockerfile --target migrate -t attendsure-api-release:ci .
       - name: Dashboard image
-        run: docker build -f apps/web/Dockerfile -t attendsure-web:ci .
+        run: docker build -f apps/web/Dockerfile --build-arg FILES_ORIGIN=https://files.example.test -t attendsure-web:ci .
       - name: The API image starts and refuses example secrets in production
         run: |
           set +e
@@ -109,3 +109,13 @@ jobs:
           code=$?
           echo "$out" | tail -5
           test $code -ne 0 && echo "$out" | grep -q "Invalid configuration"
+
+  # Secret scan of the whole history (Phase 8 step 3). Reviewed fake values are listed in .gitleaksignore.
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.0 git /repo --redact --no-banner

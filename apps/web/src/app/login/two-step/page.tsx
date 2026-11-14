@@ -149,7 +149,7 @@ export default function TwoStepPage() {
         ) : null}
         {enrolling && !enrollment && !error ? <LoadingState label="Preparing your setup code…" /> : null}
 
-        <form className="stack" onSubmit={submit}>
+        <form method="post" className="stack" onSubmit={submit}>
           <Field
             label={useRecovery ? 'Recovery code' : '6-digit code'}
             name="code"

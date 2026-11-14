@@ -159,7 +159,7 @@ function SectionRoster({ sectionId }: { sectionId: string }) {
           ]}
         />
         {r.section.capacity === null ? <p className="muted">This section has no capacity limit.</p> : null}
-        <form className="row" onSubmit={enrol} aria-label="Enrol a student">
+        <form method="post" className="row" onSubmit={enrol} aria-label="Enrol a student">
           <Field
             label="Enrol by Student ID"
             name="studentNumber"

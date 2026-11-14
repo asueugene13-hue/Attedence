@@ -108,6 +108,12 @@ test('Registrar imports students from the template and manages a record', async 
   await expect(page.getByRole('heading', { name: 'E2E Student One' })).toBeVisible();
   await page.getByLabel('Add photo').setInputFiles({ name: 'photo.png', mimeType: 'image/png', buffer: PNG });
   await expect(page.getByAltText('Photo of E2E Student One')).toBeVisible();
+  // The picture really loaded from the file store (the dashboard's security policy allows only that origin).
+  await expect
+    .poll(() =>
+      page.getByAltText('Photo of E2E Student One').evaluate((img: HTMLImageElement) => img.naturalWidth),
+    )
+    .toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Mark record as verified' }).click();
   await expect(page.getByText(/^Verified /)).toBeVisible();
   await page.screenshot({ path: 'test-results/screens/8-student-record.png', fullPage: true });

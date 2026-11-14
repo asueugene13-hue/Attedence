@@ -7,6 +7,9 @@
 {$SITE_ADDRESS} {
 	encode zstd gzip
 
+	# Browsers keep using HTTPS for this name for a year (the rehearsal on localhost sends 0).
+	header Strict-Transport-Security "max-age={$HSTS_MAX_AGE:31536000}"
+
 	# Live roster connections. Socket.IO's first requests must reach the same API instance,
 	# so a cookie keeps each browser on one instance for this path.
 	handle /api/v1/live* {

@@ -12,7 +12,11 @@ ARG NODE_IMAGE=node:24.19.0-bookworm-slim
 FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 ARG API_INTERNAL_URL=http://api:3000
+# The file store's public address (S3_PUBLIC_ENDPOINT): the only other place the browser may load images from.
+ARG FILES_ORIGIN
+RUN test -n "$FILES_ORIGIN" || (echo "Set the FILES_ORIGIN build argument (the file store's public address)." && exit 1)
 ENV API_INTERNAL_URL=${API_INTERNAL_URL} \
+    FILES_ORIGIN=${FILES_ORIGIN} \
     NEXT_OUTPUT_STANDALONE=true \
     NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json tsconfig.base.json ./

@@ -77,7 +77,15 @@ services:
       s3-bucket:
         condition: service_completed_successfully
 
+  web:
+    build:
+      args:
+        FILES_ORIGIN: http://localhost:8334
+
   proxy:
+    environment:
+      # A year of HTTPS-only would also apply to http://localhost in this browser (local development).
+      HSTS_MAX_AGE: '0'
     ports: !override
       - '127.0.0.1:8443:443'
 

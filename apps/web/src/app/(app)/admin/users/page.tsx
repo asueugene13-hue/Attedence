@@ -52,6 +52,7 @@ function UsersList() {
       />
 
       <form
+        method="post"
         className="row"
         role="search"
         onSubmit={(e) => {

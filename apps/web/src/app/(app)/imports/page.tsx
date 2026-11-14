@@ -125,7 +125,7 @@ function UploadCard({ kind }: { kind: ImportKind }) {
           </li>
           <li>Upload it here (up to 5 MB and 5,000 rows) and check the preview before confirming.</li>
         </ol>
-        <form className="row" onSubmit={upload}>
+        <form method="post" className="row" onSubmit={upload}>
           <div className="field">
             <label htmlFor="import-file">File</label>
             <input

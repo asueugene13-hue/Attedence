@@ -58,7 +58,7 @@ export function ReasonDialog(props: {
 
   return (
     <dialog ref={ref} className="dialog" aria-labelledby="reason-dialog-title" onClose={props.onClose}>
-      <form className="dialog-body" onSubmit={submit} noValidate>
+      <form method="post" className="dialog-body" onSubmit={submit} noValidate>
         <h2 id="reason-dialog-title">{props.title}</h2>
         <p className="secondary-text">{props.description}</p>
         <Field

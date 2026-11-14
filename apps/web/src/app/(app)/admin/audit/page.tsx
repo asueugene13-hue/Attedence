@@ -58,6 +58,7 @@ function AuditLog() {
         subtitle="Every sensitive action, newest first. Entries cannot be edited or deleted. Your searches are recorded too."
       />
       <form
+        method="post"
         className="row"
         role="search"
         onSubmit={(e) => {

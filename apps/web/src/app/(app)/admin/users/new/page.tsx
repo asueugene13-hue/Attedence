@@ -68,7 +68,7 @@ function NewUserForm() {
         title="New staff account"
         subtitle="The person receives an email to choose their password. Staff roles also set up two-step sign-in."
       />
-      <form className="card card-body stack" onSubmit={submit} noValidate>
+      <form method="post" className="card card-body stack" onSubmit={submit} noValidate>
         <Field
           label="Full name"
           name="fullName"

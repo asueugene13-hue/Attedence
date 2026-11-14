@@ -188,7 +188,13 @@ function DetailsCard({ student }: { student: StudentView }) {
   }
 
   return (
-    <form className="card card-body stack" onSubmit={save} noValidate aria-label="Edit student details">
+    <form
+      method="post"
+      className="card card-body stack"
+      onSubmit={save}
+      noValidate
+      aria-label="Edit student details"
+    >
       <div className="row" style={{ alignItems: 'flex-start' }}>
         <Field
           label="Full name"
@@ -549,7 +555,7 @@ function EnrolmentsCard({ student }: { student: StudentView }) {
             </table>
           </div>
         )}
-        <form className="row" onSubmit={enrol} aria-label="Enrol in a course">
+        <form method="post" className="row" onSubmit={enrol} aria-label="Enrol in a course">
           <SelectField
             label={`Enrol in a course · ${student.semester.name}`}
             name="sectionId"

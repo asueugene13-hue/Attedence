@@ -34,7 +34,7 @@ const METHODS: Partial<Record<RequestMethod, RouteInfo['method']>> = {
   [RequestMethod.DELETE]: 'delete',
   [RequestMethod.PATCH]: 'patch',
 };
-const UNPREFIXED = new Set(['health/live', 'health/ready']);
+const UNPREFIXED = new Set(['health/live', 'health/ready', 'metrics']);
 const SAMPLE_PARAMS: Record<string, string> = { key: 'REGISTRAR' };
 const SAMPLE_ID = '01960000-0000-7000-8000-0000000000aa';
 
@@ -109,6 +109,30 @@ describe('scenario 24: unauthorised access is refused on every endpoint', () => 
     // 2 health + 11 auth + 9 users + 2 roles + 1 audit-log routes.
     expect(routes.length).toBeGreaterThanOrEqual(25);
     expect(routes.filter((r) => r.rule?.kind === 'permissions').length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('opens only these endpoints without sign-in (a new public route must be added here on purpose)', () => {
+    const publicRoutes = routes
+      .filter((r) => r.rule?.kind === 'public')
+      .map((r) => `${r.method.toUpperCase()} ${r.path}`)
+      .sort();
+    expect(publicRoutes).toEqual(
+      [
+        // Signing in and recovering an account.
+        'POST /api/v1/auth/login',
+        'POST /api/v1/auth/mfa/enroll',
+        'POST /api/v1/auth/mfa/verify',
+        'POST /api/v1/auth/refresh',
+        'POST /api/v1/auth/activate',
+        'POST /api/v1/auth/password/forgot',
+        'POST /api/v1/auth/password/reset',
+        // Probes for the platform (not served through the proxy).
+        'GET /health/live',
+        'GET /health/ready',
+        // Metrics: off unless METRICS_TOKEN is set, then it needs that token (not served through the proxy).
+        'GET /metrics',
+      ].sort(),
+    );
   });
 
   it(

@@ -122,3 +122,22 @@ PostgreSQL is the only source of truth.
 - A restore drill runs monthly in staging and before every major release, and its results are recorded in DEPLOYMENT.md.
 - Targets (proposals): data loss of no more than 5 minutes, service restored within 4 hours.
 - Redis is not backed up as a source of truth. Queued work is rebuilt from the outbox and the sweepers.
+
+## 9. Security testing (Phase 8 step 3, 2026-11-14)
+
+| Check | How | Result |
+| --- | --- | --- |
+| Every API route needs sign-in and the right permission | Scenario 24 finds every route automatically: each non-public one must refuse a request without sign-in (401), and every role lacking a route's permission must be refused (403) and logged. New: the list of public routes is fixed in the test (7 sign-in routes, 2 health probes, `/metrics`), so a route made public by mistake fails CI. Checked by marking a dashboard route public: the test failed | Passed |
+| Routes open to any signed-in user | Each of the ~63 was read: every one passes the caller to its service or uses only the caller's own ID ("me" routes). Each route that takes an ID has a test file that calls it and checks a refusal for someone else (a file-level check, not proof for every case) | No gap found |
+| Secrets in git | gitleaks 8.24.0 over the whole history (100 commits). 8 findings, all deliberate fake values (the test password, the example and CI keys, a beacon test key, an example request ID), listed with reasons in `.gitleaksignore`. A planted fake token was caught. CI now runs this scan on every push | Passed |
+| Dependencies | `npm audit`: 32 advisories, 1 low and 31 moderate, none high or critical. All are in development tools (ESLint, test tools) or the phone app's Expo **build** tools; none in the API, the dashboard or code shipped to phones. The available fix changes about 20 Expo build packages, so it waits for the next phone build where it can be tested (KNOWN_LIMITATIONS 112). CI fails on high or critical | Recorded |
+| Web scan | OWASP ZAP 2.16.1 baseline against the production rehearsal over HTTPS: 0 failures, 58 checks passed | See below |
+
+**ZAP findings and what was done:**
+
+- **Fixed: a password could land in the address.** Forms did not say `method="post"`, so a form sent before the page's code had loaded (slow phone or network) would put its fields, including the password, in the URL (browser history, server logs). Every form now posts; a unit test checks every form.
+- **Fixed: the content security policy allowed any source.** It now allows only AttendSure itself, plus the file store for photos and `data:` images (the two-step QR code). A browser test proves the photo still loads, and fails when the file store is removed from the policy.
+- **Fixed: HSTS and site isolation headers.** The proxy sends `Strict-Transport-Security` (one year; the rehearsal on localhost sends 0 so it does not affect local development), and the dashboard sends `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy`.
+- **Accepted: `unsafe-inline` scripts and styles** (Next.js adds inline code; a nonce-based policy is a later step, KNOWN_LIMITATIONS 111). **`Cross-Origin-Embedder-Policy` is not set**, because it would block photos from the file store.
+- **False positive: "no anti-CSRF tokens".** The API acts only on an `Authorization` header, which browsers never add by themselves; the one cookie (staying signed in) is `SameSite=Strict` and only honoured from the dashboard's own origin; forms never act through a plain submission.
+- **Informational only:** cache directives on static files, comments in the bundled JavaScript, "modern web application", and the ZAP version notice.
