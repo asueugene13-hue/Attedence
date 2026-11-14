@@ -8,6 +8,13 @@ import { DashboardsService } from './dashboards.service.js';
 export class DashboardsController {
   constructor(private readonly dashboards: DashboardsService) {}
 
+  /** For administrators: today's classes, the last 7 days' attendance and what waits, within scope. */
+  @Get('me/admin-dashboard')
+  @Authenticated()
+  admin(@CurrentAuth() auth: AccessClaims) {
+    return this.dashboards.admin(auth);
+  }
+
   /** For lecturers: `{ waiting, excusedThisWeek, sections, minimumPercent }`. */
   @Get('me/lecturer-dashboard')
   @Authenticated()

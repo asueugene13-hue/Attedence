@@ -79,6 +79,30 @@ export class AttendanceAnalyticsService {
       });
     }
     const semester = await this.semesterFor(semesterId);
+    const result = await this.compute(actor, groupBy, Prisma.sql`o.semester_id = ${semester.id}::uuid`);
+    return { semester: { id: semester.id, name: semester.name, status: semester.status }, ...result };
+  }
+
+  /**
+   * Attendance for classes that started between two moments (any semester), within the caller's scope:
+   * the administrator dashboard's "this week". Same rules as `attendance`.
+   */
+  async totalsBetween(actor: AccessClaims, from: Date, to: Date) {
+    const result = await this.compute(
+      actor,
+      'department',
+      Prisma.sql`cs.scheduled_start >= ${from} AND cs.scheduled_start < ${to}`,
+    );
+    return { ...result.totals, departments: result.rows.length };
+  }
+
+  private async compute(actor: AccessClaims, groupBy: AttendanceGroup, window: Prisma.Sql) {
+    if (actor.role !== 'SUPER_ADMIN' && actor.role !== 'UNIVERSITY_ADMIN') {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'Analytics are for administrators.',
+      });
+    }
     const [lateWeight, minimumPercent] = await Promise.all([
       this.settings.get('attendance.lateWeight'),
       this.settings.get('attendance.minimumPercent'),
@@ -110,11 +134,11 @@ export class AttendanceAnalyticsService {
                AND e.enrolled_at <= cs.scheduled_start
                AND (e.ended_at IS NULL OR e.ended_at > cs.scheduled_start)
           JOIN course_sections sec ON sec.id = e.section_id
-          JOIN course_offerings o ON o.id = sec.offering_id AND o.semester_id = ${semester.id}::uuid
+          JOIN course_offerings o ON o.id = sec.offering_id
           JOIN courses c ON c.id = o.course_id
           JOIN departments d ON d.id = c.department_id
           JOIN student_profiles sp ON sp.id = r.student_id
-         WHERE r.status <> 'VOIDED' AND ${inScope}
+         WHERE r.status <> 'VOIDED' AND ${inScope} AND ${window}
          ORDER BY r.id
       ),
       x AS (SELECT * FROM counted),
@@ -154,7 +178,6 @@ export class AttendanceAnalyticsService {
       undecided: sum('undecided'),
     };
     return {
-      semester: { id: semester.id, name: semester.name, status: semester.status },
       groupBy,
       lateWeight,
       minimumPercent,

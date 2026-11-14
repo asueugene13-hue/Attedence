@@ -55,6 +55,7 @@ import { SessionGenerationService } from './session-generation.service.js';
     ClassEventService,
     ClassMonitorService,
     ClassAnalyticsService,
+    ClassReviewsService,
   ],
 })
 export class ClassSessionsModule {}

@@ -9,7 +9,7 @@ import { MailService } from '../src/infrastructure/mail/mail.service.js';
 import { PrismaService } from '../src/infrastructure/prisma/prisma.service.js';
 import { RedisService } from '../src/infrastructure/redis/redis.service.js';
 import { buildClass, inRoom, newPhone, registerPhone, signedCheckIn } from './attendance-fixture.js';
-import { resetDatabase, resetRedis } from './fixtures.js';
+import { resetDatabase, resetRedis, signInAs } from './fixtures.js';
 
 // The lecturer's dashboard (Phase 6 step 6): every number counted from real records. Obviously fake
 // data: the fixture's class on 2030-08-20 10:00–11:30 with three students (Accra = UTC).
@@ -134,5 +134,48 @@ describe('the lecturer’s dashboard', () => {
       'NOT_A_LECTURER',
     );
     expect(await prisma.attendanceRecord.count()).toBe(3);
+
+    // The administrator's dashboard, the same day: today's class, the week's attendance, what waits.
+    const admin = (await http.get('/api/v1/me/admin-dashboard').set(c.admin.auth).expect(200)).body;
+    expect(admin.today).toEqual({ date: '2030-08-20', classes: { COMPLETED: 1 } });
+    expect(admin.lastSevenDays).toMatchObject({
+      present: 1,
+      late: 0,
+      absences: 0,
+      excused: 1,
+      undecided: 1,
+      percentage: 100,
+    });
+    expect(admin.waiting).toMatchObject({
+      disputes: 1,
+      excuses: 0,
+      classReviews: { count: 0 },
+      lateCorrections: 0,
+    });
+    expect(typeof admin.waiting.riskFlags).toBe('number');
+    expect(admin.waiting.phoneApprovals).toBeNull(); // administrators do not approve phones by default
+    expect(admin.unacknowledgedSystemEvents).toBeNull(); // nor read system health
+    const superAdmin = await signInAs(app, prisma, 'super@example.test', ['SUPER_ADMIN']);
+    const all = (await http.get('/api/v1/me/admin-dashboard').set(superAdmin.auth).expect(200)).body;
+    expect(typeof all.waiting.phoneApprovals).toBe('number');
+    expect(typeof all.unacknowledgedSystemEvents).toBe('number');
+    // An administrator for another department sees none of it.
+    const faculty = await prisma.faculty.create({ data: { code: 'OF', name: 'Other Faculty (test)' } });
+    const other = await prisma.department.create({
+      data: { facultyId: faculty.id, code: 'OD', name: 'Other Department (test)' },
+    });
+    const elsewhere = await signInAs(app, prisma, 'admin.od@example.test', ['UNIVERSITY_ADMIN'], {
+      scope: { type: 'DEPARTMENT', id: other.id },
+    });
+    const theirs = (await http.get('/api/v1/me/admin-dashboard').set(elsewhere.auth).expect(200)).body;
+    expect(theirs.today.classes).toEqual({});
+    expect(theirs.lastSevenDays).toMatchObject({ present: 0, percentage: null });
+    expect(theirs.waiting).toMatchObject({
+      disputes: 0,
+      excuses: 0,
+      riskFlags: 0,
+      classReviews: { count: 0 },
+    });
+    await http.get('/api/v1/me/admin-dashboard').set(c.lecturer.auth).expect(403);
   });
 });

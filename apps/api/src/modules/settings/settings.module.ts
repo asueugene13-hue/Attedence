@@ -6,6 +6,6 @@ import { SystemHealthService } from './system-health.service.js';
 @Module({
   controllers: [SettingsController],
   providers: [SettingsService, SystemHealthService],
-  exports: [SettingsService],
+  exports: [SettingsService, SystemHealthService],
 })
 export class SettingsModule {}

@@ -5,6 +5,7 @@ import type { RequestContext } from '../../common/request-context.js';
 import type { FlagStatus, Prisma, RiskType, Severity } from '../../generated/prisma/client.js';
 import { Clock } from '../../infrastructure/clock/clock.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { AcademicAccessService } from '../academic/academic-access.service.js';
 import { AuditService } from '../audit-logs/audit.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { StudentsService } from '../students/students.service.js';
@@ -30,6 +31,7 @@ export class RiskFlagsService {
     private readonly audit: AuditService,
     private readonly students: StudentsService,
     private readonly clock: Clock,
+    private readonly access: AcademicAccessService,
   ) {}
 
   /** Raises a flag, or does nothing if the same situation already has an open flag. */
@@ -57,13 +59,19 @@ export class RiskFlagsService {
     }
   }
 
-  async list(filter: { status: FlagStatus; type?: RiskType }) {
-    const rows = await this.prisma.riskFlag.findMany({
+  /**
+   * The flags the reviewer may see: everything for the Super Admin and university-wide administrators;
+   * for an administrator limited to faculties or departments, only flags about students whose programme
+   * is in them (a flag about no student, such as a beacon heard far away, is for university-wide staff).
+   */
+  async list(actor: AccessClaims, filter: { status: FlagStatus; type?: RiskType }) {
+    const found = await this.prisma.riskFlag.findMany({
       where: { status: filter.status, ...(filter.type ? { type: filter.type } : {}) },
       orderBy: { createdAt: filter.status === 'OPEN' ? 'asc' : 'desc' },
       take: 500,
       include: { reviewedBy: { select: { id: true, fullName: true } } },
     });
+    const rows = await this.visibleTo(actor, found);
     const students = await this.students.summaries(rows.flatMap((r) => (r.studentId ? [r.studentId] : [])));
     return {
       data: rows.map((r) => {
@@ -95,7 +103,9 @@ export class RiskFlagsService {
     context: RequestContext,
   ) {
     const flag = await this.prisma.riskFlag.findUnique({ where: { id } });
-    if (!flag) throw new NotFoundException({ code: 'NOT_FOUND', message: 'No such risk flag.' });
+    if (!flag || (await this.visibleTo(actor, [flag])).length === 0) {
+      throw new NotFoundException({ code: 'NOT_FOUND', message: 'No such risk flag.' });
+    }
     const now = this.clock.now();
     await this.prisma.$transaction(async (tx) => {
       const done = await tx.riskFlag.updateMany({
@@ -119,6 +129,21 @@ export class RiskFlagsService {
         tx,
       );
     });
-    return (await this.list({ status: decision })).data.find((f) => f.id === id)!;
+    return (await this.list(actor, { status: decision })).data.find((f) => f.id === id)!;
+  }
+
+  private async visibleTo<T extends { studentId: string | null }>(
+    actor: AccessClaims,
+    flags: T[],
+  ): Promise<T[]> {
+    const scope = await this.access.scopeOf(actor);
+    if (scope.institutionWide) return flags;
+    const departments = await this.students.departmentsOf(
+      flags.flatMap((f) => (f.studentId ? [f.studentId] : [])),
+    );
+    return flags.filter((f) => {
+      const d = f.studentId ? departments.get(f.studentId) : undefined;
+      return !!d && (scope.departmentIds.includes(d.id) || scope.facultyIds.includes(d.facultyId));
+    });
   }
 }

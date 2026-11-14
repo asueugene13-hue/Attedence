@@ -31,6 +31,11 @@ export class SystemHealthService {
     return { data: page, nextCursor: rows.length > q.limit ? (page.at(-1)?.id ?? null) : null };
   }
 
+  /** How many system events nobody has acknowledged yet. */
+  async unacknowledgedCount(): Promise<number> {
+    return this.prisma.systemEvent.count({ where: { acknowledgedAt: null } });
+  }
+
   /** Marks an event as seen. Acknowledging twice is harmless and recorded once. */
   async acknowledge(actor: AccessClaims, id: string, context: RequestContext) {
     return this.prisma.$transaction(async (tx) => {

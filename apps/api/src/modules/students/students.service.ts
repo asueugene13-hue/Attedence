@@ -210,6 +210,15 @@ export class StudentsService implements OnModuleInit {
     return rows.map((r) => r.userId);
   }
 
+  /** Each student's department and faculty (by programme), for scope checks in other modules. */
+  async departmentsOf(ids: string[]): Promise<Map<string, { id: string; facultyId: string }>> {
+    const rows = await this.prisma.studentProfile.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      select: { id: true, programme: { select: { department: { select: { id: true, facultyId: true } } } } },
+    });
+    return new Map(rows.map((r) => [r.id, r.programme.department]));
+  }
+
   async byStudentNumbers(numbers: string[]) {
     const rows = await this.prisma.studentProfile.findMany({
       where: { studentNumber: { in: [...new Set(numbers)] } },

@@ -2090,3 +2090,26 @@ The product owner asked for the rest of Phase 6 in one go, then commit, push, "d
   - retention after 7 days.
 - **Mutation checks**, each restored, all caught: formulas not neutralised (3 failed), role not re-checked, personal-data permission not checked, downloads not logged, expired bytes kept.
 - **Checked by eye:** a 30-student, 24-class register PDF reads well. The "Attendance" heading wrapped, so its column was widened.
+
+### 2026-11-14 — Step 7.3: administrator dashboard (API), and a scope fix for risk flags
+
+- **Security fix found on the way: the risk-flag queue ignored scope.**
+  - Administrators hold `risk_flags.review`, but `GET /risk-flags` returned every flag in the university, with student names and IDs, to any of them, including one limited to a single department. A flag could also be reviewed by any of them.
+  - Now administrators limited to faculties or departments see and review only flags about students whose programme is in them. Flags about no student (for example a beacon heard far away) are for university-wide staff. The Super Admin and university-wide administrators see all, as before.
+  - Test `test/risk-flags-scope.test.ts`: it fails with the old behaviour put back and passes with the fix. The existing device tests still pass (15 tests with it).
+  - Helper `StudentsService.departmentsOf`.
+- **Built:** `GET /me/admin-dashboard` (Super Admin and administrators):
+  - today's classes by status;
+  - the last 7 days' attendance (same rules as analytics);
+  - waiting: class reviews (and how many are priority), disputes, excuse requests, late corrections, open risk flags, phone approvals;
+  - beacons suspected faulty, and unacknowledged system events.
+  - Each is counted by the module that owns it, within the administrator's scope. An item the role may not act on is `null`, never a guessed number.
+- **For this:** `AttendanceAnalyticsService.totalsBetween` (the analytics query now takes a semester or a time window; the analytics tests still pass), `ClassAnalyticsService.statusCountsBetween`, `SystemHealthService.unacknowledgedCount`, and the reviews, excuses, corrections and system-health services exported to the dashboards module.
+- **Tests:** `test/dashboards.test.ts` extended:
+  - the real day's counts;
+  - the Super Admin also seeing phone approvals and system events;
+  - an administrator for another department seeing nothing;
+  - lecturers refused.
+
+  Mutation (today's classes without scope) caught.
+- **Database changes:** none.

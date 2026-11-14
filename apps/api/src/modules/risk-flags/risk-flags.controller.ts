@@ -15,8 +15,8 @@ export class RiskFlagsController {
   /** `?status=OPEN` (default) `|DISMISSED|CONFIRMED` and `&type=`. Open flags oldest first. */
   @Get()
   @RequirePermissions('risk_flags.review')
-  list(@Query() query: unknown) {
-    return this.flags.list(parseInput(RiskFlagQuerySchema, query));
+  list(@CurrentAuth() auth: AccessClaims, @Query() query: unknown) {
+    return this.flags.list(auth, parseInput(RiskFlagQuerySchema, query));
   }
 
   /** `{ decision: CONFIRMED|DISMISSED, note }`. Nothing else changes: a person acts separately if needed. */

@@ -58,6 +58,31 @@ export class ClassAnalyticsService {
     private readonly lookups: AcademicLookupsService,
   ) {}
 
+  /**
+   * Classes scheduled between two moments, by status, within the caller's scope (the administrator
+   * dashboard's "today"). A class serving several sections counts once.
+   */
+  async statusCountsBetween(actor: AccessClaims, from: Date, to: Date): Promise<Record<string, number>> {
+    const scope = await this.access.scopeOf(actor);
+    const inScope = scope.institutionWide
+      ? Prisma.sql`TRUE`
+      : Prisma.sql`(c.department_id = ANY(${scope.departmentIds}::uuid[]) OR d.faculty_id = ANY(${scope.facultyIds}::uuid[]))`;
+    const rows = await this.prisma.$queryRaw<{ status: string; n: bigint }[]>(Prisma.sql`
+      SELECT k.status::text AS status, COUNT(*) AS n FROM (
+        SELECT DISTINCT cs.id, cs.status
+          FROM class_sessions cs
+          JOIN class_session_sections css ON css.class_session_id = cs.id
+          JOIN course_sections sec ON sec.id = css.section_id
+          JOIN course_offerings o ON o.id = sec.offering_id
+          JOIN courses c ON c.id = o.course_id
+          JOIN departments d ON d.id = c.department_id
+         WHERE cs.scheduled_start >= ${from} AND cs.scheduled_start < ${to} AND ${inScope}
+      ) k
+      GROUP BY k.status
+    `);
+    return Object.fromEntries(rows.map((r) => [r.status, Number(r.n)]));
+  }
+
   async classes(actor: AccessClaims, semesterId: string | undefined, groupBy: ClassGroup) {
     if (actor.role !== 'SUPER_ADMIN' && actor.role !== 'UNIVERSITY_ADMIN') {
       throw new ForbiddenException({
