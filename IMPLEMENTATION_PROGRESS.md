@@ -1977,4 +1977,12 @@ The product owner asked for the rest of Phase 6 in one go, then commit, push, "d
 - Phone: `phase6.test.tsx` 5 passed; all phone tests 32.
 - Browser: `npm run e2e` **8 passed** (journeys 01–08). Journey 01's expected sidebar now includes the two new links.
 
+- `npm run check` (development servers stopped first) exit 0: design-tokens 3, shared 10, API **469**, mobile **32**, web 13, so **527 passed**.
+
+**CI:** GitHub run 43592315755 on `7338a20`: **success**.
+
+**App build:** a new development build (Android, with the document picker): **finished**. APK: https://expo.dev/artifacts/eas/Vu84tyTy8ToH8n6FanLIi0-B-bAADESB0tKgFGWcK8s.apk. Build page: https://expo.dev/accounts/clent_eugene/projects/attendsure/builds/8a79f7fb-ed99-4dc3-874b-c245616b02e5
+
 **Known limitations:** KNOWN_LIMITATIONS 96–100.
+
+**Next step:** the product owner reviews Phase 6 and approves it as complete; then the Phase 7 plan, for approval before any Phase 7 work starts.
