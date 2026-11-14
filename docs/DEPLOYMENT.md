@@ -72,7 +72,7 @@ Fixtures and test accounts are never loaded into production.
 
 | Date | What was restored | Time taken | Result |
 | --- | --- | --- | --- |
-| — | — | — | No drills yet |
+| 2026-11-14 | Production rehearsal database (78 tables, 43,540 rows, 33 MB; load-test data) into a brand-new, empty database server, on one laptop | Backup 3 s (2.4 MB encrypted), restore 6 s, compare 1 s, AttendSure ready on the copy 5 s: **17 s in all** | **Passed**: every table identical row for row; the audit log still refused changes; no pending migrations. Safety checks proven: restoring over a database with data refused; a changed byte rejected (checksum, and gpg when the checksum was faked); a wrong passphrase failed; one changed row reported by the comparison |
 
 ## 7. Containers (Phase 8 step 2)
 
@@ -133,3 +133,21 @@ How: `apps/api/load/` (README there). 500 fake students, each with a signed, tru
    - The **phone app** now sends a check-in again after a `502`, `503` or `504` (before, only when completely offline), with the same Idempotency-Key and a fresh signature, so it counts once. This reaches phones with the next app build.
 2. Second try: buffering request bodies so the proxy could resend them was tried and **removed**. Two resent check-ins reached the API altered (their phone signature no longer matched, so they were refused). A clean `502` that the phone resends itself is safer than a resend that may change the request.
 3. Final settings: 0 gateway errors with an instance stopped mid-way.
+
+## 9. Backup and restore (Phase 8 step 5)
+
+Scripts in `infra/production/backup/` (bash; they need `pg_dump`, `pg_restore`, `psql` and `gpg`, all in the `postgres:18.6` image):
+
+- `backup.sh`: a full `pg_dump` (custom format), encrypted with gpg (AES-256, which also detects tampering), plus a `.sha256` checksum. If the dump fails, no file is left behind.
+- `restore.sh <file>`: checks the checksum, refuses a database that already has tables (a restore never overwrites data), decrypts and restores, stopping at the first error.
+- `compare.sh <source URL> <restored URL>`: every table's row count and a fingerprint of every row's contents.
+- `drill-rehearsal.sh`: the whole drill on the rehearsal, timed (§6).
+
+**What a real host needs (to agree with the university, D-16 and D-18):**
+
+1. A daily `backup.sh` run, copied off-site, plus the host's continuous WAL archiving for point-in-time recovery (§6).
+2. The backup passphrase **and** `ENCRYPTION_KEY` kept in the secret manager, separately from the backups. Some columns (for example two-step sign-in secrets) are encrypted with `ENCRYPTION_KEY` inside the dump; without it, or without the passphrase, a backup cannot be used.
+3. Files (photos, attachments, report files) are in object storage, not in the dump: use the storage service's versioning and a daily replicated copy (§6). Report files are deleted after 7 days by design.
+4. A monthly drill into staging, recorded in §6: restore, compare with the backup, start AttendSure on it, time it.
+
+**To recover after losing the database:** restore the latest backup into a new, empty database (`restore.sh`), run the release job (it applies any newer migrations), point `DATABASE_URL` at it, start the API instances and the worker, then check System health and a few known records. Anything written after that backup is lost, unless WAL archiving lets the host recover to a later moment.

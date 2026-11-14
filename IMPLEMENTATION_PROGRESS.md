@@ -2225,3 +2225,19 @@ Results in SECURITY.md §9. In short:
 - **Tests:** mobile 33 passed (one new); the load runs above; lint and formatting clean.
 - **Database changes:** none (load-test data exists only in the rehearsal database).
 - **Next step:** 8.5 backup and restore drill.
+
+### 2026-11-14 — Step 8.5: backup and restore drill
+
+- **Built** (`infra/production/backup/`, DEPLOYMENT.md §9):
+  - `backup.sh`: full dump, encrypted with gpg AES-256, with a checksum; a failed dump leaves no file (`pipefail`).
+  - `restore.sh`: checks the checksum, refuses a database that already has tables, restores and stops at the first error.
+  - `compare.sh`: every table's row count and a fingerprint of every row.
+  - `drill-rehearsal.sh`: the timed drill on the rehearsal. It pauses the API instances and worker so the original stays still, restores into a brand-new database server, compares, checks the append-only rules, starts AttendSure on the copy, then resumes.
+  - The passphrase lives in the git-ignored secrets folder for the rehearsal; on a real host it comes from the secret manager, kept apart from the backups together with `ENCRYPTION_KEY`.
+- **Drill (2026-11-14, recorded in DEPLOYMENT.md §6): passed in 17 s.** 78 tables and 43,540 rows identical, row for row; the audit log still refused changes on the copy; no pending migrations; the API was ready on the copy in 5 s.
+- **Safety checks proven:** restoring over the live database was refused; a backup with one changed byte was rejected by the checksum, and by gpg when the checksum was faked to match; a wrong passphrase failed; one changed row was reported by the comparison.
+- **Mistake on the way, fixed:** the drill script first passed Git Bash paths (`/c/...`) to Docker with path conversion off; it now uses Windows paths.
+- The export clean-up job in this step's plan was built in step 7.2 (files deleted after 7 days).
+- **Not done here:** files in object storage are not in the dump; the host's storage versioning and daily copy cover them (limitation 116). Other retention periods wait for D-18.
+- **Database changes:** none.
+- **Next step:** 8.6 readiness documents.

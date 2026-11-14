@@ -142,3 +142,5 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 113. **The load test ran on one laptop,** with every container and the load driver sharing it. The figures are a floor, not a measurement of the real host; repeat the test there before go-live (apps/api/load/README.md).
 114. **When an API instance stops, the lecturers' live rosters connected to it are cut.** The dashboard reconnects to the other instance and reloads by itself within a few seconds; nothing is lost, but the roster pauses briefly.
 115. **The phone app's resend after a gateway error (502, 503, 504) reaches phones only with the next app build.** Until then a student who meets one (only during a server restart or failure) sees an error and presses check in again; the attempt still counts once.
+116. **Database backups do not include files** (photos, attachments, report files). They are in object storage, which the host must version and copy daily (DEPLOYMENT.md §9).
+117. **The restore drill used a small rehearsal database** (33 MB). Real data will take longer; repeat the drill on the real host with real volumes, and record the times.
