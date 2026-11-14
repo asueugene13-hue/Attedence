@@ -1907,4 +1907,5 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
   - Mutation checks, each restored afterwards: removing the "attendance still open" check (1 failed); removing the "record changed since" check (1 failed); letting other lecturers see disputes (1 failed); an answer not restarting the 72-hour clock: at first **not caught**, so the test now includes an answer two days later, and then it failed as it should (1 failed).
   - `npm run check` (development servers stopped first) exit 0: design-tokens 3, shared 10, API **455**, mobile 27, web 13, so **508 passed**.
 - **Known limitations:** KNOWN_LIMITATIONS 92 (notifications point to screens that come in step 7), 93 (a dispute does not lock the record).
+- **CI:** GitHub run 43552927785 on `86e9851`: **success**.
 - **Next step:** step 3, excuse requests (decided by administrators only, D-22).
