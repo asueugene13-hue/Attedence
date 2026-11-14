@@ -2057,3 +2057,36 @@ The product owner asked for the rest of Phase 6 in one go, then commit, push, "d
 - **Tests:** `test/analytics.test.ts`, 5 passed. A realistic week: present, late, absent, excused, undecided, a cancelled class, a class not held yet, a reopened attendance, a record from before enrolment, and another faculty. The department totals equal the sum of the three students' own `/me/attendance` figures.
 - **Mutation checks**, each restored: scope ignored (attendance, classes) caught; three more (classes not held counted, open attendance counted, enrolment dates ignored) at first **not caught**. The fixture now has those cases, and all three fail as they should.
 - **Database changes:** none.
+
+### 2026-11-14 — Step 7.2: exports
+
+- **Built** (`reports` module, which owns the new `report_exports` table):
+  - `POST /reports/exports` `{ reportType, format: CSV | XLSX | PDF, params }`; `GET /reports/exports?view=MINE|ALL`; `GET /reports/exports/:id`; `GET /reports/exports/:id/download`.
+- **Five reports:**
+  - a class group's attendance summary;
+  - a class group's register (student by class, P/L/A/R/E/W/V);
+  - attendance analytics;
+  - class operations;
+  - the Registrar's students and enrolments for a semester.
+- **How a file is made:**
+  - Asking checks the permissions at once (`reports.course`, `analytics.read` or `reports.registrar`; plus `reports.export_personal` for any file that names people) and the cheap scope checks. It records the request in the export log and the audit log, and queues the work.
+  - The worker builds the file with the requester's own access, checked again, including that they still hold the role. Each report comes from the module that owns its data: `AttendanceSummaryService.section/sectionRegister` (with `authorizeSection` shared), the analytics services, and `EnrollmentsService.semesterReport`.
+  - The file is stored privately (`EXPORT_FILE`), and the requester is notified (`REPORT_READY` / `REPORT_FAILED`).
+- **The files:**
+  - CSV (UTF-8 with a byte-order mark), Excel (numbers as numbers) and PDF (pdfkit 0.20.2, new dependency; landscape for wide reports; columns repeated on every page; page numbers).
+  - Every file says when it was made, for whom and in which role, and warns when it holds personal data.
+  - Text that would run as a spreadsheet formula gets an apostrophe first.
+- **Logging and retention:**
+  - Requests, files made, failures, downloads (counted) and expiries are in the audit log. People who read the audit log can see the whole export log (`view=ALL`).
+  - Files are deleted after `reports.exportRetentionDays` (new setting, default 7; job `report-exports-expire`, hourly); the log entry stays. A download after that gives `410 EXPIRED`.
+- **Database changes:** migration `20261114210000_report_exports` (table, enums `ReportType`, `ExportFormat`, `ExportStatus`, `FilePurpose.EXPORT_FILE`, a check that a finished file has its rows, file and expiry and a failed one its reason). Applied; drift check: no difference.
+- **Tests:** `test/exports.test.ts`, 8 passed:
+  - each format's contents (the real counts, numbers in Excel, the formula cell neutralised, valid PDFs);
+  - refusals at once (other lecturer, student, Registrar, a lecturer asking for analytics, a bad format);
+  - the Registrar's list; analytics by lecturer marked as personal data;
+  - the personal-data permission taken away from administrators;
+  - nobody else sees my file; the export log;
+  - a role ended before the file is made (no file, told why);
+  - retention after 7 days.
+- **Mutation checks**, each restored, all caught: formulas not neutralised (3 failed), role not re-checked, personal-data permission not checked, downloads not logged, expired bytes kept.
+- **Checked by eye:** a 30-student, 24-class register PDF reads well. The "Attendance" heading wrapped, so its column was widened.

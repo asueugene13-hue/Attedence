@@ -37,6 +37,14 @@ export class ScopeService {
     return [...new Set(chosen.map((g) => g.userId))];
   }
 
+  /** Whether an active account still holds this role (a background job acting for someone checks it). */
+  async holdsRole(userId: string, role: RoleKey): Promise<boolean> {
+    const n = await this.prisma.userRole.count({
+      where: { userId, revokedAt: null, role: { key: role }, user: { status: 'ACTIVE' } },
+    });
+    return n > 0;
+  }
+
   async scopeFor(userId: string, role: RoleKey): Promise<RoleScope> {
     const grants = await this.prisma.userRole.findMany({
       where: { userId, revokedAt: null, role: { key: role } },

@@ -83,6 +83,13 @@ export const SETTINGS = {
     schema: z.number().int().min(1).max(20),
     default: 3,
   },
+  'reports.exportRetentionDays': {
+    label: 'Report files are kept for (days)',
+    description:
+      'Days a report file stays available to download; then the file is deleted (the export log is kept). Proposal in DATABASE_SCHEMA §7, pending D-18.',
+    schema: z.number().int().min(1).max(90),
+    default: 7,
+  },
   'attendance.lateWeight': {
     label: 'A late check-in counts as (share of attended)',
     description:

@@ -109,6 +109,8 @@ export const NOTIFICATION_CATEGORIES = {
     defaultChannels: ['IN_APP', 'EMAIL'],
   },
   ANNOUNCEMENT_REPORTED: { label: 'Announcement reported', mandatory: false, defaultChannels: ['IN_APP'] },
+  REPORT_READY: { label: 'Report file ready', mandatory: false, defaultChannels: ['IN_APP'] },
+  REPORT_FAILED: { label: 'Report file could not be made', mandatory: false, defaultChannels: ['IN_APP'] },
   RESCHEDULE_REQUESTED: { label: 'Reschedule request', mandatory: false, defaultChannels: ['IN_APP'] },
   RESCHEDULE_DECIDED: {
     label: 'Reschedule request decided',

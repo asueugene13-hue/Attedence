@@ -200,6 +200,39 @@ export class EnrollmentsService {
     return (await this.views([row]))[0]!;
   }
 
+  /**
+   * Every enrolment in a semester's course offerings, current and ended, with the student and the
+   * course: the Registrar's "students and enrolments" report (Phase 7). Sorted by student ID.
+   */
+  async semesterReport(semesterId: string) {
+    const rows = await this.prisma.courseEnrollment.findMany({
+      where: { offering: { semesterId } },
+      orderBy: [{ studentId: 'asc' }, { enrolledAt: 'asc' }],
+    });
+    const [people, sections] = await Promise.all([
+      this.students.summaries(rows.map((r) => r.studentId)),
+      this.courses.sectionSummaries(rows.map((r) => r.sectionId)),
+    ]);
+    return rows
+      .map((r) => {
+        const p = people.get(r.studentId);
+        const sec = sections.get(r.sectionId);
+        return {
+          studentNumber: p?.studentNumber ?? '',
+          fullName: p?.fullName ?? '',
+          programme: p?.programme.code ?? '',
+          level: p?.level?.code ?? '',
+          studentStatus: p?.status ?? '',
+          course: sec ? `${sec.course.code} · ${sec.course.title}` : '',
+          section: sec?.code ?? '',
+          enrolmentStatus: r.status,
+          enrolledAt: r.enrolledAt,
+          endedAt: r.endedAt,
+        };
+      })
+      .sort((a, b) => a.studentNumber.localeCompare(b.studentNumber) || a.course.localeCompare(b.course));
+  }
+
   async list(query: z.output<typeof EnrollmentQuerySchema>) {
     const rows = await this.prisma.courseEnrollment.findMany({
       where: {

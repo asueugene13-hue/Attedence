@@ -11,7 +11,7 @@ import { LecturersService } from '../courses/lecturers.service.js';
 import { EnrollmentsService } from '../enrollments/enrollments.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { StudentsService } from '../students/students.service.js';
-import { type ClassFact, judgeClass, summarise, warning } from './calculation.js';
+import { type ClassFact, type ClassResult, judgeClass, summarise, warning } from './calculation.js';
 
 type Enrolment = { sectionId: string; enrolledAt: Date; endedAt: Date | null };
 type ClassRow = Awaited<ReturnType<ClassSessionsService['forSections']>>[number];
@@ -145,8 +145,8 @@ export class AttendanceSummaryService {
     };
   }
 
-  /** Every student of a section, with their summary: for its lecturers and administrators in scope. */
-  async section(actor: AccessClaims, sectionId: string) {
+  /** A section's lecturers, and administrators whose scope covers it, may see its attendance. */
+  async authorizeSection(actor: AccessClaims, sectionId: string) {
     const section = await this.courses.sectionFacts(sectionId);
     if (!section) throw new NotFoundException({ code: 'NOT_FOUND', message: 'No such section.' });
     const held = await this.permissions.forRole(actor.role);
@@ -156,6 +156,45 @@ export class AttendanceSummaryService {
     } else {
       await this.access.assertDepartment(actor, section.department);
     }
+    return section;
+  }
+
+  /**
+   * A section's register: one row per student (current and former), one column per class held, each
+   * cell what the student's own calculation found (P present, L late, A absent, R rejected, E excused,
+   * W waiting for a decision, V voided, — not enrolled yet). Same access as `section`.
+   */
+  async sectionRegister(actor: AccessClaims, sectionId: string) {
+    const section = await this.authorizeSection(actor, sectionId);
+    const enrolments = await this.enrollments.enrolmentsInSection(sectionId);
+    const byStudent = new Map<string, Enrolment[]>();
+    for (const e of enrolments)
+      byStudent.set(e.studentId, [...(byStudent.get(e.studentId) ?? []), { ...e, sectionId }]);
+    const classes = await this.classSessions.forSections([sectionId]);
+    const held = classes.filter((c) => c.status === 'COMPLETED');
+    const people = await this.students.summaries([...byStudent.keys()]);
+    const data = [];
+    for (const [studentId, rows] of byStudent) {
+      const { summary, results } = await this.forStudent(studentId, rows, classes);
+      const resultOf = new Map(results.map((x) => [x.classSessionId, x]));
+      data.push({
+        studentNumber: people.get(studentId)?.studentNumber ?? '',
+        fullName: people.get(studentId)?.fullName ?? '',
+        enrolled: enrolments.some((e) => e.studentId === studentId && e.status === 'ENROLLED'),
+        cells: held.map((c) => registerCell(resultOf.get(c.id))),
+        percentage: summary.percentage,
+      });
+    }
+    return {
+      section: { id: section.id, code: section.code, course: section.course, semester: section.semester },
+      classes: held.map((c) => ({ id: c.id, scheduledStart: c.scheduledStart })),
+      data: data.sort((a, b) => a.fullName.localeCompare(b.fullName)),
+    };
+  }
+
+  /** Every student of a section, with their summary: for its lecturers and administrators in scope. */
+  async section(actor: AccessClaims, sectionId: string) {
+    const section = await this.authorizeSection(actor, sectionId);
     const policy = await this.policy();
     const enrolments = await this.enrollments.enrolmentsInSection(sectionId);
     const byStudent = new Map<string, Enrolment[]>();
@@ -262,5 +301,27 @@ export class AttendanceSummaryService {
       code: 'PERMISSION_DENIED',
       message: 'Only the section’s lecturers and administrators in scope can see its attendance.',
     });
+  }
+}
+
+/** One cell of a register (see `sectionRegister`). */
+function registerCell(result: ClassResult | undefined): string {
+  if (!result) return '';
+  if (result.notCounted === 'NOT_ENROLLED_YET') return '—';
+  if (result.notCounted === 'VOIDED') return 'V';
+  if (result.record === 'REJECTED') return 'R';
+  switch (result.outcome) {
+    case 'PRESENT':
+      return 'P';
+    case 'LATE':
+      return 'L';
+    case 'ABSENT':
+      return 'A';
+    case 'EXCUSED':
+      return 'E';
+    case 'UNDECIDED':
+      return 'W';
+    default:
+      return '';
   }
 }

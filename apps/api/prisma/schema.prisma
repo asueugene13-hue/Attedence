@@ -150,6 +150,7 @@ model User {
   announcementsHidden   Announcement[]          @relation("AnnouncementHiddenBy")
   announcementsReceived AnnouncementRecipient[]
   announcementReports   AnnouncementReport[]
+  reportExports         ReportExport[]
   disputeMessages       DisputeMessage[]        @relation("DisputeMessageAuthor")
 
   @@map("users")
@@ -747,6 +748,8 @@ enum FilePurpose {
   IMPORT_FILE
   /// A student's supporting file for a dispute or an excuse request.
   REQUEST_ATTACHMENT
+  /// A report file someone asked for (kept for a few days).
+  EXPORT_FILE
 }
 
 enum FileStatus {
@@ -776,6 +779,7 @@ model FileObject {
   importBatch       ImportBatch?
   disputeAttachment DisputeAttachment?
   excuseAttachment  ExcuseAttachment?
+  reportExport      ReportExport?
 
   @@map("file_objects")
 }
@@ -2279,4 +2283,58 @@ model AnnouncementReport {
 
   @@unique([announcementId, reporterId])
   @@map("announcement_reports")
+}
+
+// ───────── Report exports (Phase 7 step 2; owned by the reports module) ─────────
+
+enum ReportType {
+  SECTION_SUMMARY
+  SECTION_REGISTER
+  ATTENDANCE_ANALYTICS
+  CLASS_OPERATIONS
+  STUDENT_ENROLMENTS
+}
+
+enum ExportFormat {
+  CSV
+  XLSX
+  PDF
+}
+
+enum ExportStatus {
+  QUEUED
+  RUNNING
+  READY
+  FAILED
+  /// The file was deleted after its retention period; the log entry stays.
+  EXPIRED
+}
+
+/// Every report file asked for: who, what, in which role, when, how many rows, and what became of it.
+model ReportExport {
+  id                   String       @id @default(uuid(7)) @db.Uuid
+  requestedById        String       @map("requested_by_id") @db.Uuid
+  /// The role it was asked for in; the file is made with that role's access, checked again then.
+  requestedRole        String       @map("requested_role")
+  reportType           ReportType   @map("report_type")
+  params               Json
+  format               ExportFormat
+  status               ExportStatus @default(QUEUED)
+  containsPersonalData Boolean      @map("contains_personal_data")
+  title                String?
+  fileId               String?      @unique @map("file_id") @db.Uuid
+  rowCount             Int?         @map("row_count")
+  error                String?
+  createdAt            DateTime     @map("created_at") @db.Timestamptz(3)
+  completedAt          DateTime?    @map("completed_at") @db.Timestamptz(3)
+  expiresAt            DateTime?    @map("expires_at") @db.Timestamptz(3)
+  downloadCount        Int          @default(0) @map("download_count")
+  lastDownloadedAt     DateTime?    @map("last_downloaded_at") @db.Timestamptz(3)
+
+  requestedBy User        @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+  file        FileObject? @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([requestedById, createdAt])
+  @@index([status, expiresAt])
+  @@map("report_exports")
 }
