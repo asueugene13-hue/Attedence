@@ -21,3 +21,4 @@ export * from './attendance.js';
 export * from './requests.js';
 export * from './announcements.js';
 export * from './student-id.js';
+export * from './reports.js';

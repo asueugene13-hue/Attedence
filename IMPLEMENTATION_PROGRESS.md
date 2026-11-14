@@ -2038,3 +2038,22 @@ The product owner asked for the rest of Phase 6 in one go, then commit, push, "d
 - **Test:** `test/worker-jobs.test.ts` starts both (without running jobs) and checks they know the same jobs and schedules, naming the ones that keep attendance and requests moving. With the old worker put back it failed, naming `monitoring/attendance-sweep`; restored, it passes (2 tests).
 - **Checked by hand:** the built worker (`node dist/worker.js`) started with every module, ran the email, monitoring and system queues for 25 seconds and logged no errors.
 - **Database changes:** none.
+
+### 2026-11-14 — Step 7.1: analytics
+
+- **Built:**
+  - `GET /analytics/attendance?semesterId=&groupBy=faculty|department|programme|level|course|lecturer` (`AttendanceAnalyticsService`, attendance module).
+  - `GET /analytics/classes?semesterId=&groupBy=faculty|department|course|lecturer` (`ClassAnalyticsService`, class-sessions module).
+  - Both are behind `analytics.read` (Super Admin and administrators), served by a new `reports` module, and default to the active semester. With none active they say so (`404 NO_ACTIVE_SEMESTER`) rather than guess.
+- **Attendance uses the same rules as each student's own percentage** (calculation.ts). A record counts only when:
+  - its class was held (COMPLETED);
+  - attendance was taken and closed, and not voided;
+  - the student was enrolled in one of the class's sections at its start.
+
+  The rate is present plus weighted late over present, late and absences; excused and undecided records are left out. Each group gives students, the counts, the rate, and (once a minimum is set) how many students are below it. One SQL query with bound parameters, read only. A student in two sections of a combined class is counted once.
+- **Class operations** per group: scheduled, held, cancelled, rescheduled, suspended, still to come, delay reported, marked unconfirmed, sent to review, and the average late start of held classes.
+- **Scope:** by the course's department (administrators limited to a faculty or department see only theirs). Lecturers and students are refused.
+- **Small helpers in the academic module:** `AcademicAccessService.scopeOf`, `AcademicLookupsService.currentSemesterId`.
+- **Tests:** `test/analytics.test.ts`, 5 passed. A realistic week: present, late, absent, excused, undecided, a cancelled class, a class not held yet, a reopened attendance, a record from before enrolment, and another faculty. The department totals equal the sum of the three students' own `/me/attendance` figures.
+- **Mutation checks**, each restored: scope ignored (attendance, classes) caught; three more (classes not held counted, open attendance counted, enrolment dates ignored) at first **not caught**. The fixture now has those cases, and all three fail as they should.
+- **Database changes:** none.

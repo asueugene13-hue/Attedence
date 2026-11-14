@@ -26,6 +26,7 @@ import { RequestsModule } from './modules/requests/requests.module.js';
 import { AnnouncementsModule } from './modules/announcements/announcements.module.js';
 import { StudentIdsModule } from './modules/student-ids/student-ids.module.js';
 import { DashboardsModule } from './modules/dashboards/dashboards.module.js';
+import { ReportsModule } from './modules/reports/reports.module.js';
 import { VerificationModule } from './modules/verification/verification.module.js';
 import { PermissionGuard } from './modules/authorization/permission.guard.js';
 import { CoursesModule } from './modules/courses/courses.module.js';
@@ -81,6 +82,7 @@ export const FEATURE_MODULES = [
   StudentIdsModule,
   DashboardsModule,
   BeaconsModule,
+  ReportsModule,
 ];
 
 @Module({

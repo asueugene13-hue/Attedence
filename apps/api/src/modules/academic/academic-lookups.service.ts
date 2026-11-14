@@ -58,6 +58,15 @@ export class AcademicLookupsService {
     };
   }
 
+  /** The active semester (the latest-starting one if several are active), or null. */
+  async currentSemesterId(): Promise<string | null> {
+    const s = await this.prisma.semester.findFirst({
+      where: { status: 'ACTIVE' },
+      orderBy: { startDate: 'desc' },
+    });
+    return s?.id ?? null;
+  }
+
   async semester(id: string) {
     const s = await this.prisma.semester.findUnique({ where: { id } });
     return s

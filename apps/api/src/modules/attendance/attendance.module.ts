@@ -10,6 +10,7 @@ import { RiskFlagsModule } from '../risk-flags/risk-flags.module.js';
 import { SettingsModule } from '../settings/settings.module.js';
 import { StudentsModule } from '../students/students.module.js';
 import { VerificationModule } from '../verification/verification.module.js';
+import { AttendanceAnalyticsService } from './attendance-analytics.service.js';
 import { AttendanceEventsService } from './attendance-events.service.js';
 import { AttendanceGateway } from './attendance.gateway.js';
 import { AttendanceSummaryController } from './attendance-summary.controller.js';
@@ -55,7 +56,13 @@ import { RosterService } from './roster.service.js';
     CorrectionsService,
     AttendanceSummaryService,
     AttendanceRecordsService,
+    AttendanceAnalyticsService,
   ],
-  exports: [AttendanceSessionsService, AttendanceRecordsService, AttendanceSummaryService],
+  exports: [
+    AttendanceSessionsService,
+    AttendanceRecordsService,
+    AttendanceSummaryService,
+    AttendanceAnalyticsService,
+  ],
 })
 export class AttendanceModule {}

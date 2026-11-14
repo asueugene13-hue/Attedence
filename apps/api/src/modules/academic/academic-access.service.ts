@@ -18,6 +18,13 @@ const outOfScope = () =>
 export class AcademicAccessService {
   constructor(private readonly scopes: ScopeService) {}
 
+  /** The actor's reach: everything, or some faculties and departments (for filtering reports). */
+  async scopeOf(
+    actor: AccessClaims,
+  ): Promise<{ institutionWide: boolean; facultyIds: string[]; departmentIds: string[] }> {
+    return this.scope(actor);
+  }
+
   private async scope(actor: AccessClaims) {
     if (actor.role === 'SUPER_ADMIN') return { institutionWide: true, facultyIds: [], departmentIds: [] };
     return this.scopes.scopeFor(actor.userId, actor.role);
