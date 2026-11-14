@@ -131,3 +131,9 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 105. **A report file shows the records as they were when it was made.** It is not updated afterwards; make it again for newer figures.
 106. **Report files are deleted from AttendSure after 7 days** (`reports.exportRetentionDays`), and the export log keeps who made and downloaded each one. A copy someone has already saved on their own computer is outside AttendSure's control; files naming people say so in their footer (Act 843).
 107. **The `/metrics` page is for a monitoring server that is not set up yet.** It stays switched off until `METRICS_TOKEN` is set, and charts and alerts on it come with hosting (D-16). Until then, System health shows background jobs and alerts.
+
+## Production readiness (Phase 8)
+
+108. **The rehearsal's certificate is not trusted by browsers.** It comes from Caddy's own local authority, because a public certificate needs a real domain name (D-16). With a real name in `SITE_ADDRESS`, Caddy gets a trusted one automatically.
+109. **In the rehearsal, download links use plain http** (`http://localhost:8334`, the stand-in file store). A real host's storage service must serve its links over https; set `S3_PUBLIC_ENDPOINT` to it.
+110. **The API image is about 1 GB** (all production dependencies, including the AWS S3 client and Prisma). It works, but slimming it would speed up deployments; not done yet.

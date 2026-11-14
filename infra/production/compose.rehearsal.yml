@@ -1,0 +1,87 @@
+# Rehearsal on one computer: the production services (compose.yml) plus stand-ins for what the real host
+# provides (managed PostgreSQL, Redis, S3 storage and an email service). Throwaway secrets come from
+# `node infra/production/make-rehearsal-secrets.mjs`. Separate data from local development. Never use for real data.
+#
+#   docker compose -f infra/production/compose.yml -f infra/production/compose.rehearsal.yml up -d --build
+#
+# Then open https://localhost:8443 (the local certificate is not trusted by browsers; accept the warning).
+
+services:
+  postgres:
+    image: postgres:18.6
+    env_file: ./secrets/rehearsal.env
+    volumes:
+      - rehearsal-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8.8.4-alpine
+    env_file: ./secrets/rehearsal.env
+    command: ['sh', '-c', 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
+    volumes:
+      - rehearsal-redis:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  s3:
+    image: chrislusf/seaweedfs:4.52
+    command: ['server', '-dir=/data', '-s3', '-s3.port=8333', '-s3.config=/etc/seaweedfs/s3.json']
+    # Browsers fetch download links from here (S3_PUBLIC_ENDPOINT). A real host uses its storage service's address.
+    ports:
+      - '127.0.0.1:8334:8333'
+    volumes:
+      - rehearsal-s3:/data
+      - ./secrets/s3.json:/etc/seaweedfs/s3.json:ro
+
+  # The API refuses to start in production unless the bucket exists, so the rehearsal creates it once.
+  s3-bucket:
+    image: attendsure-api:${ATTENDSURE_VERSION:-local}
+    env_file: ./secrets/app.env
+    working_dir: /app/apps/api
+    command: ['node', 'create-bucket.mjs']
+    volumes:
+      - ./create-bucket.mjs:/app/apps/api/create-bucket.mjs:ro
+    depends_on:
+      s3:
+        condition: service_started
+    restart: 'no'
+
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    ports:
+      - '127.0.0.1:8026:8025'
+
+  release:
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-1:
+    depends_on:
+      redis:
+        condition: service_healthy
+      s3-bucket:
+        condition: service_completed_successfully
+
+  api-2:
+    depends_on:
+      redis:
+        condition: service_healthy
+      s3-bucket:
+        condition: service_completed_successfully
+
+  proxy:
+    ports: !override
+      - '127.0.0.1:8443:443'
+
+volumes:
+  rehearsal-postgres:
+  rehearsal-redis:
+  rehearsal-s3:

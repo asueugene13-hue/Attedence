@@ -2162,3 +2162,27 @@ The product owner asked for the rest of Phase 6 in one go, then commit, push, "d
   - Web unit tests: **17 passed**.
   - Full `npm run check`, first run: formatting, lint, types and build passed; tests **1 failed, 488 passed** of the API's 489. The failure: the 500-check-in load test (scenario 25) confirmed all 500 check-ins, but its live roster connection received none of the updates. Run alone it passed (500 of 500, 14.7 s); the whole API suite run again passed (**489 of 489**). Cause not confirmed; it appeared only with all test files running at once on this computer. The test now records any connection drop and its reason in its failure message, so a repeat says why. Other packages in that run: shared 10, design tokens 3, web 17, mobile 32, all passed.
 - **Database changes:** none.
+
+### 2026-11-14 — Step 8.2: containers, and a production rehearsal on this computer
+
+- **Built:**
+  - `apps/api/Dockerfile`: one image for the API and the worker (target `runtime`), and a release-job image (target `migrate`: migrations, then the system roles; safe to repeat). Node 24.19.0, production dependencies only, runs as the unprivileged `node` user, no secrets inside.
+  - `apps/web/Dockerfile`: the dashboard as a Next.js standalone server. `next.config.ts` switches to standalone output only when `NEXT_OUTPUT_STANDALONE=true` (set by the image), so development and the browser tests are unchanged.
+  - `.dockerignore`: no `node_modules`, build output, `.env` files, secrets, docs, mobile code or browser tests in the build.
+  - `infra/production/compose.yml`: proxy, api-1 and api-2, worker, web and the release job. `RUN_JOBS_IN_API=false`, `TRUST_PROXY_HOPS=1`, health checks; the API starts only after the release job succeeds.
+  - `infra/production/Caddyfile`: HTTPS. `/api/*` goes to both API instances in turn and avoids one that fails its readiness check. The live roster path stays on one instance per browser (a cookie, as Socket.IO needs). `/health/*` and `/metrics` are not served outside.
+  - `infra/production/compose.rehearsal.yml`, `make-rehearsal-secrets.mjs`, `create-bucket.mjs`: stand-in PostgreSQL, Redis, S3 and Mailpit, with throwaway random secrets in `infra/production/secrets/` (git-ignored, checked).
+  - CI: a new `images` job builds the three images from a clean checkout and checks the API refuses to start in production without real settings.
+- **Found on the way:** the browser tests used `ioredis` without the web app declaring it (it worked only because the API installs it). The dashboard image build caught it. `ioredis` 6.0.0 (the API's version) is now a web dev dependency.
+- **Rehearsal** (production settings; results in DEPLOYMENT.md §7):
+  - all services healthy in 22 s from empty; the release job applied all 29 migrations;
+  - in a real browser over HTTPS: the first Super Admin activated, two-step sign-in set up, the refresh cookie `Secure` and `HttpOnly`;
+  - an audit-log file was made **by the worker** and downloaded; System health showed all 8 schedules running, none overdue;
+  - requests were shared by both API instances; with one stopped, 20 of 20 requests were still answered;
+  - a second `create-super-admin` was refused; re-running the release job changed nothing.
+- **Mistakes on the way, fixed:** the bucket script first could not find the S3 library (mounted outside the app folder); my browser script first lacked a base address. One image build failed on a passing network outage (npm registry unreachable) and succeeded when retried.
+- **Commands run:** `docker build` (three images), `docker compose … up -d --no-build --wait`, `down -v`, the browser drive script, `curl` route checks, `npm run typecheck -w @attendsure/web`, eslint, prettier.
+- **Not run here:** the new CI `images` job runs on the next push.
+- **Known limitations:** 108–110 (untrusted local certificate, http download links in the rehearsal, a 1 GB API image).
+- **Database changes:** none.
+- **Next step:** 8.3 security testing.

@@ -90,3 +90,22 @@ jobs:
         run: npm run e2e -w @attendsure/web
       - name: Dependency audit (high and critical)
         run: npm audit --audit-level=high
+
+  # The production images build from a clean checkout (Phase 8 step 2). Built only; nothing is published.
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: API image
+        run: docker build -f apps/api/Dockerfile --target runtime -t attendsure-api:ci .
+      - name: Release job image
+        run: docker build -f apps/api/Dockerfile --target migrate -t attendsure-api-release:ci .
+      - name: Dashboard image
+        run: docker build -f apps/web/Dockerfile -t attendsure-web:ci .
+      - name: The API image starts and refuses example secrets in production
+        run: |
+          set +e
+          out=$(docker run --rm -e NODE_ENV=production attendsure-api:ci 2>&1)
+          code=$?
+          echo "$out" | tail -5
+          test $code -ne 0 && echo "$out" | grep -q "Invalid configuration"

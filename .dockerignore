@@ -1,0 +1,19 @@
+# Keep the image build small and free of secrets: only source code goes in.
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+.git
+.github
+.env
+.env.*
+!.env.example
+infra/production/secrets
+apps/mobile/**
+!apps/mobile/package.json
+docs
+*.log
+apps/web/e2e

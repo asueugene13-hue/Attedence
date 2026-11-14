@@ -1,0 +1,42 @@
+# AttendSure HTTPS proxy (Caddy).
+#
+# SITE_ADDRESS is the public name (for example attendsure.knutsford.edu.gh, once D-16 is decided).
+# With a real name, Caddy obtains and renews a public certificate by itself. With "localhost" (the
+# rehearsal) it uses its own local certificate authority, which browsers do not trust by default.
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# Live roster connections. Socket.IO's first requests must reach the same API instance,
+	# so a cookie keeps each browser on one instance for this path.
+	handle /api/v1/live* {
+		reverse_proxy api-1:3000 api-2:3000 {
+			lb_policy cookie attendsure_live
+			health_uri /health/ready
+			health_interval 10s
+		}
+	}
+
+	# Every other API request: shared between the two instances. If one stops answering its
+	# readiness check, requests go to the other.
+	handle /api/* {
+		reverse_proxy api-1:3000 api-2:3000 {
+			lb_policy round_robin
+			lb_try_duration 5s
+			health_uri /health/ready
+			health_interval 10s
+		}
+	}
+
+	# The health probes and /metrics stay inside the network: the proxy does not forward them.
+	handle /health/* {
+		respond 404
+	}
+	handle /metrics {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy web:3001
+	}
+}

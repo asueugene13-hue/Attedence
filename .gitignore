@@ -50,3 +50,6 @@ apps/web/next-env.d.ts
 # Expo
 apps/mobile/dist-check/
 apps/mobile/.expo/
+
+# Production rehearsal secrets (infra/production/make-rehearsal-secrets.mjs)
+infra/production/secrets/
