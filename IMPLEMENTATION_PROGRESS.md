@@ -2241,3 +2241,20 @@ Results in SECURITY.md §9. In short:
 - **Not done here:** files in object storage are not in the dump; the host's storage versioning and daily copy cover them (limitation 116). Other retention periods wait for D-18.
 - **Database changes:** none.
 - **Next step:** 8.6 readiness documents.
+
+### 2026-11-14 — Step 8.6: readiness documents
+
+- **Written** (in `docs/`, each for the people named at its top):
+  - `RUNBOOK.md` (IT, on call): what runs where and what happens when each part stops; first deployment; releasing and rolling back; everyday checks; what to do when something goes wrong; backups; contacts to fill in.
+  - `PHONE_TEST_CHECKLIST.md` (product owner): sign-in and the phone, checking in (camera, Bluetooth, location, offline), records and requests, lecturer and staff tasks, look and feel; and the open Phase 4 field test.
+  - `UAT_PLAN.md` and `UAT_SIGNOFF.md` (Knutsford staff): who takes part, where (staging, test or approved data only), severities, tasks per role mapped to the 25 scenarios, when UAT is complete; a sheet for results, accepted issues and signatures.
+  - `GO_LIVE_CHECKLIST.md` (product owner, sponsor, IT): the open decisions, what must be tested and signed, production set-up, real data loading with no test data, people, and the first week with a fallback.
+- **Checked against the code before writing**, and corrected where my first draft was wrong:
+  - with location off, a check-in still counts on the beacon (a missing location is never held against a student);
+  - the version is not shown on System health;
+  - the request ID is in error replies and logs, not on screen;
+  - the effect of a "deferred" status on check-in is left for UAT to confirm against university policy.
+  - Also confirmed: suspending an account ends all its sessions; changing a setting needs a reason; assisted check-in needs a reason; there is no key-rotation feature (the runbook says to ask before changing `ENCRYPTION_KEY`).
+- **No invented Knutsford data:** names, contacts, dates and the university's choices are blanks or open decisions.
+- **Database changes:** none.
+- **Next step:** 8.7 Phase 8 exit check.
