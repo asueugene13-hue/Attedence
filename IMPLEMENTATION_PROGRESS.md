@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 6 (user experiences): plan approved by the product owner 2026-11-14 with the recommended decisions; step 1 (designs) approved 2026-11-14; **steps 1–8 all done 2026-11-14, including the exit check; waiting for the product owner to approve Phase 6 as complete** (the phone screens still to be seen on a phone, with the new app build). Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phases 7 (reports and administration) and 8 (production readiness), started together 2026-11-14 with the product owner's approval ("build phase 7 and 8 together … take your time"); see "Phases 7 and 8" at the end. Phase 6 (user experiences) is complete, approved 2026-11-14 (the phone screens still to be seen on a phone). Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-14
 
 ### Phase 1 steps
@@ -29,9 +29,9 @@ Read this first in every session, and update it after every implementation step.
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Done; approved by the product owner 2026-11-09 (CI run 42695433225) |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Done; approved by the product owner 2026-11-13 (CI run 43449937698; camera build still to be tried on a phone) |
-| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Exit check done 2026-11-14; awaiting approval |
-| 7 Reports and administration | Admin dashboards, analytics, CSV/Excel/PDF exports, system monitoring, audit views | Every report respects role scope; exports are logged | Not started |
-| 8 Production readiness | Security testing, load testing, device testing, backup and restore drill, deployment, user acceptance testing | Knutsford staff sign off on UAT; a restore drill succeeds | Not started |
+| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Done; approved by the product owner 2026-11-14 (CI run 43592315755; phone screens still to be seen on a phone) |
+| 7 Reports and administration | Admin dashboards, analytics, CSV/Excel/PDF exports, system monitoring, audit views | Every report respects role scope; exports are logged | Started 2026-11-14 (with Phase 8) |
+| 8 Production readiness | Security testing, load testing, device testing, backup and restore drill, deployment, user acceptance testing | Knutsford staff sign off on UAT; a restore drill succeeds | Started 2026-11-14 (with Phase 7) |
 
 ## Recommended changes to the phase order
 
@@ -99,6 +99,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-13 | Phase 5 approval | Phase 5 approved as complete after the exit check ("proceed"); the camera build is to be tried on a phone when one is at hand | Product owner |
 | 2026-11-14 | Phase 6 plan | Plan approved with the recommended decisions: D-21 disputes (14 days; the class's lecturer decides, administrators after 72 h); D-22 excuse requests decided by administrators in scope only (lecturers see only "excused"; 14 days after the last covered class); rep updates at most 3 per section per day; digital ID online only, any signed-in staff member may check one, every check logged; placeholder colours kept until D-15 | Product owner |
 | 2026-11-14 | Phase 6 designs | The 11 Phase 6 boards on the design canvas approved ("designs approved, proceed") | Product owner |
+| 2026-11-14 | Phase 6 approval; Phases 7 and 8 | Phase 6 approved as complete. Phases 7 and 8 to be built together, carefully ("take your time, understand how the system works") | Product owner |
 | 2026-11-14 | D-15 (part) | The product owner supplied the Knutsford University crest and wordmark and asked for them to be the app's official logo, as SVG, crest and words separate. Brand colours still to come. | Product owner |
 
 ## Session log
@@ -1986,3 +1987,54 @@ The product owner asked for the rest of Phase 6 in one go, then commit, push, "d
 **Known limitations:** KNOWN_LIMITATIONS 96–100.
 
 **Next step:** the product owner reviews Phase 6 and approves it as complete; then the Phase 7 plan, for approval before any Phase 7 work starts.
+
+
+### 2026-11-14 — Phase 6 approved
+
+- The product owner approved Phase 6 as complete and asked for Phases 7 and 8 to be built together, without haste.
+
+## Phases 7 and 8: reports and administration; production readiness (started 2026-11-14)
+
+**What the survey found first** (before planning):
+
+- **The worker does not run most scheduled jobs.** DEPLOYMENT.md says production runs jobs only in the worker (`RUN_JOBS_IN_API` unset), but `worker.module.ts` loads only the imports and class-sessions modules. The attendance auto-close (which marks absences), undecided reminders, dispute hand-over, excuse application and beacon-health summaries are declared in modules the worker never loads. Development hides this (`RUN_JOBS_IN_API=true`). **Highest priority; fixed first, with a test.**
+- No container images or production configuration yet; CI has no secret scan (SECURITY.md says it does).
+- Phase 7 starts from: the report permissions, the audit search (university-wide administrators only), the system-events page, csv-stringify and write-excel-file. No analytics, exports, admin dashboard, job monitoring or PDF library.
+
+**What cannot be done here, and stays open:** real deployment (hosting is D-16), testing on real phones (no phone or emulator here), and Knutsford staff's acceptance testing. Everything up to those points is built and documented, so they can be done as soon as the decisions and people are available.
+
+**Exit criteria (unchanged):** Phase 7: every report respects role scope; exports are logged. Phase 8: Knutsford staff sign off on UAT; a restore drill succeeds.
+
+### Steps
+
+| # | Step |
+| --- | --- |
+| 8.1 | **Worker runs every job.** The worker loads every module that declares jobs; a test compares the worker's jobs with the API's, so a new module cannot be missed again. |
+| 7.1 | **Analytics.** Attendance by faculty, department, programme, level, course and lecturer for a semester; class operations (held, cancelled, delayed, unconfirmed, reviewed). Worked out from the records, within the caller's scope. |
+| 7.2 | **Exports.** CSV, Excel and PDF for: a section's attendance summary, a section's register (student × class), analytics, class operations, and the Registrar's student and enrolment list. Made by a background job, logged (who, what, when, rows), personal data only with `reports.export_personal`, formulas neutralised, files kept 7 days, every download logged. |
+| 7.3 | **Administrator dashboard.** Today's classes by status, this week's attendance, everything waiting (class reviews, disputes, excuses, risk flags, phone approvals, late corrections), beacons suspected faulty, unacknowledged system events; all within scope. |
+| 7.4 | **System monitoring and audit views.** Background jobs (waiting, running, failed, last run of each schedule) on the System health page; metrics in Prometheus format behind a token; audit search with readable action names and a logged CSV export. |
+| 7.5 | **Screens and Phase 7 exit check.** Reports page, analytics, admin dashboard, jobs; tests per role that every report and export stays in scope and every export is logged; browser journey. |
+| 8.2 | **Containers.** Dockerfiles for the API (also the worker) and the dashboard; a production compose file (two API instances, worker, dashboard, a TLS reverse proxy with WebSockets); run locally end to end with production settings. |
+| 8.3 | **Security testing.** Every API route checked for sign-in and permission rules; OWASP ZAP baseline scan; a secret scan in CI; dependency audit. Findings fixed or recorded. |
+| 8.4 | **Load testing.** k6 against the containerised stack (two API instances): a burst of check-ins with live rosters, plus dashboards and reports at the same time. |
+| 8.5 | **Backup and restore drill.** Backup and restore scripts (encrypted); a drill: back up, restore into an empty database, start the system on it, check it, and time it; recorded in DEPLOYMENT.md. Export-file clean-up job (7 days). Other retention periods wait for D-18. |
+| 8.6 | **Readiness documents.** Deployment runbook for the chosen host, phone test checklist, UAT plan and sign-off sheet for Knutsford staff, go-live checklist. |
+| 8.7 | **Phase 8 exit check.** What can be verified here, verified; what needs the university, listed with who and what. |
+
+### Decisions taken with this plan (recommended defaults; the product owner can change any)
+
+- **Reports are worked out from the records when asked** (no separate reporting database), one semester at a time.
+- **Export files are kept 7 days** (DATABASE_SCHEMA §7 proposal, for export files only; a setting). The export log itself is kept.
+- **Lecturer analytics name lecturers,** so they count as personal data for exports.
+- **The metrics endpoint is off unless a `METRICS_TOKEN` is set**, and then needs it.
+- **Audit search stays university-wide only** for now (filtering every kind of entry by faculty is a larger piece of work); recorded as a limitation.
+- **No retention purge of academic data** until D-18 is decided; only export files are cleaned up.
+
+### 2026-11-14 — Step 8.1: the worker runs every job
+
+- **The problem:** in production only the worker runs background jobs, and each module declares its jobs when it loads. The worker loaded two modules, so with the documented production settings attendance would never have closed on its own (no absences marked), and undecided reminders, dispute hand-overs, excuse application and beacon-health summaries would never have run. Development and CI hid it, because there the API runs the jobs itself.
+- **The fix:** `app.module.ts` now has one list, `FEATURE_MODULES`, used by both the API and `worker.module.ts`. The job registry can list its jobs (`definedKeys`).
+- **Test:** `test/worker-jobs.test.ts` starts both (without running jobs) and checks they know the same jobs and schedules, naming the ones that keep attendance and requests moving. With the old worker put back it failed, naming `monitoring/attendance-sweep`; restored, it passes (2 tests).
+- **Checked by hand:** the built worker (`node dist/worker.js`) started with every module, ran the email, monitoring and system queues for 25 seconds and logged no errors.
+- **Database changes:** none.

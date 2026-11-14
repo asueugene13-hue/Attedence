@@ -46,6 +46,11 @@ export class JobRegistry {
     return this.schedules;
   }
 
+  /** Every declared job as `queue/name` (to check that the API and the worker know the same jobs). */
+  definedKeys(): string[] {
+    return [...this.definitions.keys()].sort();
+  }
+
   get(queue: string, name: string): JobDefinition | undefined {
     return this.definitions.get(`${queue}/${name}`);
   }

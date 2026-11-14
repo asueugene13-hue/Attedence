@@ -52,35 +52,44 @@ export const INFRASTRUCTURE_MODULES = [
   JobsModule,
 ];
 
+/**
+ * The feature modules, shared by the API and the worker. A module declares its background jobs when it
+ * loads, so the worker must load every one of them, or its jobs never run in production (where only
+ * the worker runs jobs). test/worker-jobs.test.ts checks that both processes know the same jobs.
+ */
+export const FEATURE_MODULES = [
+  AuthorizationModule,
+  AuthModule,
+  UsersModule,
+  RolesModule,
+  AuditLogsModule,
+  AcademicModule,
+  PlacesModule,
+  CoursesModule,
+  StudentsModule,
+  EnrollmentsModule,
+  ImportsModule,
+  SettingsModule,
+  TimetablesModule,
+  ClassSessionsModule,
+  DevicesModule,
+  RiskFlagsModule,
+  VerificationModule,
+  AttendanceModule,
+  RequestsModule,
+  AnnouncementsModule,
+  StudentIdsModule,
+  DashboardsModule,
+  BeaconsModule,
+];
+
 @Module({
   imports: [
     ...INFRASTRUCTURE_MODULES,
-    // File storage is used by the API only; the worker gains it when a job needs files.
+    // File storage (the worker loads it too, for jobs that make or read files).
     StorageModule,
-    AuthorizationModule,
     HealthModule,
-    AuthModule,
-    UsersModule,
-    RolesModule,
-    AuditLogsModule,
-    AcademicModule,
-    PlacesModule,
-    CoursesModule,
-    StudentsModule,
-    EnrollmentsModule,
-    ImportsModule,
-    SettingsModule,
-    TimetablesModule,
-    ClassSessionsModule,
-    DevicesModule,
-    RiskFlagsModule,
-    VerificationModule,
-    AttendanceModule,
-    RequestsModule,
-    AnnouncementsModule,
-    StudentIdsModule,
-    DashboardsModule,
-    BeaconsModule,
+    ...FEATURE_MODULES,
     // Runs background jobs in this process only when RUN_JOBS_IN_API=true; the worker always runs them.
     JobRunnerModule.forRoot('fromConfig'),
   ],
