@@ -1,5 +1,6 @@
 import { type DynamicModule, Global, Module } from '@nestjs/common';
 import { AppConfig } from '../../config/app-config.js';
+import { JobMonitorService } from './job-monitor.service.js';
 import { JobRegistry } from './job-registry.js';
 import { JobRunner, RUN_JOBS } from './job-runner.service.js';
 import { JobsService } from './jobs.service.js';
@@ -9,8 +10,8 @@ import { SystemEventsService } from './system-events.service.js';
 /** What every module may use: declaring jobs, queueing them, the outbox and system events. */
 @Global()
 @Module({
-  providers: [JobRegistry, JobsService, OutboxService, SystemEventsService],
-  exports: [JobRegistry, JobsService, OutboxService, SystemEventsService],
+  providers: [JobRegistry, JobsService, OutboxService, SystemEventsService, JobMonitorService],
+  exports: [JobRegistry, JobsService, OutboxService, SystemEventsService, JobMonitorService],
 })
 export class JobsModule {}
 

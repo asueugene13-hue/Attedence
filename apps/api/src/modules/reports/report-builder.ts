@@ -3,6 +3,7 @@ import { type ExportRequest, REPORT_LABELS, type ReportType } from '@attendsure/
 import { AppConfig } from '../../config/app-config.js';
 import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
 import { AttendanceAnalyticsService } from '../attendance/attendance-analytics.service.js';
+import { AuditLogsService } from '../audit-logs/audit-logs.service.js';
 import { AttendanceSummaryService } from '../attendance/attendance-summary.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { PermissionService } from '../authorization/permission.service.js';
@@ -26,6 +27,7 @@ const NEEDS: Record<ReportType, string> = {
   ATTENDANCE_ANALYTICS: 'analytics.read',
   CLASS_OPERATIONS: 'analytics.read',
   STUDENT_ENROLMENTS: 'reports.registrar',
+  AUDIT_LOG: 'audit_logs.read',
 };
 
 /** Whether a report names people (students or lecturers): such files are personal data (Act 843). */
@@ -56,6 +58,7 @@ export class ReportBuilder {
     private readonly attendance: AttendanceAnalyticsService,
     private readonly classes: ClassAnalyticsService,
     private readonly enrollments: EnrollmentsService,
+    private readonly auditLogs: AuditLogsService,
   ) {}
 
   /** Checks the permissions a report needs (scope is checked by its source when it is built). */
@@ -95,6 +98,9 @@ export class ReportBuilder {
       case 'STUDENT_ENROLMENTS':
         await this.semester(request.params.semesterId);
         return;
+      case 'AUDIT_LOG':
+        await this.auditLogs.assertCanRead(actor);
+        return;
     }
   }
 
@@ -111,6 +117,8 @@ export class ReportBuilder {
         return this.classOperations(actor, request.params.semesterId, request.params.groupBy);
       case 'STUDENT_ENROLMENTS':
         return this.studentEnrolments(request.params.semesterId);
+      case 'AUDIT_LOG':
+        return this.auditLog(actor, request.params);
     }
   }
 
@@ -238,6 +246,51 @@ export class ReportBuilder {
         r.unconfirmed,
         r.reviewed,
         r.averageLateStartMinutes ?? '—',
+      ]),
+    };
+  }
+
+  private async auditLog(
+    actor: AccessClaims,
+    filters: Parameters<AuditLogsService['forExport']>[1],
+  ): Promise<Report> {
+    const { rows, truncated } = await this.auditLogs.forExport(actor, filters);
+    const when = new Intl.DateTimeFormat('en-GB', {
+      timeZone: this.config.institutionTimezone,
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+    });
+    const described = Object.entries(filters)
+      .filter(([, v]) => v !== undefined && v !== '')
+      .map(([k, v]) => `${k} ${String(v)}`)
+      .join(', ');
+    return {
+      title: REPORT_LABELS.AUDIT_LOG,
+      subtitle: `${described ? `Filtered by ${described}. ` : 'Everything. '}Newest first.${truncated ? ' Only the newest 20,000 entries: narrow the dates for more.' : ''}`,
+      wide: true,
+      columns: [
+        { label: 'When', width: 18 },
+        { label: 'Who', width: 22 },
+        { label: 'Role', width: 14 },
+        { label: 'Action', width: 26 },
+        { label: 'Record', width: 18 },
+        { label: 'Record ID', width: 26 },
+        { label: 'Reason', width: 30 },
+        { label: 'IP address', width: 14 },
+      ],
+      rows: rows.map((a) => [
+        when.format(a.occurredAt),
+        a.actor
+          ? `${a.actor.fullName} <${a.actor.email}>`
+          : a.actorType === 'SYSTEM'
+            ? 'The system'
+            : a.actorType,
+        a.actorRoleKey ?? '',
+        a.action,
+        a.entityType,
+        a.entityId ?? '',
+        a.reason ?? '',
+        a.ip ?? '',
       ]),
     };
   }

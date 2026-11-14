@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { IdSchema } from './admin.js';
+import { AuditLogQuerySchema, IdSchema } from './admin.js';
 
 /**
  * Reports and analytics (Phase 7). Everything is worked out from the records when asked, one semester
@@ -42,6 +42,7 @@ export const REPORT_TYPES = [
   'ATTENDANCE_ANALYTICS',
   'CLASS_OPERATIONS',
   'STUDENT_ENROLMENTS',
+  'AUDIT_LOG',
 ] as const;
 export type ReportType = (typeof REPORT_TYPES)[number];
 export const EXPORT_FORMATS = ['CSV', 'XLSX', 'PDF'] as const;
@@ -53,6 +54,7 @@ export const REPORT_LABELS: Record<ReportType, string> = {
   ATTENDANCE_ANALYTICS: 'Attendance analytics',
   CLASS_OPERATIONS: 'Class operations',
   STUDENT_ENROLMENTS: 'Students and enrolments',
+  AUDIT_LOG: 'Audit log',
 };
 
 export const RequestExportSchema = z.discriminatedUnion('reportType', [
@@ -80,6 +82,12 @@ export const RequestExportSchema = z.discriminatedUnion('reportType', [
     reportType: z.literal('STUDENT_ENROLMENTS'),
     format: z.enum(EXPORT_FORMATS),
     params: z.strictObject({ semesterId: IdSchema.optional() }),
+  }),
+  z.strictObject({
+    reportType: z.literal('AUDIT_LOG'),
+    format: z.enum(EXPORT_FORMATS),
+    /** The same filters as the audit search (no paging). */
+    params: AuditLogQuerySchema.omit({ limit: true, cursor: true }),
   }),
 ]);
 export type ExportRequest = z.output<typeof RequestExportSchema>;

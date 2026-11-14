@@ -8,7 +8,8 @@ import { RedisIoAdapter } from './infrastructure/realtime/redis-io.adapter.js';
 /** HTTP settings applied in main.ts and in tests, so tests exercise the same app users get. */
 export function configureApp(app: INestApplication): void {
   const config = app.get(AppConfig);
-  app.setGlobalPrefix('api/v1', { exclude: ['health/live', 'health/ready'] });
+  // Probes and the metrics scrape sit at the root, where load balancers and Prometheus look for them.
+  app.setGlobalPrefix('api/v1', { exclude: ['health/live', 'health/ready', 'metrics'] });
 
   const http = app.getHttpAdapter().getInstance() as Express;
   http.disable('x-powered-by');

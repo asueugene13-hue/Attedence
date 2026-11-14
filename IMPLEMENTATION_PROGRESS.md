@@ -2113,3 +2113,26 @@ The product owner asked for the rest of Phase 6 in one go, then commit, push, "d
 
   Mutation (today's classes without scope) caught.
 - **Database changes:** none.
+
+### 2026-11-14 — Step 7.4: system monitoring, metrics and the audit-log export
+
+- **Background jobs:** `GET /system/jobs` (`system_health.read`; `JobMonitorService`, job infrastructure). It shows:
+  - the last day's job runs by status, and the 20 latest failures of the past week, with their error;
+  - each schedule's last success, marked **overdue** if it has not succeeded for three of its periods (a sign the worker is not running);
+  - jobs waiting, running, delayed and failed per queue; outbox rows not yet handed to a queue.
+- **Metrics:** `GET /metrics` in Prometheus text format, at the root next to the health probes.
+  - Off (404) unless `METRICS_TOKEN` (new setting, at least 32 characters) is set; then the scraper sends it as a Bearer token, compared in constant time.
+  - It reports Node.js process figures plus job runs by status, queue sizes, overdue schedules, the outbox and unacknowledged system events. Nothing personal. New dependency `prom-client` 15.1.3.
+  - The values are read once per scrape before the gauges report, because prom-client asks them all at once.
+- **Audit log:**
+  - A new report type, `AUDIT_LOG`: the same filters as the search, at most the newest 20,000 entries per file (it says so when cut). CSV, Excel or PDF; personal data; requesting it is logged like every export.
+  - The rule "university-wide readers only" now lives in one place, `AuditLogsService`, used by both the search and the export. The search keeps its paging.
+  - Readable action names come with the screens (7.5).
+- **Database changes:** migration `20261114230000_audit_log_export` (`ReportType.AUDIT_LOG`). Applied; drift check: no difference.
+- **Tests:** `test/system-monitoring.test.ts`, 4 passed:
+  - the overdue logic (a schedule that ran just now versus one that never ran); failures; queues; the Super Admin only;
+  - metrics with no, wrong and right token, and off when no token is set;
+  - the audit export (contents, formula neutralised, logged), refused for a faculty-limited administrator and for lecturers.
+
+  The audit search and export tests still pass (30).
+- **Fixed on the way:** `/metrics` was first registered under `/api/v1` (the test found it with a 404); it is now excluded from the prefix like the health probes.

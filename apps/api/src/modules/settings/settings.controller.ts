@@ -17,6 +17,7 @@ import { parseInput } from '../../common/validation/parse-input.js';
 import { CurrentAuth } from '../auth/access-token.guard.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { RequirePermissions } from '../authorization/access.decorators.js';
+import { JobMonitorService } from '../../infrastructure/jobs/job-monitor.service.js';
 import { SettingsService } from './settings.service.js';
 import { SystemHealthService } from './system-health.service.js';
 
@@ -37,6 +38,7 @@ export class SettingsController {
   constructor(
     private readonly settings: SettingsService,
     private readonly health: SystemHealthService,
+    private readonly jobs: JobMonitorService,
   ) {}
 
   @Get('settings')
@@ -58,6 +60,13 @@ export class SettingsController {
     const version = expectedVersion(req);
     const input = parseInput(UpdateSettingSchema, body);
     return this.settings.update(auth, settingKey, version, input.value, input.reason, requestContextOf(req));
+  }
+
+  /** Background jobs: the last day by status, recent failures, each schedule's last success, queues, outbox. */
+  @Get('system/jobs')
+  @RequirePermissions('system_health.read')
+  jobOverview() {
+    return this.jobs.overview();
   }
 
   @Get('system-events')

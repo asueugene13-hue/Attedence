@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AcademicModule } from '../academic/academic.module.js';
 import { AttendanceModule } from '../attendance/attendance.module.js';
+import { AuditLogsModule } from '../audit-logs/audit-logs.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { ClassSessionsModule } from '../class-sessions/class-sessions.module.js';
 import { EnrollmentsModule } from '../enrollments/enrollments.module.js';
@@ -20,6 +21,7 @@ import { ReportBuilder } from './report-builder.js';
   imports: [
     AcademicModule,
     AttendanceModule,
+    AuditLogsModule,
     AuthModule,
     ClassSessionsModule,
     EnrollmentsModule,
