@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { LecturerDashboard } from '@/components/lecturer-dashboard';
 import { Alert, PageHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { roleLabel } from '@/lib/format';
@@ -21,11 +22,13 @@ export default function HomePage() {
       {MOBILE_FIRST_ROLES.includes(me.activeRole) ? (
         <Alert tone="info">
           Students and course representatives use the AttendSure mobile app to check in and follow their
-          timetable. The app is still being built.
+          timetable, see their attendance, send disputes and excuse requests, and show their student ID.
         </Alert>
       ) : null}
 
-      {tools.length > 0 ? (
+      {me.activeRole === 'LECTURER' ? <LecturerDashboard /> : null}
+
+      {me.activeRole !== 'LECTURER' && tools.length > 0 ? (
         <section className="card" aria-labelledby="tools-heading">
           <div className="card-header">
             <h2 id="tools-heading">Your tools</h2>
@@ -41,8 +44,7 @@ export default function HomePage() {
       ) : null}
 
       <p className="muted">
-        AttendSure is being built in phases. Timetables, class monitoring, attendance and reports will appear
-        here for your role as each phase is completed.
+        AttendSure is being built in phases. Reports and administration dashboards come next.
       </p>
     </div>
   );

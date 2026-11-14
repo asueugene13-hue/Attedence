@@ -7,6 +7,15 @@ export type RootStackParamList = {
   CheckClassroom: undefined;
   Survey: undefined;
   AttendanceCode: { attendanceSessionId: string };
+  StudentId: undefined;
+  CheckId: undefined;
+  CourseAttendance: { offeringId: string };
+  DisputeForm: { classSessionId: string; title: string; status: string };
+  ExcuseForm: undefined;
+  MyRequests: undefined;
+  RequestDetail: { kind: 'dispute' | 'excuse'; id: string; notice?: string };
+  Announcements: undefined;
+  AnnouncementCompose: undefined;
   TwoStep: undefined;
   Login: undefined;
 };

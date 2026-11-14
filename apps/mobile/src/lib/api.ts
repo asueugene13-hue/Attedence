@@ -19,6 +19,8 @@ export class ApiError extends Error {
 
 export interface ApiRequest {
   method?: 'GET' | 'POST' | 'PUT';
+  /** A multipart form (a file upload), sent instead of a JSON body. */
+  form?: FormData;
   body?: unknown;
   accessToken?: string | null;
   /** Extra headers, such as a phone's signature. */
@@ -30,8 +32,10 @@ export interface ApiRequest {
 /** Calls the API. Throws ApiError for any non-2xx answer, using the API's problem-details body. */
 export async function apiFetch<T>(path: string, request: ApiRequest = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json', ...request.headers };
-  const body = request.rawBody ?? (request.body === undefined ? undefined : JSON.stringify(request.body));
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const json = request.rawBody ?? (request.body === undefined ? undefined : JSON.stringify(request.body));
+  // A form sets its own multipart Content-Type (with the boundary).
+  if (json !== undefined && !request.form) headers['Content-Type'] = 'application/json';
+  const body: BodyInit | undefined = request.form ?? json;
   if (request.accessToken) headers.Authorization = `Bearer ${request.accessToken}`;
 
   let response: Response;

@@ -136,6 +136,27 @@ export class AttendanceRecordsService {
     );
   }
 
+  /**
+   * What waits for a lecturer about attendance: check-ins not yet decided in their classes, their own
+   * late corrections (waiting, and answered since `since`), and records excused in their classes since
+   * `since` (counts only; never why).
+   */
+  async lecturerCounts(lecturerId: string, userId: string, since: Date) {
+    const [checkInsWaiting, excused, correctionsWaiting, correctionsAnswered] = await Promise.all([
+      this.prisma.attendanceRecord.count({
+        where: { status: { in: ['PENDING', 'UNDER_REVIEW'] }, classSession: { lecturerId } },
+      }),
+      this.prisma.attendanceCorrection.count({
+        where: { toStatus: 'EXCUSED', correctedAt: { gte: since }, record: { classSession: { lecturerId } } },
+      }),
+      this.prisma.attendanceCorrectionRequest.count({ where: { requestedById: userId, status: 'PENDING' } }),
+      this.prisma.attendanceCorrectionRequest.count({
+        where: { requestedById: userId, status: { not: 'PENDING' }, decidedAt: { gte: since } },
+      }),
+    ]);
+    return { checkInsWaiting, excused, correctionsWaiting, correctionsAnswered };
+  }
+
   /** The University Administrators responsible for a class's departments. */
   async adminsFor(classSessionId: string): Promise<string[]> {
     const cls = (await this.classSessions.facts([classSessionId])).get(classSessionId);

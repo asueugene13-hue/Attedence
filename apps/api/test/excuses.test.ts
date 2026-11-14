@@ -126,6 +126,26 @@ describe('an excuse request', () => {
     at('2030-08-20T15:00:00Z');
     const sent = (await submit(s).expect(201)).body;
     expect(sent).toMatchObject({ status: 'SUBMITTED', category: 'MEDICAL', classCount: 2 });
+    // The phone shows the same classes before sending (here after: Tuesday's is now absent).
+    const preview = (
+      await http
+        .get('/api/v1/excuse-requests/covered?startDate=2030-08-20&endDate=2030-08-22')
+        .set(s.auth)
+        .expect(200)
+    ).body.data;
+    expect(
+      preview.map((x: { classSessionId: string; recordStatus: string | null }) => [
+        x.classSessionId,
+        x.recordStatus,
+      ]),
+    ).toEqual([
+      [tuesday, 'ABSENT'],
+      [wednesday, null],
+    ]);
+    await http
+      .get('/api/v1/excuse-requests/covered?startDate=2030-08-20&endDate=2030-08-22')
+      .set(c.lecturer.auth)
+      .expect(403);
     // The cancelled Thursday class is not covered; it never counts anyway.
     expect(sent.classes.map((x: { classSessionId: string }) => x.classSessionId)).toEqual([
       tuesday,

@@ -180,6 +180,36 @@ export class StudentsService implements OnModuleInit {
     );
   }
 
+  /**
+   * Accounts of active students (by programme) in a department, a faculty, or everywhere. Accounts not
+   * activated yet are included (they see it once they sign in); disabled or locked ones are not.
+   */
+  async activeUserIdsIn(where: { departmentId?: string; facultyId?: string }): Promise<string[]> {
+    const rows = await this.prisma.studentProfile.findMany({
+      where: {
+        status: 'ACTIVE',
+        user: { status: { in: ['ACTIVE', 'PENDING_ACTIVATION'] } },
+        ...(where.departmentId ? { programme: { departmentId: where.departmentId } } : {}),
+        ...(where.facultyId ? { programme: { department: { facultyId: where.facultyId } } } : {}),
+      },
+      select: { userId: true },
+    });
+    return rows.map((r) => r.userId);
+  }
+
+  /** Accounts of these students, if they are active students (as for `activeUserIdsIn`). */
+  async activeUserIds(studentIds: string[]): Promise<string[]> {
+    const rows = await this.prisma.studentProfile.findMany({
+      where: {
+        id: { in: [...new Set(studentIds)] },
+        status: 'ACTIVE',
+        user: { status: { in: ['ACTIVE', 'PENDING_ACTIVATION'] } },
+      },
+      select: { userId: true },
+    });
+    return rows.map((r) => r.userId);
+  }
+
   async byStudentNumbers(numbers: string[]) {
     const rows = await this.prisma.studentProfile.findMany({
       where: { studentNumber: { in: [...new Set(numbers)] } },

@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 6 (user experiences): plan approved by the product owner 2026-11-14 with the recommended decisions; step 1 (designs) approved 2026-11-14; steps 2–3 (disputes and excuse requests, API) done; next: step 4 (announcements). Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 6 (user experiences): plan approved by the product owner 2026-11-14 with the recommended decisions; step 1 (designs) approved 2026-11-14; **steps 1–8 all done 2026-11-14, including the exit check; waiting for the product owner to approve Phase 6 as complete** (the phone screens still to be seen on a phone, with the new app build). Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-14
 
 ### Phase 1 steps
@@ -29,7 +29,7 @@ Read this first in every session, and update it after every implementation step.
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Done; approved by the product owner 2026-11-09 (CI run 42695433225) |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Done; approved by the product owner 2026-11-13 (CI run 43449937698; camera build still to be tried on a phone) |
-| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Plan approved 2026-11-14; steps 1–3 done |
+| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Exit check done 2026-11-14; awaiting approval |
 | 7 Reports and administration | Admin dashboards, analytics, CSV/Excel/PDF exports, system monitoring, audit views | Every report respects role scope; exports are logged | Not started |
 | 8 Production readiness | Security testing, load testing, device testing, backup and restore drill, deployment, user acceptance testing | Knutsford staff sign off on UAT; a restore drill succeeds | Not started |
 
@@ -1931,3 +1931,50 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Known limitations:** KNOWN_LIMITATIONS 94 (a later class is excused up to 15 minutes after attendance closes), 95 (no 72-hour hand-over for excuse requests).
 - **CI:** GitHub run 43586582998 on `900bfc0`: **success**.
 - **Next step:** step 4, announcements.
+
+### 2026-11-14 — Phase 6, steps 4–8 (built together, at the product owner's request)
+
+The product owner asked for the rest of Phase 6 in one go, then commit, push, "deploy and build". There is no server to deploy to yet (hosting is decision D-16, Phase 8), so "deploy" means pushing to GitHub with CI green; "build" is a new cloud app build.
+
+**Step 4: announcements (API).** New `announcements` module (owns the tables).
+- Lecturers send to the sections they teach. Administrators send to sections, a department or a faculty in scope; with `announcements.send_institution` and university-wide scope, to everyone. Course reps (students with an active rep assignment) post to their own section, labelled "Course rep", at most `announcements.repDailyLimit` (new setting, default 3) per section per Accra day.
+- Recipients are fixed when it is sent: active students in the audience, including accounts not activated yet; deferred, suspended or disabled ones are not.
+- In-app notification for each recipient (category `ANNOUNCEMENT`), plus email when the sender asks (`ANNOUNCEMENT_EMAILED`, by each student's preference).
+- Feed, unread count and read marks for recipients; sent list with delivered, read, emailed and report counts for authors.
+- Recipients report (once); moderators (administrators in scope, lecturers for their sections) are told, see the reported list and hide with a reason. A hidden announcement is kept.
+- Plain text only. Migration `20261114180000_announcements`; append-only reports.
+- Read helpers added to the owning modules: `AcademicLookupsService.faculty/activeStructure`, `AcademicAccessService.coversFaculty/coversInstitution`, `StudentsService.activeUserIds/activeUserIdsIn`, `LecturersService.teacherUserIds`, `NotificationsService.emailsSent`.
+
+**Step 5: digital student ID (API).** New `student-ids` module (no tables).
+- `GET /me/student-id` returns the card and a code `ASID1.<random ref>.<expires>.<mac>`. The key is derived with HKDF from the server's encryption key, used for nothing else. The reference points to the student in Redis for 45 seconds; the phone asks again every 30. The code holds no personal data.
+- `POST /student-ids/check` (Super Admin, Administrator, Registrar, Lecturer): GENUINE (with the student, whether active, and the Registrar's photo as a short-lived link), EXPIRED or NOT_GENUINE (nobody shown). Attendance codes are refused, and check-in refuses ID codes. Every check is audited, including ones that identify nobody.
+
+**Step 6: dashboards (API).** New `dashboards` module (no tables): `GET /me/lecturer-dashboard`.
+- Waiting: disputes (and the oldest), check-ins, late corrections; excused this week.
+- Attendance per section, worked out over all students the same way as each student's (§9): `AttendanceSummaryService.sectionOverview`. Counts come from `AttendanceRecordsService.lecturerCounts` and `DisputesService.waitingFor`.
+- The student home uses existing endpoints plus the new ones; `GET /excuse-requests/covered` was added so the phone can show the classes before sending.
+
+**Step 7: screens.**
+- **Phone (new):** student ID card (online only), staff ID check (camera), a course's classes with "Dispute this record", dispute form, excuse form (find classes, untick, files), My requests, a request's page (reply, add a file, withdraw), announcements (filter, report), announcement compose (lecturers and course reps). Home redesigned for students (requests, announcements, attendance per course, "No minimum attendance set yet") and lecturers (what is waiting, sections, Check ID, write an announcement). Links from Attendance and Profile.
+- **Phone setup:** file upload support in the API helper; new native module `expo-document-picker` 58.0.5 (so a new app build).
+- **Web (new):** lecturer dashboard on Home; Reviews (disputes; excuse requests for administrators; question, approve, reject; attachments by short-lived link); Announcements (write, sent with counts, reported and hide). Sidebar: "Disputes and excuses", "Announcements".
+
+**Step 8: exit check.**
+- Scenario 19: API (`test/disputes.test.ts`), phone (`phase6.test.tsx`, "scenario 19 on the phone"), browser (`e2e/08-requests.spec.ts`). Scenarios 20 and 21 were already passing from Phase 5.
+- Screens against the canvas: the new web pages were checked from screenshots against the boards (layout, wording, states). The phone screens were checked by component tests only; no phone or emulator here (limitation 96).
+- `e2e/global-setup.ts` now also clears the e2e Redis database. Re-running the journeys within minutes had been refused by the sign-in rate limit ("Too many requests").
+
+**Found and fixed on the way:**
+- Announcements reached nobody in the browser journey: the recipient rule required activated accounts. It now includes students who have not activated yet. The rule is tested.
+- The rep's "of 3 updates" text was fixed in the app; it now comes from the setting.
+- The plural "1 classes" on the Reviews list.
+
+**Database changes:** migration `20261114180000_announcements` (tables `announcements`, `announcement_sections`, `announcement_recipients`, `announcement_reports`; enums `AnnouncementKind`, `AnnouncementScope`, `AnnouncementStatus`; SQL checks and an append-only trigger). Applied to the development database; drift check: no difference.
+
+**Tests run:**
+- API: `announcements.test.ts` 5, `student-ids.test.ts` 4, `dashboards.test.ts` 1 (all passed); `excuses.test.ts` 4 (with the preview).
+- Mutation checks, each restored: announcements 5 of 5 caught (sending to sections not taught, no daily limit, hidden ones still in the feed, administrator scope ignored, any lecturer moderating); student ID 4 of 4 (expiry ignored, signature not checked, students checking, failed checks not logged); dashboard 2 of 2 (counts across all lecturers, undecided counted as absent).
+- Phone: `phase6.test.tsx` 5 passed; all phone tests 32.
+- Browser: `npm run e2e` **8 passed** (journeys 01–08). Journey 01's expected sidebar now includes the two new links.
+
+**Known limitations:** KNOWN_LIMITATIONS 96–100.

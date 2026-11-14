@@ -93,6 +93,18 @@ export const SubmitExcuseSchema = z
     path: ['endDate'],
   });
 
+/** The classes a request for these dates would cover, before sending it. */
+export const ExcuseCoverQuerySchema = z
+  .strictObject({ startDate: IsoDate, endDate: IsoDate })
+  .refine((v) => v.endDate >= v.startDate, {
+    message: 'The end date is before the start date',
+    path: ['endDate'],
+  })
+  .refine((v) => (Date.parse(v.endDate) - Date.parse(v.startDate)) / 86_400_000 < EXCUSE_MAX_DAYS, {
+    message: `One request covers at most ${EXCUSE_MAX_DAYS} days`,
+    path: ['endDate'],
+  });
+
 export const ExcuseListQuerySchema = DisputeListQuerySchema;
 export const ExcuseQuestionSchema = DisputeQuestionSchema;
 export const ExcuseReplySchema = DisputeReplySchema;

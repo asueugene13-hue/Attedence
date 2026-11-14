@@ -856,6 +856,8 @@ model ExcuseAttachment  { excuseRequestId String @db.Uuid  fileId String @db.Uui
 
 ### 3.5 Communication
 
+**As built (Phase 6 step 4):** `announcements` (author, role, kind OFFICIAL or COURSE_REP, scope SECTION, DEPARTMENT, FACULTY or INSTITUTION, title, body, emailed, PUBLISHED or HIDDEN with who, when and why), `announcement_sections`, `announcement_recipients` (fixed when sent, with `read_at`) and `announcement_reports` (one per reporter, append-only). SQL checks keep the audience consistent with the scope, course-rep updates to sections only, and a hidden announcement's reason. The design below used `AnnouncementRecipient` and `MessageReport`; the built names are those above.
+
 ```prisma
 model Notification {                 // Phase 3 step 6; table notifications
   id

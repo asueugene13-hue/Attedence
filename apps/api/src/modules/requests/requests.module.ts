@@ -33,5 +33,6 @@ import { ExcusesService } from './excuses.service.js';
   ],
   controllers: [DisputesController, ExcusesController],
   providers: [DisputesService, ExcusesService],
+  exports: [DisputesService],
 })
 export class RequestsModule {}

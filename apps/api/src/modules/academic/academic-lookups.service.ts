@@ -37,6 +37,27 @@ export class AcademicLookupsService {
     return d ? { id: d.id, facultyId: d.facultyId, isActive: d.isActive } : null;
   }
 
+  /** A faculty, as scope checks need it. */
+  async faculty(id: string) {
+    const f = await this.prisma.faculty.findUnique({ where: { id } });
+    return f ? { id: f.id, code: f.code, name: f.name, isActive: f.isActive } : null;
+  }
+
+  /** Active faculties and departments, by code (for choosing an announcement's audience). */
+  async activeStructure() {
+    const [faculties, departments] = await Promise.all([
+      this.prisma.faculty.findMany({ where: { isActive: true }, orderBy: { code: 'asc' } }),
+      this.prisma.department.findMany({
+        where: { isActive: true, faculty: { isActive: true } },
+        orderBy: { code: 'asc' },
+      }),
+    ]);
+    return {
+      faculties: faculties.map((f) => ({ id: f.id, code: f.code, name: f.name })),
+      departments: departments.map((d) => ({ id: d.id, code: d.code, name: d.name, facultyId: d.facultyId })),
+    };
+  }
+
   async semester(id: string) {
     const s = await this.prisma.semester.findUnique({ where: { id } });
     return s

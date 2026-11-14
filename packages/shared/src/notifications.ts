@@ -102,6 +102,13 @@ export const NOTIFICATION_CATEGORIES = {
     mandatory: false,
     defaultChannels: ['IN_APP', 'EMAIL'],
   },
+  ANNOUNCEMENT: { label: 'Announcements', mandatory: false, defaultChannels: ['IN_APP'] },
+  ANNOUNCEMENT_EMAILED: {
+    label: 'Announcements the sender also emailed',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
+  ANNOUNCEMENT_REPORTED: { label: 'Announcement reported', mandatory: false, defaultChannels: ['IN_APP'] },
   RESCHEDULE_REQUESTED: { label: 'Reschedule request', mandatory: false, defaultChannels: ['IN_APP'] },
   RESCHEDULE_DECIDED: {
     label: 'Reschedule request decided',

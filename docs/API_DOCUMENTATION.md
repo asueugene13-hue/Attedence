@@ -220,9 +220,11 @@ Class actions follow the shared transition table (`packages/shared/src/class-lif
 | POST | `/me/notifications/:id/read` · `/me/notifications/read-all` | Signed in | Mark as read (never counts as attendance). Another person's notification is `404`. **Built.** |
 | GET · PUT | `/me/notification-preferences` | Signed in | Every category with its EMAIL and PUSH switches (`available` is false for push until it is set up). PUT `{ category, channel, enabled }`; mandatory categories (cancelled, rescheduled, back on, room changed) cannot be switched off (`409 MANDATORY_CATEGORY`). **Built.** |
 | POST | `/me/push-token` | Mobile | Register or refresh the FCM token. Not built: push waits for a university-owned Firebase project. |
-| POST · GET | `/announcements` | LE, CR, UA, SA (scoped) | Send and list. Rep messages are rate-limited and labelled. |
-| GET | `/announcements/:id/stats` | Author, scoped admins | Delivery and read counts |
-| POST | `/announcements/:id/report` · `/announcements/:id/hide` | Recipients · moderators | Abuse reporting and moderation |
+| GET | `/announcements/targets` | Signed in | What the caller may send to: `{ kind: OFFICIAL | COURSE_REP, sections [{ id, code, course, students, remainingToday? }], dailyLimit?, departments, faculties, institution }`. **Built (Phase 6 step 4).** |
+| POST | `/announcements` | Lecturers (their sections), administrators (sections, a department or faculty in scope; everyone with `announcements.send_institution` and university-wide scope), course reps (a student with an active rep assignment, own section only) | `{ scope: SECTION | DEPARTMENT | FACULTY | INSTITUTION, sectionIds? | departmentId? | facultyId?, title (3–150), body (1–2000), email }`. Plain text. Recipients are the active students in the audience (accounts not yet activated included), fixed when sent. Course-rep updates are labelled and limited to `announcements.repDailyLimit` (default 3) per section per Accra day: `409 REP_LIMIT_REACHED`. `403 NOT_YOUR_SECTION`, `NOT_COURSE_REP`; `409 NO_RECIPIENTS`. In-app notification for each recipient; email too when `email` (category `ANNOUNCEMENT_EMAILED`, by preference). **Built.** |
+| GET | `/announcements?view=MINE|REPORTED` · `/announcements/:id/stats` | Author · moderators | Sent by the caller, or reported ones the caller may moderate, with `counts { recipients, read, reports, emailsSent }`. **Built.** |
+| POST | `/announcements/:id/report` `{ reason }` · `/announcements/:id/hide` `{ reason }` | Recipients (once: `409 ALREADY_REPORTED`) · moderators (`announcements.moderate`: administrators in scope; lecturers for their sections) | Moderators are told of a report. A hidden announcement leaves every feed but is kept, with who, when and why. **Built.** |
+| GET · POST | `/me/announcements?kind=&limit=&cursor=` · `/me/announcements/unread-count` · `/me/announcements/:id/read` | Signed in | The caller's announcements, newest first, with `audience`, `author` and `read`. **Built.** |
 
 ### Reports, analytics, operations
 
@@ -234,8 +236,10 @@ Class actions follow the shared transition table (`packages/shared/src/class-lif
 | GET | `/reports/exports/:id` · `/reports/exports/:id/download` | Requester | Status; short-lived download link |
 | GET · POST | `/risk-flags?status=OPEN\|DISMISSED\|CONFIRMED&type=` · `/risk-flags/:id/review` | `risk_flags.review` (SA, UA) | The review queue (open flags oldest first). Review `{ decision: CONFIRMED|DISMISSED, note }`; a flag never changes attendance or access by itself. `409 ALREADY_REVIEWED`. **Built (Phase 4 step 1).** |
 | GET | `/system/health` · `/system/jobs` · `/system/events` | SA | Health, job failures, alerts |
-| GET | `/me/student-id` | ST | Card data plus a rotating `ASID1` token |
-| POST | `/student-id/verify` | Staff | `{ token }` → name, photo, programme, status |
+| GET | `/me/student-id` · `/me/student-id/photo` | Students | The card (`student { fullName, studentNumber, programme, level, status, hasPhoto }`) and `code { value (ASID1.…), expiresAt (45 s), refreshAfterSeconds (30) }`; the photo as a short-lived link (`404 NO_PHOTO`). **Built (Phase 6 step 5).** |
+| POST | `/student-ids/check` | Staff (Super Admin, Administrator, Registrar, Lecturer) | `{ code }` → `{ result: GENUINE | EXPIRED | NOT_GENUINE, checkedAt, student | null, photo | null }`; `student.active` says whether they are an active student. An attendance code (`AS1.`) is `400 NOT_AN_ID_CODE`. Every check is in the audit log (`student_ids.checked`). **Built.** |
+| GET | `/me/lecturer-dashboard` | Lecturers | `{ waiting { disputes { count, oldestWaitingSince }, checkIns, corrections { waiting, answeredThisWeek } }, excusedThisWeek, sections [{ sectionId, code, course, students, classesHeld, percentage | null }], minimumPercent }`, counted from the records when asked. **Built (Phase 6 step 6).** |
+| GET | `/excuse-requests/covered?startDate=&endDate=` | Students | The classes a request for these dates would cover, with each record's status now (the phone shows them before sending). **Built.** |
 | GET | `/health/live` · `/health/ready` | Infrastructure | Liveness and readiness probes |
 
 ## 3. Example: a check-in

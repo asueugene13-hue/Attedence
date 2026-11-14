@@ -76,6 +76,13 @@ export const SETTINGS = {
     schema: z.number().int().min(1).max(90),
     default: 14,
   },
+  'announcements.repDailyLimit': {
+    label: 'Course-rep updates per section per day',
+    description:
+      'How many updates a course rep may post to their section in one day (Africa/Accra). Decided 2026-11-14: 3.',
+    schema: z.number().int().min(1).max(20),
+    default: 3,
+  },
   'attendance.lateWeight': {
     label: 'A late check-in counts as (share of attended)',
     description:

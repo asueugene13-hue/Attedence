@@ -7,6 +7,15 @@ import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
 import { AlertsScreen } from '../screens/AlertsScreen';
+import { AnnouncementComposeScreen } from '../screens/AnnouncementComposeScreen';
+import { AnnouncementsScreen } from '../screens/AnnouncementsScreen';
+import { CheckIdScreen } from '../screens/CheckIdScreen';
+import { CourseAttendanceScreen } from '../screens/CourseAttendanceScreen';
+import { DisputeFormScreen } from '../screens/DisputeFormScreen';
+import { ExcuseFormScreen } from '../screens/ExcuseFormScreen';
+import { MyRequestsScreen } from '../screens/MyRequestsScreen';
+import { RequestDetailScreen } from '../screens/RequestDetailScreen';
+import { StudentIdScreen } from '../screens/StudentIdScreen';
 import { AttendanceCodeScreen } from '../screens/AttendanceCodeScreen';
 import { CheckInScreen } from '../screens/CheckInScreen';
 import { CheckClassroomScreen } from '../screens/CheckClassroomScreen';
@@ -123,6 +132,51 @@ export function RootNavigator() {
             name="CheckClassroom"
             component={CheckClassroomScreen}
             options={{ headerShown: true, title: 'Check this classroom' }}
+          />
+          <Stack.Screen
+            name="StudentId"
+            component={StudentIdScreen}
+            options={{ headerShown: true, title: 'Student ID' }}
+          />
+          <Stack.Screen
+            name="CheckId"
+            component={CheckIdScreen}
+            options={{ headerShown: true, title: 'Check a student ID' }}
+          />
+          <Stack.Screen
+            name="CourseAttendance"
+            component={CourseAttendanceScreen}
+            options={{ headerShown: true, title: 'Course attendance' }}
+          />
+          <Stack.Screen
+            name="DisputeForm"
+            component={DisputeFormScreen}
+            options={{ headerShown: true, title: 'Dispute this record' }}
+          />
+          <Stack.Screen
+            name="ExcuseForm"
+            component={ExcuseFormScreen}
+            options={{ headerShown: true, title: 'Request an excuse' }}
+          />
+          <Stack.Screen
+            name="MyRequests"
+            component={MyRequestsScreen}
+            options={{ headerShown: true, title: 'My requests' }}
+          />
+          <Stack.Screen
+            name="RequestDetail"
+            component={RequestDetailScreen}
+            options={{ headerShown: true, title: 'Request' }}
+          />
+          <Stack.Screen
+            name="Announcements"
+            component={AnnouncementsScreen}
+            options={{ headerShown: true, title: 'Announcements' }}
+          />
+          <Stack.Screen
+            name="AnnouncementCompose"
+            component={AnnouncementComposeScreen}
+            options={{ headerShown: true, title: 'Write an announcement' }}
           />
           {auth.me.permissions.includes('beacons.manage') ? (
             <Stack.Screen

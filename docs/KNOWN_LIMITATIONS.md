@@ -116,3 +116,8 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 93. **A dispute does not lock the record.** A lecturer can still correct it directly; approving the dispute afterwards is refused (`RECORD_CHANGED`) and the reviewer rejects or the student withdraws it.
 94. **An excused class that had no record yet is excused up to 15 minutes after attendance closes** (the job runs every 15 minutes). Until then the record shows ABSENT.
 95. **Excuse requests have no 72-hour hand-over.** Disputes do (D-21); excuse requests already go only to administrators, so there is no one further to pass them to. Waiting requests are listed oldest first.
+96. **The Phase 6 phone screens have not been seen on a real phone.** They are covered by component tests and match the canvas in structure; the visual check waits for the next app build on a phone. The same is true of the student ID code being scanned by another phone's camera.
+97. **Dates in the phone's excuse form are typed (year-month-day).** A calendar picker needs another native module; it can come with a later app build.
+98. **Lecturers decide disputes on the web dashboard.** The phone shows how many are waiting and says so; a phone screen for deciding them was not part of the approved designs.
+99. **Announcements go to students only,** worked out when sent: a student who enrols later does not see earlier ones. Staff-wide messages are not part of Phase 6.
+100. **A report on a faculty-wide or university-wide announcement goes to the administrators who cover that faculty (or the whole university)**, not to department administrators.

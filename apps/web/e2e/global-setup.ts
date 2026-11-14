@@ -1,12 +1,25 @@
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import pg from 'pg';
 // @ts-expect-error -- plain JavaScript helper shared with the API start script
 import { apiDir, prepareDatabase } from './prepare-db.mjs';
 
-/** Empties the e2e database and creates the first Super Admin with the real one-time command. */
+/** Empties the e2e database and Redis database, and creates the first Super Admin with the real one-time command. */
 export default async function globalSetup(): Promise<void> {
   const databaseUrl = process.env.E2E_DATABASE_URL!;
   await prepareDatabase(databaseUrl);
+
+  // The e2e Redis database too: rate-limit counters and used nonces from an earlier run would otherwise
+  // refuse a run started a few minutes later ("Too many requests").
+  const Redis = createRequire(`${apiDir as string}/package.json`)(
+    'ioredis',
+  ) as typeof import('ioredis').default;
+  const redis = new Redis(process.env.E2E_REDIS_URL!);
+  try {
+    await redis.flushdb();
+  } finally {
+    redis.disconnect();
+  }
 
   const db = new pg.Client({ connectionString: databaseUrl });
   await db.connect();

@@ -19,3 +19,5 @@ export * from './verification.js';
 export * from './beacons.js';
 export * from './attendance.js';
 export * from './requests.js';
+export * from './announcements.js';
+export * from './student-id.js';

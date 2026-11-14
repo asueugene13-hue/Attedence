@@ -549,3 +549,21 @@ legend {
   font-weight: 600;
   margin-bottom: 4px;
 }
+
+/* Dashboard tiles (lecturer home): a grid that wraps at phone width. */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  color: inherit;
+  text-decoration: none;
+}
+a.tile:hover {
+  border-color: var(--color-primary);
+}

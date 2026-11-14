@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UploadedFile } from '@nestjs/common';
 import {
   ApproveExcuseSchema,
+  ExcuseCoverQuerySchema,
   ExcuseListQuerySchema,
   ExcuseQuestionSchema,
   ExcuseReplySchema,
@@ -33,6 +34,14 @@ export class ExcusesController {
   @RequirePermissions('requests.submit')
   submit(@CurrentAuth() auth: AccessClaims, @Body() body: unknown, @Req() req: Request) {
     return this.excuses.submit(auth, parseInput(SubmitExcuseSchema, body), requestContextOf(req));
+  }
+
+  /** `?startDate=&endDate=`: the student's classes a request for these dates would cover. */
+  @Get('covered')
+  @RequirePermissions('requests.submit')
+  covered(@CurrentAuth() auth: AccessClaims, @Query() query: unknown) {
+    const { startDate, endDate } = parseInput(ExcuseCoverQuerySchema, query);
+    return this.excuses.covered(auth, startDate, endDate);
   }
 
   /** `?state=OPEN|DECIDED|ALL`: a student's own, or those an administrator may decide. */

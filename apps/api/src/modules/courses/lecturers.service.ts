@@ -328,6 +328,15 @@ export class LecturersService implements OnModuleInit {
     );
   }
 
+  /** Accounts of the lecturers currently teaching any of these sections. */
+  async teacherUserIds(sectionIds: string[]): Promise<string[]> {
+    const rows = await this.prisma.lecturerAssignment.findMany({
+      where: { sectionId: { in: [...new Set(sectionIds)] }, endedAt: null },
+      select: { lecturer: { select: { userId: true } } },
+    });
+    return [...new Set(rows.map((r) => r.lecturer.userId))];
+  }
+
   /** Whether this person currently teaches the section (an active assignment). */
   async teaches(userId: string, sectionId: string): Promise<boolean> {
     const count = await this.prisma.lecturerAssignment.count({

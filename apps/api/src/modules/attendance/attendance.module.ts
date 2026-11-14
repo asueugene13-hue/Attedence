@@ -56,6 +56,6 @@ import { RosterService } from './roster.service.js';
     AttendanceSummaryService,
     AttendanceRecordsService,
   ],
-  exports: [AttendanceSessionsService, AttendanceRecordsService],
+  exports: [AttendanceSessionsService, AttendanceRecordsService, AttendanceSummaryService],
 })
 export class AttendanceModule {}

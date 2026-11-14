@@ -185,6 +185,25 @@ export class ExcusesService implements OnModuleInit {
     return this.view(request);
   }
 
+  /** The student's classes in these dates, as a request would cover them, with each record's status now. */
+  async covered(actor: AccessClaims, startDate: string, endDate: string) {
+    const studentId = await this.ownStudentId(actor);
+    const classes = await this.classesIn(studentId, startDate, endDate);
+    const sections = await this.courses.sectionSummaries(classes.flatMap((c) => c.sectionIds));
+    const records = await Promise.all(classes.map((c) => this.records.forStudentClass(studentId, c.id)));
+    return {
+      data: classes.map((c, n) => {
+        const section = sections.get(c.sectionIds[0] ?? '');
+        return {
+          classSessionId: c.id,
+          scheduledStart: c.scheduledStart,
+          course: section ? { code: section.course.code, title: section.course.title } : null,
+          recordStatus: records[n]?.status ?? null,
+        };
+      }),
+    };
+  }
+
   async attach(actor: AccessClaims, id: string, upload: UploadedBytes, context: RequestContext) {
     const request = await this.ownRequest(actor, id);
     if (!OPEN.includes(request.status)) throw conflict('NOT_OPEN', 'This excuse request is closed.');

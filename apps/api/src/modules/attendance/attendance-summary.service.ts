@@ -122,6 +122,29 @@ export class AttendanceSummaryService {
     };
   }
 
+  /**
+   * One line for a section on the lecturer's dashboard: students, classes held and the section's
+   * overall attendance, worked out the same way as each student's (ATTENDANCE_FLOW §9) over all of
+   * them. `percentage` is null until something counts.
+   */
+  async sectionOverview(actor: AccessClaims, sectionId: string) {
+    const s = await this.section(actor, sectionId);
+    let attended = 0;
+    let denominator = 0;
+    for (const line of s.data) {
+      attended += line.present + s.lateWeight * line.late;
+      denominator += line.eligible - line.excused - line.undecided;
+    }
+    return {
+      sectionId: s.section.id,
+      code: s.section.code,
+      course: s.section.course,
+      students: s.data.filter((l) => l.enrolled).length,
+      classesHeld: s.classesHeld,
+      percentage: denominator > 0 ? Math.round((attended / denominator) * 1000) / 10 : null,
+    };
+  }
+
   /** Every student of a section, with their summary: for its lecturers and administrators in scope. */
   async section(actor: AccessClaims, sectionId: string) {
     const section = await this.courses.sectionFacts(sectionId);

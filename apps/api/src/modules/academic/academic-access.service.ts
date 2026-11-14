@@ -38,6 +38,16 @@ export class AcademicAccessService {
     throw outOfScope();
   }
 
+  /** Whether the actor's scope covers a whole faculty (or the university). */
+  async coversFaculty(actor: AccessClaims, facultyId: string): Promise<boolean> {
+    const scope = await this.scope(actor);
+    return scope.institutionWide || scope.facultyIds.includes(facultyId);
+  }
+
+  async coversInstitution(actor: AccessClaims): Promise<boolean> {
+    return (await this.scope(actor)).institutionWide;
+  }
+
   /** Whether the actor's scope covers this department (for filtering lists, where refusing would be wrong). */
   async covers(actor: AccessClaims, department: { id: string; facultyId: string }): Promise<boolean> {
     const scope = await this.scope(actor);

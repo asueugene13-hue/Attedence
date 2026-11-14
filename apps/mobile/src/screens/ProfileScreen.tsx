@@ -45,6 +45,34 @@ export function ProfileScreen() {
         {row('Email', user.email)}
         {row('Acting as', ROLE_LABELS[activeRole])}
       </Card>
+      <Card>
+        <Text style={{ color: palette.textPrimary, fontWeight: '600' }}>More</Text>
+        {activeRole === 'STUDENT' || activeRole === 'COURSE_REP' ? (
+          <>
+            <Button
+              label="My student ID"
+              variant="secondary"
+              onPress={() => navigation.navigate('StudentId')}
+            />
+            <Button
+              label="My requests"
+              variant="secondary"
+              onPress={() => navigation.navigate('MyRequests')}
+            />
+          </>
+        ) : (
+          <Button
+            label="Check a student ID"
+            variant="secondary"
+            onPress={() => navigation.navigate('CheckId')}
+          />
+        )}
+        <Button
+          label="Announcements"
+          variant="secondary"
+          onPress={() => navigation.navigate('Announcements')}
+        />
+      </Card>
       <ThisPhone />
       <Card>
         <Text style={{ color: palette.textPrimary, fontWeight: '600' }}>Classroom tools</Text>

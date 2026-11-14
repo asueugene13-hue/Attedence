@@ -73,6 +73,17 @@ export class NotificationsService implements OnModuleInit {
   }
 
   /** Creates the notifications and queues their deliveries, all in one transaction. */
+  /** How many emails were sent for notifications about one thing (for announcement statistics). */
+  async emailsSent(related: { type: string; id: string }): Promise<number> {
+    return this.prisma.notificationDelivery.count({
+      where: {
+        channel: 'EMAIL',
+        status: 'SENT',
+        notification: { relatedEntityType: related.type, relatedEntityId: related.id },
+      },
+    });
+  }
+
   async notify(input: NotifyInput): Promise<number> {
     const userIds = [...new Set(input.userIds)];
     if (userIds.length === 0) return 0;

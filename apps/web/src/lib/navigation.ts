@@ -18,6 +18,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/classes', label: 'Class monitor', permission: 'class_reviews.decide' },
   { href: '/class-reviews', label: 'Class reviews', permission: 'class_reviews.decide' },
   { href: '/attendance-corrections', label: 'Attendance corrections', permission: 'attendance.correct' },
+  { href: '/reviews', label: 'Disputes and excuses', permission: 'requests.review' },
+  {
+    href: '/announcements',
+    label: 'Announcements',
+    permission: ['announcements.send_official', 'announcements.moderate'],
+  },
   {
     href: '/reschedule-requests',
     label: 'Reschedule requests',

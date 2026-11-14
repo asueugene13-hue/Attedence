@@ -401,6 +401,16 @@ export class DisputesService implements OnModuleInit {
     return { data: await this.summaries(visible) };
   }
 
+  /** Disputes waiting for this reviewer's decision (not for a student's answer), and the oldest. */
+  async waitingFor(actor: AccessClaims) {
+    const open = (await this.list(actor, 'OPEN')).data.filter((d) => d.status === 'SUBMITTED');
+    const oldest = open
+      .map((d) => d.waitingSince)
+      .filter((d) => d !== null)
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+    return { count: open.length, oldestWaitingSince: oldest ?? null };
+  }
+
   async get(actor: AccessClaims, id: string) {
     const dispute = await this.find(id);
     await this.assertMaySee(actor, dispute);

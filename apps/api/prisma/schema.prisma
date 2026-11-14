@@ -143,10 +143,14 @@ model User {
   correctionRequests  AttendanceCorrectionRequest[] @relation("CorrectionRequestedBy")
   correctionDecisions AttendanceCorrectionRequest[] @relation("CorrectionRequestDecidedBy")
 
-  disputesDecided AttendanceDispute[] @relation("DisputeDecidedBy")
-  excusesDecided  ExcuseRequest[]     @relation("ExcuseDecidedBy")
-  excuseMessages  ExcuseMessage[]     @relation("ExcuseMessageAuthor")
-  disputeMessages DisputeMessage[]    @relation("DisputeMessageAuthor")
+  disputesDecided       AttendanceDispute[]     @relation("DisputeDecidedBy")
+  excusesDecided        ExcuseRequest[]         @relation("ExcuseDecidedBy")
+  excuseMessages        ExcuseMessage[]         @relation("ExcuseMessageAuthor")
+  announcementsWritten  Announcement[]          @relation("AnnouncementAuthor")
+  announcementsHidden   Announcement[]          @relation("AnnouncementHiddenBy")
+  announcementsReceived AnnouncementRecipient[]
+  announcementReports   AnnouncementReport[]
+  disputeMessages       DisputeMessage[]        @relation("DisputeMessageAuthor")
 
   @@map("users")
 }
@@ -381,7 +385,8 @@ model Faculty {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  departments Department[]
+  departments   Department[]
+  announcements Announcement[]
 
   @@map("faculties")
 }
@@ -395,10 +400,11 @@ model Department {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  faculty    Faculty           @relation(fields: [facultyId], references: [id])
-  programmes Programme[]
-  courses    Course[]
-  lecturers  LecturerProfile[]
+  faculty       Faculty           @relation(fields: [facultyId], references: [id])
+  programmes    Programme[]
+  courses       Course[]
+  lecturers     LecturerProfile[]
+  announcements Announcement[]
 
   @@index([facultyId])
   @@map("departments")
@@ -632,6 +638,7 @@ model CourseSection {
   courseRepAssignments   CourseRepAssignment[]
   timetableEntrySections TimetableEntrySection[]
   classSessionSections   ClassSessionSection[]
+  announcementSections   AnnouncementSection[]
 
   @@unique([offeringId, code])
   @@map("course_sections")
@@ -2179,4 +2186,97 @@ model ExcuseAttachment {
 
   @@id([excuseRequestId, fileId])
   @@map("excuse_attachments")
+}
+
+// ───────── Announcements (Phase 6 step 4; owned by the announcements module) ─────────
+
+enum AnnouncementKind {
+  OFFICIAL
+  COURSE_REP
+}
+
+enum AnnouncementScope {
+  SECTION
+  DEPARTMENT
+  FACULTY
+  INSTITUTION
+}
+
+enum AnnouncementStatus {
+  PUBLISHED
+  /// Hidden by a moderator, with a reason; kept for the record.
+  HIDDEN
+}
+
+/// A message to students: official (lecturer, administrator) or a course rep's update. Plain text.
+model Announcement {
+  id           String             @id @default(uuid(7)) @db.Uuid
+  authorId     String             @map("author_id") @db.Uuid
+  /// The role the author sent it in (a person may hold several).
+  authorRole   String             @map("author_role")
+  kind         AnnouncementKind
+  scope        AnnouncementScope
+  departmentId String?            @map("department_id") @db.Uuid
+  facultyId    String?            @map("faculty_id") @db.Uuid
+  title        String
+  body         String
+  emailed      Boolean            @default(false)
+  status       AnnouncementStatus @default(PUBLISHED)
+  hiddenById   String?            @map("hidden_by_id") @db.Uuid
+  hiddenAt     DateTime?          @map("hidden_at") @db.Timestamptz(3)
+  hiddenReason String?            @map("hidden_reason")
+  sentAt       DateTime           @map("sent_at") @db.Timestamptz(3)
+
+  author     User                    @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  hiddenBy   User?                   @relation("AnnouncementHiddenBy", fields: [hiddenById], references: [id], onDelete: Restrict)
+  department Department?             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  faculty    Faculty?                @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  sections   AnnouncementSection[]
+  recipients AnnouncementRecipient[]
+  reports    AnnouncementReport[]
+
+  @@index([authorId, sentAt])
+  @@index([status, sentAt])
+  @@map("announcements")
+}
+
+model AnnouncementSection {
+  announcementId String @map("announcement_id") @db.Uuid
+  sectionId      String @map("section_id") @db.Uuid
+
+  announcement Announcement  @relation(fields: [announcementId], references: [id], onDelete: Restrict)
+  section      CourseSection @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+
+  @@id([announcementId, sectionId])
+  @@index([sectionId])
+  @@map("announcement_sections")
+}
+
+/// Who it was sent to (worked out when sent) and when they read it.
+model AnnouncementRecipient {
+  announcementId String    @map("announcement_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  readAt         DateTime? @map("read_at") @db.Timestamptz(3)
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([announcementId, userId])
+  @@index([userId, announcementId])
+  @@map("announcement_recipients")
+}
+
+/// A recipient says an announcement is offensive or misleading; a moderator reviews it.
+model AnnouncementReport {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  announcementId String   @map("announcement_id") @db.Uuid
+  reporterId     String   @map("reporter_id") @db.Uuid
+  reason         String
+  createdAt      DateTime @map("created_at") @db.Timestamptz(3)
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Restrict)
+  reporter     User         @relation(fields: [reporterId], references: [id], onDelete: Restrict)
+
+  @@unique([announcementId, reporterId])
+  @@map("announcement_reports")
 }
