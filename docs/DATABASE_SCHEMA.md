@@ -806,21 +806,25 @@ model AttendanceCorrection {         // append-only: every change to a record af
   @@index([recordId, createdAt])
 }
 
-model AttendanceDispute {
+model AttendanceDispute {          // as built in Phase 6 step 2 (requests module)
   id
-  recordId       String        @db.Uuid
-  studentId      String        @db.Uuid
-  reason         String
-  status         RequestStatus @default(SUBMITTED)
-  assignedToId   String?       @db.Uuid
-  resolutionNote String?
-  resolvedById   String?       @db.Uuid
-  resolvedAt     DateTime?
-  createdAt
+  recordId       String           @db.Uuid
+  studentId      String           @db.Uuid
+  reason         String                       // CHECK: at least 10 characters
+  status         DisputeStatus    @default(SUBMITTED)   // SUBMITTED INFO_REQUESTED APPROVED REJECTED WITHDRAWN
+  recordStatus   AttendanceStatus             // when sent; CHECK: ABSENT or REJECTED
+  submittedAt    DateTime
+  waitingSince   DateTime?                    // waiting for a reviewer since (72-hour clock)
+  escalatedAt    DateTime?
+  outcome        AttendanceStatus?            // PRESENT or LATE when approved
+  decidedById    String?          @db.Uuid
+  decidedAt      DateTime?
+  decisionNote   String?                      // CHECK: required to reject
   updatedAt
   // partial unique index (SQL): one open dispute per record
 }
 
+model DisputeMessage { id  disputeId  kind QUESTION|REPLY  body  authorId  createdAt }   // append-only
 model ExcuseRequest {
   id
   studentId      String         @db.Uuid
@@ -843,7 +847,7 @@ model ExcuseRequestSession {         // the class sessions an excuse covers
   @@id([excuseRequestId, classSessionId])
 }
 
-model DisputeAttachment { disputeId String @db.Uuid  fileId String @db.Uuid  @@id([disputeId, fileId]) }
+model DisputeAttachment { disputeId String @db.Uuid  fileId String @db.Uuid @unique  addedAt  @@id([disputeId, fileId]) }   // append-only
 model ExcuseAttachment  { excuseRequestId String @db.Uuid  fileId String @db.Uuid  @@id([excuseRequestId, fileId]) }
 ```
 

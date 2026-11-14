@@ -69,6 +69,27 @@ export const NOTIFICATION_CATEGORIES = {
     mandatory: false,
     defaultChannels: ['IN_APP', 'EMAIL', 'PUSH'],
   },
+  DISPUTE_SUBMITTED: { label: 'Attendance dispute to decide', mandatory: false, defaultChannels: ['IN_APP'] },
+  DISPUTE_INFO_REQUESTED: {
+    label: 'Question about your dispute',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
+  DISPUTE_REPLIED: {
+    label: 'Reply to your question on a dispute',
+    mandatory: false,
+    defaultChannels: ['IN_APP'],
+  },
+  DISPUTE_DECIDED: {
+    label: 'Your dispute was decided',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
+  DISPUTE_ESCALATED: {
+    label: 'Attendance dispute waiting too long',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
   RESCHEDULE_REQUESTED: { label: 'Reschedule request', mandatory: false, defaultChannels: ['IN_APP'] },
   RESCHEDULE_DECIDED: {
     label: 'Reschedule request decided',

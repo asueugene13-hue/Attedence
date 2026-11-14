@@ -5,6 +5,7 @@
 export type DetectedType =
   | 'image/jpeg'
   | 'image/png'
+  | 'application/pdf'
   | 'text/csv'
   | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
@@ -16,6 +17,8 @@ export function detectFileType(buf: Buffer): DetectedType | null {
   if (buf.length === 0) return null;
   if (startsWith(buf, [0xff, 0xd8, 0xff])) return 'image/jpeg';
   if (startsWith(buf, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return 'image/png';
+  // "%PDF-": a PDF document (supporting files for disputes and excuse requests).
+  if (startsWith(buf, [0x25, 0x50, 0x44, 0x46, 0x2d])) return 'application/pdf';
   // An .xlsx file is a ZIP archive containing the workbook parts.
   if (startsWith(buf, [0x50, 0x4b, 0x03, 0x04]) && buf.includes('[Content_Types].xml')) return XLSX_MIME;
   return isPlainText(buf) ? 'text/csv' : null;

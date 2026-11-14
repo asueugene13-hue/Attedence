@@ -20,6 +20,7 @@ import { CheckInController } from './check-in.controller.js';
 import { CheckInService } from './check-in.service.js';
 import { CorrectionsController } from './corrections.controller.js';
 import { CorrectionsService } from './corrections.service.js';
+import { AttendanceRecordsService } from './records.service.js';
 import { RosterController } from './roster.controller.js';
 import { RosterService } from './roster.service.js';
 
@@ -53,7 +54,8 @@ import { RosterService } from './roster.service.js';
     AttendanceGateway,
     CorrectionsService,
     AttendanceSummaryService,
+    AttendanceRecordsService,
   ],
-  exports: [AttendanceSessionsService],
+  exports: [AttendanceSessionsService, AttendanceRecordsService],
 })
 export class AttendanceModule {}

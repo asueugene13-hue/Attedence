@@ -102,7 +102,7 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 79. **Reminders about undecided check-ins go to the lecturer and to University Administrators in scope**, not to Super Admins, and only for classes whose attendance has closed.
 80. **Percentages are worked out on every request** from the records (always current, nothing to go stale). For very large sections this may need a cached summary later; the pilot sizes are small.
 81. **"How many more absences" assumes the student attends every other remaining class** and counts classes still scheduled, confirmed, delayed or unconfirmed. A class cancelled later is simply no longer counted.
-82. **Excuse requests and disputes are Phase 6.** Until then EXCUSED is reached only through those workflows, so no record is excused yet.
+82. **Excuse requests are Phase 6 step 3** (disputes are built). Until then EXCUSED is reached only through that workflow, so no record is excused yet.
 83. **The lecturer's phone refreshes the roster every 5 seconds**; the web dashboard's roster is live. Rejecting a check-in (a note is needed) and hand check-ins are on the dashboard; the phone approves.
 84. **The phone does not keep the screen awake while showing the code.** Set the phone's screen timeout longer, or use the projector page.
 85. **Students have six tabs** (Home, Check in, Attendance, Schedule, Alerts, Profile). If that is too crowded on small phones, Schedule can move into Home later.
@@ -112,3 +112,5 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 89. **An automatic close is recorded as a class event, not an audit-log entry.** The class's event log keeps who (the system), why (time up, or class ended) and how many students were marked absent; a person's close is also in the audit log.
 90. **The crest SVG wraps the supplied picture; it is not drawn in vector shapes.** The crest is a detailed gold rendering, so tracing it into shapes would lose detail. The SVG file holds the original artwork (452 × 444 pixels) unchanged. The "Knutsford University" wordmark is a true vector outline, traced from the same image. For print or very large displays, ask the university for its original logo files (vector or high resolution) and replace the files in `apps/web/public/brand` and `apps/mobile/assets/brand`.
 91. **The new app icon (the crest) appears only after the next app build.** Phones running the current build keep the old icon until it is replaced.
+92. **Dispute notifications point to screens that are not built yet** (`/reviews`, `/requests/disputes/…`). The screens come in Phase 6 step 7; until then the in-app notification says what happened but opening it leads nowhere specific.
+93. **A dispute does not lock the record.** A lecturer can still correct it directly; approving the dispute afterwards is refused (`RECORD_CHANGED`) and the reviewer rejects or the student withdraws it.

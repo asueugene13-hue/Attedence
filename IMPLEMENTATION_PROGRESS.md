@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 6 (user experiences): plan approved by the product owner 2026-11-14 with the recommended decisions; step 1 (designs on the canvas) done, **waiting for the product owner to review the designs**. Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 6 (user experiences): plan approved by the product owner 2026-11-14 with the recommended decisions; step 1 (designs) approved 2026-11-14; step 2 (disputes, API) done; next: step 3 (excuse requests). Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-14
 
 ### Phase 1 steps
@@ -29,7 +29,7 @@ Read this first in every session, and update it after every implementation step.
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Done; approved by the product owner 2026-11-09 (CI run 42695433225) |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Done; approved by the product owner 2026-11-13 (CI run 43449937698; camera build still to be tried on a phone) |
-| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Plan approved 2026-11-14; step 1 in progress |
+| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Plan approved 2026-11-14; steps 1–2 done |
 | 7 Reports and administration | Admin dashboards, analytics, CSV/Excel/PDF exports, system monitoring, audit views | Every report respects role scope; exports are logged | Not started |
 | 8 Production readiness | Security testing, load testing, device testing, backup and restore drill, deployment, user acceptance testing | Knutsford staff sign off on UAT; a restore drill succeeds | Not started |
 
@@ -98,6 +98,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-08 | D-16 (part) | Development and CI file storage: SeaweedFS (S3-compatible, already in Docker). Production storage host still open; switching needs settings only. | Product owner |
 | 2026-11-13 | Phase 5 approval | Phase 5 approved as complete after the exit check ("proceed"); the camera build is to be tried on a phone when one is at hand | Product owner |
 | 2026-11-14 | Phase 6 plan | Plan approved with the recommended decisions: D-21 disputes (14 days; the class's lecturer decides, administrators after 72 h); D-22 excuse requests decided by administrators in scope only (lecturers see only "excused"; 14 days after the last covered class); rep updates at most 3 per section per day; digital ID online only, any signed-in staff member may check one, every check logged; placeholder colours kept until D-15 | Product owner |
+| 2026-11-14 | Phase 6 designs | The 11 Phase 6 boards on the design canvas approved ("designs approved, proceed") | Product owner |
 | 2026-11-14 | D-15 (part) | The product owner supplied the Knutsford University crest and wordmark and asked for them to be the app's official logo, as SVG, crest and words separate. Brand colours still to come. | Product owner |
 
 ## Session log
@@ -1887,3 +1888,23 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Tests run:** `npm run format:check`, `npm run lint`, `npm run typecheck`: all clean. Mobile tests 27 passed; web tests 13 passed. The API was not changed. The sign-in page and the signed-in sidebar were checked in a browser (screenshots), signing in as the demo lecturer.
 - **CI:** GitHub run 43550122780 on `7315ff9`: **success**.
 - **Not yet done:** the design canvas still shows the placeholder crest; the phone sign-in screen has not been seen on a phone.
+
+### 2026-11-14 — Phase 6, step 2: disputes (API)
+
+- **Designs approved** by the product owner first (step 1).
+- **Built:**
+  - New `requests` module (owns the new tables): `DisputesService`, `DisputesController` at `/api/v1/disputes`.
+  - A student disputes their own ABSENT or REJECTED record for a class, after attendance closed, within `requests.disputeDays` (new setting, default 14) of the class. One open dispute per record. Optional supporting files (PDF, JPEG, PNG; type checked from the bytes; 10 MB; at most 3).
+  - The class's lecturer, or an administrator in scope (`requests.review`), can ask a question (the student answers), approve as PRESENT or LATE (with an optional note) or reject (note required). The student can withdraw.
+  - Approving changes the record through the attendance module's new `AttendanceRecordsService` (CLAUDE.md rule 8): only if it is still absent or rejected, version-checked, with a correction row (source DISPUTE, naming the dispute) and an audit entry, and the live roster is told. A record that changed since is never overwritten (`409 RECORD_CHANGED`).
+  - A dispute waiting 72 hours for a reviewer is passed to the administrators responsible, once (a job every 15 minutes). Waiting for the student's answer stops that clock; the answer restarts it. Nothing is decided automatically.
+  - Notifications: the lecturer on a new dispute and on an answer; the student on a question and on the decision; administrators on the hand-over (five new categories).
+  - `CorrectionsService` now uses the shared administrator lookup in `AttendanceRecordsService` instead of its own copy.
+- **Database changes:** migration `20261114120000_attendance_disputes`: tables `attendance_disputes`, `dispute_messages`, `dispute_attachments`; enums `DisputeStatus`, `DisputeMessageKind`; `FilePurpose` gains `REQUEST_ATTACHMENT`. SQL rules: only absent or rejected records with an explanation of at least 10 characters; a decided dispute has who and when; approval has an outcome (PRESENT or LATE); rejection needs a note; one open dispute per record (partial unique index); messages and attachments are append-only (trigger). Applied to the development database; drift check: no difference.
+- **Files:** API `modules/requests/` (new: module, service, controller), `modules/attendance/records.service.ts` (new), `attendance.module.ts`, `corrections.service.ts`, `modules/files/file-type.ts` (PDF), `app.module.ts`, `prisma/schema.prisma`, the migration; shared `requests.ts` (new), `settings.ts`, `notifications.ts`, `index.ts`; tests `test/disputes.test.ts` (new), `test/fixtures.ts`; docs API_DOCUMENTATION, ATTENDANCE_FLOW, DATABASE_SCHEMA, TESTING (scenario 19, API part), KNOWN_LIMITATIONS 82, 92–93.
+- **Tests run:**
+  - `test/disputes.test.ts`: 6 passed.
+  - Mutation checks, each restored afterwards: removing the "attendance still open" check (1 failed); removing the "record changed since" check (1 failed); letting other lecturers see disputes (1 failed); an answer not restarting the 72-hour clock: at first **not caught**, so the test now includes an answer two days later, and then it failed as it should (1 failed).
+  - `npm run check` (development servers stopped first) exit 0: design-tokens 3, shared 10, API **455**, mobile 27, web 13, so **508 passed**.
+- **Known limitations:** KNOWN_LIMITATIONS 92 (notifications point to screens that come in step 7), 93 (a dispute does not lock the record).
+- **Next step:** step 3, excuse requests (decided by administrators only, D-22).

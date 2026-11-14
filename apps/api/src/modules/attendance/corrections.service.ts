@@ -2,7 +2,6 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  Logger,
   NotFoundException,
   type OnModuleInit,
 } from '@nestjs/common';
@@ -23,9 +22,7 @@ import { JobRegistry } from '../../infrastructure/jobs/job-registry.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AuditService } from '../audit-logs/audit.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
-import { ScopeService } from '../authorization/scope.service.js';
 import { ClassSessionsService } from '../class-sessions/class-sessions.service.js';
-import { CoursesService } from '../courses/courses.service.js';
 import { LecturersService } from '../courses/lecturers.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { SettingsService } from '../settings/settings.service.js';
@@ -33,6 +30,7 @@ import { StudentsService } from '../students/students.service.js';
 import { AttendanceEventsService } from './attendance-events.service.js';
 import { AttendanceSessionsService } from './attendance-sessions.service.js';
 import { changeRecordStatus } from './record-changes.js';
+import { AttendanceRecordsService } from './records.service.js';
 import { RosterService } from './roster.service.js';
 
 const HOUR = 3_600_000;
@@ -48,8 +46,6 @@ const conflict = (code: string, message: string) => new ConflictException({ code
  */
 @Injectable()
 export class CorrectionsService implements OnModuleInit {
-  private readonly logger = new Logger(CorrectionsService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly clock: Clock,
@@ -62,10 +58,9 @@ export class CorrectionsService implements OnModuleInit {
     private readonly roster: RosterService,
     private readonly notifications: NotificationsService,
     private readonly lecturers: LecturersService,
-    private readonly courses: CoursesService,
-    private readonly scopes: ScopeService,
     private readonly students: StudentsService,
     private readonly classSessions: ClassSessionsService,
+    private readonly records: AttendanceRecordsService,
   ) {}
 
   onModuleInit(): void {
@@ -508,15 +503,8 @@ export class CorrectionsService implements OnModuleInit {
   }
 
   /** The University Administrators responsible for a class's departments. */
-  private async adminsFor(classSessionId: string): Promise<string[]> {
-    const cls = (await this.classSessions.facts([classSessionId])).get(classSessionId);
-    const sections = await this.courses.sectionSummaries(cls?.sectionIds ?? []);
-    const admins = new Set<string>();
-    for (const s of sections.values()) {
-      for (const id of await this.scopes.holdersCovering('UNIVERSITY_ADMIN', s.department)) admins.add(id);
-    }
-    if (admins.size === 0) this.logger.warn(`No administrator found for class ${classSessionId}`);
-    return [...admins];
+  private adminsFor(classSessionId: string): Promise<string[]> {
+    return this.records.adminsFor(classSessionId);
   }
 
   private requestView(r: {

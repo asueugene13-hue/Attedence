@@ -143,6 +143,9 @@ model User {
   correctionRequests  AttendanceCorrectionRequest[] @relation("CorrectionRequestedBy")
   correctionDecisions AttendanceCorrectionRequest[] @relation("CorrectionRequestDecidedBy")
 
+  disputesDecided AttendanceDispute[] @relation("DisputeDecidedBy")
+  disputeMessages DisputeMessage[]    @relation("DisputeMessageAuthor")
+
   @@map("users")
 }
 
@@ -720,6 +723,7 @@ model StudentProfile {
   attendanceRecords    AttendanceRecord[]
   attendanceAttempts   AttendanceAttempt[]
   assistedCheckIns     AssistedCheckIn[]
+  disputes             AttendanceDispute[]
 
   @@index([programmeId, levelId])
   @@index([status])
@@ -731,6 +735,8 @@ model StudentProfile {
 enum FilePurpose {
   PROFILE_PHOTO
   IMPORT_FILE
+  /// A student's supporting file for a dispute or an excuse request.
+  REQUEST_ATTACHMENT
 }
 
 enum FileStatus {
@@ -755,9 +761,10 @@ model FileObject {
   createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   removedAt    DateTime?   @map("removed_at") @db.Timestamptz(3)
 
-  uploadedBy   User            @relation(fields: [uploadedById], references: [id])
-  studentPhoto StudentProfile?
-  importBatch  ImportBatch?
+  uploadedBy        User               @relation(fields: [uploadedById], references: [id])
+  studentPhoto      StudentProfile?
+  importBatch       ImportBatch?
+  disputeAttachment DisputeAttachment?
 
   @@map("file_objects")
 }
@@ -1836,6 +1843,7 @@ model AttendanceRecord {
   corrections        AttendanceCorrection[]
   assistedCheckIns   AssistedCheckIn[]
   correctionRequests AttendanceCorrectionRequest[]
+  disputes           AttendanceDispute[]
 
   @@unique([classSessionId, studentId])
   @@index([studentId, status])
@@ -1997,4 +2005,84 @@ model AttendanceCorrectionRequest {
   @@index([status, requestedAt])
   @@index([recordId])
   @@map("attendance_correction_requests")
+}
+
+// ───────── Requests from students (Phase 6; owned by the requests module) ─────────
+
+enum DisputeStatus {
+  /// Waiting for the reviewer.
+  SUBMITTED
+  /// The reviewer asked a question; waiting for the student.
+  INFO_REQUESTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum DisputeMessageKind {
+  QUESTION
+  REPLY
+}
+
+/// A student's challenge to one of their attendance records (ATTENDANCE_FLOW §7, D-21). The record is
+/// changed only if a reviewer approves, through the attendance module, with a correction and an audit.
+model AttendanceDispute {
+  id           String            @id @default(uuid(7)) @db.Uuid
+  recordId     String            @map("record_id") @db.Uuid
+  studentId    String            @map("student_id") @db.Uuid
+  reason       String
+  status       DisputeStatus     @default(SUBMITTED)
+  /// The record's status when the dispute was sent.
+  recordStatus AttendanceStatus  @map("record_status")
+  submittedAt  DateTime          @map("submitted_at") @db.Timestamptz(3)
+  /// When it last started waiting for a reviewer; the escalation clock runs from here.
+  waitingSince DateTime?         @map("waiting_since") @db.Timestamptz(3)
+  /// When the administrators responsible were told it had waited too long (once).
+  escalatedAt  DateTime?         @map("escalated_at") @db.Timestamptz(3)
+  /// What the record became, for an approved dispute.
+  outcome      AttendanceStatus?
+  decidedById  String?           @map("decided_by_id") @db.Uuid
+  decidedAt    DateTime?         @map("decided_at") @db.Timestamptz(3)
+  decisionNote String?           @map("decision_note")
+  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  record      AttendanceRecord    @relation(fields: [recordId], references: [id], onDelete: Restrict)
+  student     StudentProfile      @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  decidedBy   User?               @relation("DisputeDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+  messages    DisputeMessage[]
+  attachments DisputeAttachment[]
+
+  @@index([studentId, submittedAt])
+  @@index([status, waitingSince])
+  @@index([recordId])
+  @@map("attendance_disputes")
+}
+
+/// Questions from the reviewer and the student's replies, in order (append-only).
+model DisputeMessage {
+  id        String             @id @default(uuid(7)) @db.Uuid
+  disputeId String             @map("dispute_id") @db.Uuid
+  kind      DisputeMessageKind
+  body      String
+  authorId  String             @map("author_id") @db.Uuid
+  createdAt DateTime           @map("created_at") @db.Timestamptz(3)
+
+  dispute AttendanceDispute @relation(fields: [disputeId], references: [id], onDelete: Restrict)
+  author  User              @relation("DisputeMessageAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([disputeId, createdAt])
+  @@map("dispute_messages")
+}
+
+/// A supporting file the student attached. The bytes are in private storage (files module).
+model DisputeAttachment {
+  disputeId String   @map("dispute_id") @db.Uuid
+  fileId    String   @unique @map("file_id") @db.Uuid
+  addedAt   DateTime @map("added_at") @db.Timestamptz(3)
+
+  dispute AttendanceDispute @relation(fields: [disputeId], references: [id], onDelete: Restrict)
+  file    FileObject        @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@id([disputeId, fileId])
+  @@map("dispute_attachments")
 }

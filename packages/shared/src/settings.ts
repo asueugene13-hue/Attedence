@@ -62,6 +62,13 @@ export const SETTINGS = {
     schema: z.number().int().min(1).max(90),
     default: 14,
   },
+  'requests.disputeDays': {
+    label: 'Students can dispute a record for (days)',
+    description:
+      'Days after a class during which a student can dispute an absent or rejected record (D-21). Interim default until Knutsford sets its own.',
+    schema: z.number().int().min(1).max(90),
+    default: 14,
+  },
   'attendance.lateWeight': {
     label: 'A late check-in counts as (share of attended)',
     description:
