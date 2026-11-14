@@ -57,13 +57,17 @@ export const Icons = {
     ),
 };
 
+/**
+ * The university's crest and wordmark (supplied by the product owner, docs/brand/), with the product
+ * name under them. Plain <img> elements: the files are static SVGs in public/brand.
+ */
 export function BrandMark() {
   return (
     <div className="brand">
-      <div className="brand-mark">{Icons.check(16)}</div>
+      <img className="brand-crest" src="/brand/knutsford-crest.svg" alt="Knutsford University crest" />
       <div className="brand-name">
-        <strong>AttendSure</strong>
-        <span>Knutsford University</span>
+        <img className="brand-wordmark" src="/brand/knutsford-wordmark.svg" alt="Knutsford University" />
+        <span>AttendSure</span>
       </div>
     </div>
   );

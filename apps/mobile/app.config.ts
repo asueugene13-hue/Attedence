@@ -18,9 +18,12 @@ const config: ExpoConfig = {
   version: '0.1.0',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
+  // The Knutsford University crest (supplied by the product owner, docs/brand/). Takes effect in the next app build.
+  icon: './assets/brand/icon.png',
   ios: { bundleIdentifier: 'app.attendsure.mobile', supportsTablet: false },
   android: {
     package: 'app.attendsure.mobile',
+    adaptiveIcon: { foregroundImage: './assets/brand/adaptive-icon.png', backgroundColor: '#FFFFFF' },
     // Bluetooth scanning and fine location are added by the two plugins below (Android 12+ treats
     // beacon scanning as location use). The camera is added by the expo-camera plugin (QR check-in).
     permissions: [],

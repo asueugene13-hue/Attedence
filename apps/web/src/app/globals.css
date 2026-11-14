@@ -353,22 +353,33 @@ dl.details dd {
   align-items: center;
   gap: 10px;
 }
-.brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-control);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.brand-crest {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  flex: none;
 }
 .brand-name {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
-.brand-name strong {
-  font-size: 14px;
+.brand-wordmark {
+  display: block;
+  height: 30px;
+  width: auto;
+}
+/* Sign-in and account pages: the university's logo at a size it can be recognised. */
+.auth-card .brand {
+  gap: 14px;
+}
+.auth-card .brand-crest {
+  width: 72px;
+  height: 72px;
+}
+.auth-card .brand-wordmark {
+  height: 46px;
 }
 .brand-name span {
   font-size: 11px;

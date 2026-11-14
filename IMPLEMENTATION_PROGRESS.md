@@ -64,7 +64,7 @@ Read this first in every session, and update it after every implementation step.
 | D-12 | Who appoints course reps | An Administrator appoints; the lecturer may nominate | Phase 2 |
 | D-13 | Monitoring thresholds | **Decided 2026-11-09:** configurable settings. UNCONFIRMED at start + 15 min without lecturer activity; UNDER_REVIEW at + 30 min, or earlier once at least 3 students AND 10% of the enrolled class report a problem. A course rep's report is a priority, verified report that adds weight but never counts as extra students on its own. Course-rep rule (confirmed 2026-11-09, "corroboration"): the normal path stays at least 3 students AND 10% of the enrolled class. A course rep's report opens a second path: the rep plus at least 1 other enrolled student (a setting) reporting a problem escalates an UNCONFIRMED class early. A rep alone never escalates. A rep's report also nudges the lecturer at once and marks the review as priority. The rep always counts as one reporter. | Phase 3 |
 | D-14 | Real academic data and ID formats | The Registrar and Administrators supply the structure. Student ID: 8 digits (decided). Staff ID format still needed. | Phase 2 |
-| D-15 | Brand colours and crest | Knutsford supplies them; the design tokens are ready to swap | Phase 6 |
+| D-15 | Brand colours and crest | **Crest and wordmark supplied 2026-11-14 and in use.** Colours: Knutsford supplies them; the design tokens are ready to swap | Phase 6 |
 | D-16 | Hosting, data location, Data Protection Commission registration | University IT and the university's data protection lead decide | File storage by Phase 2; hosting before Phase 8 |
 | D-17 | Email and SMS providers | The university's mail system or a transactional email service; a Ghanaian SMS gateway if SMS is wanted | Phase 3 |
 | D-18 | Data retention periods | Proposals are in [DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) §7 | Phase 5 |
@@ -98,6 +98,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-08 | D-16 (part) | Development and CI file storage: SeaweedFS (S3-compatible, already in Docker). Production storage host still open; switching needs settings only. | Product owner |
 | 2026-11-13 | Phase 5 approval | Phase 5 approved as complete after the exit check ("proceed"); the camera build is to be tried on a phone when one is at hand | Product owner |
 | 2026-11-14 | Phase 6 plan | Plan approved with the recommended decisions: D-21 disputes (14 days; the class's lecturer decides, administrators after 72 h); D-22 excuse requests decided by administrators in scope only (lecturers see only "excused"; 14 days after the last covered class); rep updates at most 3 per section per day; digital ID online only, any signed-in staff member may check one, every check logged; placeholder colours kept until D-15 | Product owner |
+| 2026-11-14 | D-15 (part) | The product owner supplied the Knutsford University crest and wordmark and asked for them to be the app's official logo, as SVG, crest and words separate. Brand colours still to come. | Product owner |
 
 ## Session log
 
@@ -1870,3 +1871,18 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Sample data only:** names, courses and rooms are layout samples as on the existing boards; Student IDs are made-up 99xxxxxx numbers.
 - **Files:** canvas only; no code. **Database changes:** none. **Tests:** none (design step).
 - **Next step:** the product owner reviews the boards and approves them or asks for changes; then step 2 (disputes).
+
+### 2026-11-14 — The university's logo (D-15, crest and wordmark)
+
+- **Asked by the product owner:** use the supplied Knutsford University artwork as the app's official logo, as SVG, with the crest and the words separate.
+- **Built:**
+  - The supplied image is kept as received in `docs/brand/knutsford-logo-supplied.png`.
+  - It was split at the clear gap between the crest and the words.
+  - `apps/web/public/brand/knutsford-wordmark.svg`: the words traced into a true vector outline (potrace, run from a scratch folder; not a project dependency).
+  - `apps/web/public/brand/knutsford-crest.svg`: the full-colour crest, unchanged, inside an SVG (limitation 90).
+  - Web: the brand block (sidebar and every sign-in and account page) shows the crest, the wordmark and "AttendSure" under them, larger on the sign-in pages. The browser tab icon is the crest (`src/app/icon.png`, `apple-icon.png`).
+  - Phone: the sign-in screen shows the crest and the wordmark; the wordmark is drawn in the theme's text colour, so it stays readable in dark mode (`components/knutsford-wordmark.ts`, generated). The app icon and Android's adaptive icon are the crest on white (`assets/brand/`), from the next app build (limitation 91).
+- **Files:** `apps/web/src/components/ui.tsx`, `apps/web/src/app/globals.css`, `apps/web/public/brand/*`, `apps/web/src/app/icon.png`, `apple-icon.png`; `apps/mobile/src/components/ui.tsx`, `knutsford-wordmark.ts`, `src/assets.d.ts`, `app.config.ts`, `assets/brand/*`; `docs/brand/`; KNOWN_LIMITATIONS 90–91.
+- **Database changes:** none.
+- **Tests run:** `npm run format:check`, `npm run lint`, `npm run typecheck`: all clean. Mobile tests 27 passed; web tests 13 passed. The API was not changed. The sign-in page and the signed-in sidebar were checked in a browser (screenshots), signing in as the demo lecturer.
+- **Not yet done:** the design canvas still shows the placeholder crest; the phone sign-in screen has not been seen on a phone.

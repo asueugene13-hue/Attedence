@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +11,10 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 import { textStyle, useTheme } from '../lib/theme';
+import crestImage from '../../assets/brand/knutsford-crest.png';
+import { KNUTSFORD_WORDMARK } from './knutsford-wordmark';
 
 export function Screen({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
   const { palette, spacing } = useTheme();
@@ -153,16 +157,33 @@ export function Card({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The university's crest and wordmark (supplied by the product owner, docs/brand/), with the product
+ * name under them. The wordmark is a vector outline drawn in the theme's text colour, so it stays
+ * readable in dark mode; the crest is the full-colour artwork.
+ */
 export function Brand() {
   const { palette } = useTheme();
+  const wordmarkHeight = 30;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-      <View style={[styles.brandMark, { backgroundColor: palette.primary }]}>
-        <Text style={{ color: palette.onPrimary, fontWeight: '700' }}>✓</Text>
-      </View>
-      <View>
-        <Text style={{ color: palette.textPrimary, fontWeight: '600', fontSize: 15 }}>AttendSure</Text>
-        <Text style={{ color: palette.textMuted, fontSize: 12 }}>Knutsford University</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <Image
+        source={crestImage}
+        style={{ width: 52, height: 52 }}
+        resizeMode="contain"
+        accessibilityLabel="Knutsford University crest"
+      />
+      <View style={{ gap: 2 }}>
+        <Svg
+          width={wordmarkHeight * KNUTSFORD_WORDMARK.aspectRatio}
+          height={wordmarkHeight}
+          viewBox={KNUTSFORD_WORDMARK.viewBox}
+          accessibilityLabel="Knutsford University"
+          accessibilityRole="image"
+        >
+          <Path d={KNUTSFORD_WORDMARK.d} fill={palette.textPrimary} fillRule="evenodd" />
+        </Svg>
+        <Text style={{ color: palette.textMuted, fontSize: 12 }}>AttendSure</Text>
       </View>
     </View>
   );
@@ -170,5 +191,4 @@ export function Brand() {
 
 const styles = StyleSheet.create({
   button: { alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  brandMark: { width: 32, height: 32, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
 });
