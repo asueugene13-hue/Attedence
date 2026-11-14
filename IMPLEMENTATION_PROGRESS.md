@@ -1929,4 +1929,5 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
   - Mutation checks, each restored afterwards: lecturers allowed (1 failed); scope not checked (1 failed); the reason text in the record's history (1 failed); the "already asked for" check missing open requests (1 failed). Making the 15-minute job ignore which classes the administrator chose was **not caught**: a second guard (a class is marked applied only if it was chosen) still blocks it, and the test confirms the unchosen class stays absent.
   - `npm run check` (development servers stopped first) exit 0: design-tokens 3, shared 10, API **459**, mobile 27, web 13, so **512 passed**.
 - **Known limitations:** KNOWN_LIMITATIONS 94 (a later class is excused up to 15 minutes after attendance closes), 95 (no 72-hour hand-over for excuse requests).
+- **CI:** GitHub run 43586582998 on `900bfc0`: **success**.
 - **Next step:** step 4, announcements.
