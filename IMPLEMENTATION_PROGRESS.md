@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 7 (reports and administration) is **complete**, waiting for the product owner's approval. Phase 8 (production readiness): steps 8.1–8.7 done on 2026-11-14; it closes when Knutsford staff sign off UAT and the restore drill is repeated on the real host, both of which need the university (see "Step 8.7" at the end). Phases 7 and 8 were started together 2026-11-14 with the product owner's approval. Still open from earlier phases: the phone test of the camera and Phase 6 screens (docs/PHONE_TEST_CHECKLIST.md), and Phase 4's field test in two real classrooms. Phases 1–3, 5 and 6 are complete and approved; Phase 4 waits only for its field test.
+**Current phase:** Phase 7 (reports and administration) is **complete and approved** by the product owner (2026-11-14). Phase 8 (production readiness): steps 8.1–8.7 done on 2026-11-14; it closes when Knutsford staff sign off UAT and the restore drill is repeated on the real host, both of which need the university (see "Step 8.7" at the end). Phases 7 and 8 were started together 2026-11-14 with the product owner's approval. Still open from earlier phases: the phone test of the camera and Phase 6 screens (docs/PHONE_TEST_CHECKLIST.md), and Phase 4's field test in two real classrooms. Phases 1–3, 5 and 6 are complete and approved; Phase 4 waits only for its field test.
 **Last updated:** 2026-11-14
 
 ### Phase 1 steps
@@ -2293,3 +2293,10 @@ Results in SECURITY.md §9. In short:
 | IT on the real host | Repeat the load test and the restore drill there; fill in RUNBOOK.md §7 |
 
 **Phase 8 status:** everything that can be built and verified without the university is done. Phase 8 closes when UAT is signed off and the drill is repeated on the real host.
+
+### 2026-11-14 — Phase 7 approved; new app build
+
+- **Phase 7 approved** by the product owner ("yes approved").
+- **App build:** a new Android development build was started at the product owner's request (the phone is still not at hand), with the 8.4 change (a check-in is sent again after a 502, 503 or 504). Build page: https://expo.dev/accounts/clent_eugene/projects/attendsure/builds/51865aa8-f289-4ded-86b4-61af066a0490
+- **Build finished.** APK (install on an Android phone): https://expo.dev/artifacts/eas/3UgJLCpnaWbnkGdX-HytN0yY8YiQpRCZBIPOhLy5xPk.apk
+- Not yet installed on a phone (none at hand). Next: the phone test checklist (docs/PHONE_TEST_CHECKLIST.md) when a phone is available.
