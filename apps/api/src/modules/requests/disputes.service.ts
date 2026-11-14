@@ -19,7 +19,7 @@ import type { z } from 'zod';
 import { auditEntry } from '../../common/audit-entry.js';
 import { dbErrorInfo, PG } from '../../common/db-errors.js';
 import type { RequestContext } from '../../common/request-context.js';
-import { unsupportedFile, type UploadedBytes } from '../../common/upload.js';
+import type { UploadedBytes } from '../../common/upload.js';
 import type { AttendanceDispute, Prisma } from '../../generated/prisma/client.js';
 import { Clock } from '../../infrastructure/clock/clock.js';
 import { JobRegistry } from '../../infrastructure/jobs/job-registry.js';
@@ -30,11 +30,11 @@ import type { AccessClaims } from '../auth/token.service.js';
 import { ClassSessionsService } from '../class-sessions/class-sessions.service.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { LecturersService } from '../courses/lecturers.service.js';
-import { detectFileType } from '../files/file-type.js';
 import { FilesService } from '../files/files.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { SettingsService } from '../settings/settings.service.js';
 import { StudentsService } from '../students/students.service.js';
+import { requestAttachmentType } from './attachments.js';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -157,10 +157,7 @@ export class DisputesService implements OnModuleInit {
     if (count >= REQUEST_ATTACHMENT_LIMITS.maxFiles) {
       throw conflict('TOO_MANY_FILES', `At most ${REQUEST_ATTACHMENT_LIMITS.maxFiles} files per dispute.`);
     }
-    const type = detectFileType(upload.buffer);
-    if (!type || !(REQUEST_ATTACHMENT_LIMITS.types as readonly string[]).includes(type)) {
-      throw unsupportedFile('a PDF, JPEG or PNG file');
-    }
+    const type = requestAttachmentType(upload);
     const stored = await this.files.store({
       purpose: 'REQUEST_ATTACHMENT',
       bytes: upload.buffer,

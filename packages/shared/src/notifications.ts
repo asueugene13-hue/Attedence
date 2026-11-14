@@ -90,6 +90,18 @@ export const NOTIFICATION_CATEGORIES = {
     mandatory: false,
     defaultChannels: ['IN_APP', 'EMAIL'],
   },
+  EXCUSE_SUBMITTED: { label: 'Excuse request to decide', mandatory: false, defaultChannels: ['IN_APP'] },
+  EXCUSE_INFO_REQUESTED: {
+    label: 'Question about your excuse request',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
+  EXCUSE_REPLIED: { label: 'Reply about an excuse request', mandatory: false, defaultChannels: ['IN_APP'] },
+  EXCUSE_DECIDED: {
+    label: 'Your excuse request was decided',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
   RESCHEDULE_REQUESTED: { label: 'Reschedule request', mandatory: false, defaultChannels: ['IN_APP'] },
   RESCHEDULE_DECIDED: {
     label: 'Reschedule request decided',

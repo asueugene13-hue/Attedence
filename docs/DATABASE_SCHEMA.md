@@ -825,30 +825,33 @@ model AttendanceDispute {          // as built in Phase 6 step 2 (requests modul
 }
 
 model DisputeMessage { id  disputeId  kind QUESTION|REPLY  body  authorId  createdAt }   // append-only
-model ExcuseRequest {
+model ExcuseRequest {             // as built in Phase 6 step 3 (requests module)
   id
   studentId      String         @db.Uuid
-  category       ExcuseCategory
-  description    String
+  category       ExcuseCategory              // MEDICAL BEREAVEMENT OFFICIAL_UNIVERSITY_DUTY OTHER
+  description    String                      // CHECK: at least 10 characters
   startDate      DateTime       @db.Date
-  endDate        DateTime       @db.Date
-  status         RequestStatus  @default(SUBMITTED)
-  reviewerId     String?        @db.Uuid
-  resolutionNote String?
-  resolvedAt     DateTime?
-  createdAt
+  endDate        DateTime       @db.Date     // CHECK: end >= start, fewer than 31 days
+  status         ExcuseStatus   @default(SUBMITTED)   // SUBMITTED INFO_REQUESTED APPROVED REJECTED WITHDRAWN
+  submittedAt    DateTime
+  decidedById    String?        @db.Uuid
+  decidedAt      DateTime?
+  decisionNote   String?                     // CHECK: required to reject
   updatedAt
 }
 
-model ExcuseRequestSession {         // the class sessions an excuse covers
+model ExcuseRequestClass {          // the class sessions an excuse covers
   excuseRequestId String  @db.Uuid
   classSessionId  String  @db.Uuid
-  approved        Boolean?
+  included        Boolean?                   // decided: excused or not
+  appliedAt       DateTime?                  // when the record became EXCUSED; CHECK: only if included
   @@id([excuseRequestId, classSessionId])
 }
 
+model ExcuseMessage { id  excuseRequestId  kind QUESTION|REPLY  body  authorId  createdAt }   // append-only
+
 model DisputeAttachment { disputeId String @db.Uuid  fileId String @db.Uuid @unique  addedAt  @@id([disputeId, fileId]) }   // append-only
-model ExcuseAttachment  { excuseRequestId String @db.Uuid  fileId String @db.Uuid  @@id([excuseRequestId, fileId]) }
+model ExcuseAttachment  { excuseRequestId String @db.Uuid  fileId String @db.Uuid @unique  addedAt  @@id([excuseRequestId, fileId]) }   // append-only
 ```
 
 ### 3.5 Communication

@@ -69,6 +69,13 @@ export const SETTINGS = {
     schema: z.number().int().min(1).max(90),
     default: 14,
   },
+  'requests.excuseDays': {
+    label: 'Students can ask for an excuse for (days)',
+    description:
+      'Days after the last class it covers during which a student can send an excuse request (D-22). Interim default until Knutsford sets its own.',
+    schema: z.number().int().min(1).max(90),
+    default: 14,
+  },
   'attendance.lateWeight': {
     label: 'A late check-in counts as (share of attended)',
     description:

@@ -56,3 +56,49 @@ export const ApproveDisputeSchema = z.strictObject({
   note: Text(2, 1000, 'The note').optional(),
 });
 export const RejectDisputeSchema = z.strictObject({ note: Text(5, 1000, 'The note') });
+
+// ───────── Excuse requests (Phase 6 step 3; decision D-22) ─────────
+//
+// Decided by administrators whose scope covers the student's department, never by lecturers: medical
+// and bereavement details are private. Lecturers see only that a class was excused. A request may be
+// sent until `requests.excuseDays` (default 14) after the last class it covers.
+
+export const EXCUSE_CATEGORIES = ['MEDICAL', 'BEREAVEMENT', 'OFFICIAL_UNIVERSITY_DUTY', 'OTHER'] as const;
+export type ExcuseCategory = (typeof EXCUSE_CATEGORIES)[number];
+export const EXCUSE_STATUSES = ['SUBMITTED', 'INFO_REQUESTED', 'APPROVED', 'REJECTED', 'WITHDRAWN'] as const;
+export type ExcuseStatus = (typeof EXCUSE_STATUSES)[number];
+export const OPEN_EXCUSE_STATUSES = ['SUBMITTED', 'INFO_REQUESTED'] as const satisfies ExcuseStatus[];
+/** Only these records become EXCUSED; a class the student attended stays as it is. */
+export const EXCUSABLE_STATUSES = ['ABSENT', 'REJECTED'] as const;
+/** One request covers at most this many days, so it stays reviewable. */
+export const EXCUSE_MAX_DAYS = 31;
+
+const IsoDate = z.iso.date();
+
+export const SubmitExcuseSchema = z
+  .strictObject({
+    category: z.enum(EXCUSE_CATEGORIES),
+    startDate: IsoDate,
+    endDate: IsoDate,
+    description: Text(10, 2000, 'The details'),
+    /** Leave out to cover every class in the dates; or name the ones to cover. */
+    classSessionIds: z.array(IdSchema).min(1).max(200).optional(),
+  })
+  .refine((v) => v.endDate >= v.startDate, {
+    message: 'The end date is before the start date',
+    path: ['endDate'],
+  })
+  .refine((v) => (Date.parse(v.endDate) - Date.parse(v.startDate)) / 86_400_000 < EXCUSE_MAX_DAYS, {
+    message: `One request covers at most ${EXCUSE_MAX_DAYS} days`,
+    path: ['endDate'],
+  });
+
+export const ExcuseListQuerySchema = DisputeListQuerySchema;
+export const ExcuseQuestionSchema = DisputeQuestionSchema;
+export const ExcuseReplySchema = DisputeReplySchema;
+/** Excuse the classes named (a subset of those covered); the others stay as they are. */
+export const ApproveExcuseSchema = z.strictObject({
+  classSessionIds: z.array(IdSchema).min(1).max(200),
+  note: Text(2, 1000, 'The note').optional(),
+});
+export const RejectExcuseSchema = RejectDisputeSchema;

@@ -85,7 +85,8 @@ Course Representatives keep every Student permission. Their column shows only wh
 | View own attendance and history | — | — | — | — | O | — |
 | Edit own attendance | — | — | — | — | — | — |
 | Submit a dispute or excuse request | — | — | — | — | O | — |
-| Review disputes and excuse requests | Y | S | — | S | — | — |
+| Review disputes (D-21) | Y | S | — | S (own classes) | — | — |
+| Review excuse requests (D-22: administrators only; lecturers see only "Excused") | Y | S (student's department) | — | — | — | — |
 | **Communication** | | | | | | |
 | Send official course announcements | — | S | — | S | — | — |
 | Send course-rep updates (rate-limited, labelled) | — | — | — | — | — | S |

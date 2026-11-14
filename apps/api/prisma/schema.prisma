@@ -144,6 +144,8 @@ model User {
   correctionDecisions AttendanceCorrectionRequest[] @relation("CorrectionRequestDecidedBy")
 
   disputesDecided AttendanceDispute[] @relation("DisputeDecidedBy")
+  excusesDecided  ExcuseRequest[]     @relation("ExcuseDecidedBy")
+  excuseMessages  ExcuseMessage[]     @relation("ExcuseMessageAuthor")
   disputeMessages DisputeMessage[]    @relation("DisputeMessageAuthor")
 
   @@map("users")
@@ -724,6 +726,7 @@ model StudentProfile {
   attendanceAttempts   AttendanceAttempt[]
   assistedCheckIns     AssistedCheckIn[]
   disputes             AttendanceDispute[]
+  excuseRequests       ExcuseRequest[]
 
   @@index([programmeId, levelId])
   @@index([status])
@@ -765,6 +768,7 @@ model FileObject {
   studentPhoto      StudentProfile?
   importBatch       ImportBatch?
   disputeAttachment DisputeAttachment?
+  excuseAttachment  ExcuseAttachment?
 
   @@map("file_objects")
 }
@@ -1243,6 +1247,7 @@ model ClassSession {
   reviews            ClassStatusReview[]
   attendanceSession  AttendanceSession?
   attendanceRecords  AttendanceRecord[]
+  excuseClasses      ExcuseRequestClass[]
 
   @@unique([timetableEntryId, scheduledStart])
   @@index([status, scheduledStart])
@@ -2085,4 +2090,93 @@ model DisputeAttachment {
 
   @@id([disputeId, fileId])
   @@map("dispute_attachments")
+}
+
+enum ExcuseCategory {
+  MEDICAL
+  BEREAVEMENT
+  OFFICIAL_UNIVERSITY_DUTY
+  OTHER
+}
+
+enum ExcuseStatus {
+  SUBMITTED
+  INFO_REQUESTED
+  /// Some or all of the covered classes are excused (see ExcuseRequestClass.included).
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+/// A student's request to be excused from the classes in some dates (ATTENDANCE_FLOW §7, D-22).
+/// Decided by administrators in scope only; the reason and the files are never shown to lecturers.
+model ExcuseRequest {
+  id           String         @id @default(uuid(7)) @db.Uuid
+  studentId    String         @map("student_id") @db.Uuid
+  category     ExcuseCategory
+  description  String
+  startDate    DateTime       @map("start_date") @db.Date
+  endDate      DateTime       @map("end_date") @db.Date
+  status       ExcuseStatus   @default(SUBMITTED)
+  submittedAt  DateTime       @map("submitted_at") @db.Timestamptz(3)
+  decidedById  String?        @map("decided_by_id") @db.Uuid
+  decidedAt    DateTime?      @map("decided_at") @db.Timestamptz(3)
+  decisionNote String?        @map("decision_note")
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student     StudentProfile       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  decidedBy   User?                @relation("ExcuseDecidedBy", fields: [decidedById], references: [id], onDelete: Restrict)
+  classes     ExcuseRequestClass[]
+  messages    ExcuseMessage[]
+  attachments ExcuseAttachment[]
+
+  @@index([studentId, submittedAt])
+  @@index([status, submittedAt])
+  @@map("excuse_requests")
+}
+
+/// A class an excuse request covers, and what became of it.
+model ExcuseRequestClass {
+  excuseRequestId String    @map("excuse_request_id") @db.Uuid
+  classSessionId  String    @map("class_session_id") @db.Uuid
+  /// Decided: excused (true) or not (false); null while the request is open or if it was rejected.
+  included        Boolean?
+  /// When the record was set to EXCUSED (at approval, or later when the record appeared).
+  appliedAt       DateTime? @map("applied_at") @db.Timestamptz(3)
+
+  request      ExcuseRequest @relation(fields: [excuseRequestId], references: [id], onDelete: Restrict)
+  classSession ClassSession  @relation(fields: [classSessionId], references: [id], onDelete: Restrict)
+
+  @@id([excuseRequestId, classSessionId])
+  @@index([classSessionId])
+  @@map("excuse_request_classes")
+}
+
+/// Questions from the administrator and the student's replies, in order (append-only).
+model ExcuseMessage {
+  id              String             @id @default(uuid(7)) @db.Uuid
+  excuseRequestId String             @map("excuse_request_id") @db.Uuid
+  kind            DisputeMessageKind
+  body            String
+  authorId        String             @map("author_id") @db.Uuid
+  createdAt       DateTime           @map("created_at") @db.Timestamptz(3)
+
+  request ExcuseRequest @relation(fields: [excuseRequestId], references: [id], onDelete: Restrict)
+  author  User          @relation("ExcuseMessageAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([excuseRequestId, createdAt])
+  @@map("excuse_messages")
+}
+
+/// A supporting file (for example a clinic note). Readable only by the student and the deciders.
+model ExcuseAttachment {
+  excuseRequestId String   @map("excuse_request_id") @db.Uuid
+  fileId          String   @unique @map("file_id") @db.Uuid
+  addedAt         DateTime @map("added_at") @db.Timestamptz(3)
+
+  request ExcuseRequest @relation(fields: [excuseRequestId], references: [id], onDelete: Restrict)
+  file    FileObject    @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@id([excuseRequestId, fileId])
+  @@map("excuse_attachments")
 }

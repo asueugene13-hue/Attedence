@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 6 (user experiences): plan approved by the product owner 2026-11-14 with the recommended decisions; step 1 (designs) approved 2026-11-14; step 2 (disputes, API) done; next: step 3 (excuse requests). Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 6 (user experiences): plan approved by the product owner 2026-11-14 with the recommended decisions; step 1 (designs) approved 2026-11-14; steps 2–3 (disputes and excuse requests, API) done; next: step 4 (announcements). Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
 **Last updated:** 2026-11-14
 
 ### Phase 1 steps
@@ -29,7 +29,7 @@ Read this first in every session, and update it after every implementation step.
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Done; approved by the product owner 2026-11-09 (CI run 42695433225) |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Done; approved by the product owner 2026-11-13 (CI run 43449937698; camera build still to be tried on a phone) |
-| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Plan approved 2026-11-14; steps 1–2 done |
+| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Plan approved 2026-11-14; steps 1–3 done |
 | 7 Reports and administration | Admin dashboards, analytics, CSV/Excel/PDF exports, system monitoring, audit views | Every report respects role scope; exports are logged | Not started |
 | 8 Production readiness | Security testing, load testing, device testing, backup and restore drill, deployment, user acceptance testing | Knutsford staff sign off on UAT; a restore drill succeeds | Not started |
 
@@ -1909,3 +1909,24 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Known limitations:** KNOWN_LIMITATIONS 92 (notifications point to screens that come in step 7), 93 (a dispute does not lock the record).
 - **CI:** GitHub run 43552927785 on `86e9851`: **success**.
 - **Next step:** step 3, excuse requests (decided by administrators only, D-22).
+
+### 2026-11-14 — Phase 6, step 3: excuse requests (API)
+
+- **Built** (in the `requests` module, which now owns the excuse tables too):
+  - `ExcusesService` and `ExcusesController` at `/api/v1/excuse-requests`.
+  - A student asks to be excused from their classes between two dates (at most 31 days), with a category (medical, bereavement, official university duty, other), details and optional files. The classes are worked out by the server: the student's classes in those dates (Accra time), in sections they were enrolled in then, not cancelled or moved. The student may name a subset. Accepted until `requests.excuseDays` (new setting, default 14) after the last class covered. A class already in an open or approved request cannot be asked for again.
+  - **Only administrators whose scope covers the student's department** see and decide requests (D-22). Lecturers get `403 ADMINISTRATORS_ONLY` on every excuse endpoint, even though they hold `requests.review` for disputes. An administrator for another department is told the request does not exist.
+  - The administrator can ask a question (the student answers), approve the classes they choose (with an optional note) or reject (note required). The student can withdraw.
+  - On approval, each chosen class whose record is ABSENT or REJECTED becomes EXCUSED through `AttendanceRecordsService`, with a correction (source EXCUSE) and an audit entry. The correction reason never mentions the category or the details, so a lecturer's view of the record's history shows only that it was excused. A class the student attended stays as it is. A class with no record yet is excused when its record appears (job `excuses-apply`, every 15 minutes; once per class).
+  - Notifications: administrators on a new request (the category only, never the details); the student on a question and on the decision; the asker on an answer.
+  - The supporting-file check is shared by disputes and excuses (`requests/attachments.ts`).
+  - ROLE_PERMISSION_MATRIX: "Review disputes and excuse requests" split into two rows (D-22).
+- **Database changes:** migration `20261114150000_excuse_requests`: tables `excuse_requests`, `excuse_request_classes`, `excuse_messages`, `excuse_attachments`; enums `ExcuseCategory`, `ExcuseStatus`. SQL rules: details at least 10 characters; dates in order and fewer than 31 days apart; a decided request has who and when; rejection needs a note; only an included class is ever applied; messages and attachments append-only. Applied to the development database; drift check: no difference.
+- **Bug found while writing it:** the "already asked for" check first excluded classes with no decision yet (a SQL `NOT` on a null value), so the same class could be asked for twice while the first request was open. Fixed before the tests ran; mutation 5 below shows the test now catches it.
+- **Files:** API `modules/requests/` (new `excuses.service.ts`, `excuses.controller.ts`, `attachments.ts`; `disputes.service.ts`, `requests.module.ts`), `prisma/schema.prisma`, the migration; shared `requests.ts`, `settings.ts`, `notifications.ts`; tests `test/excuses.test.ts` (new), `test/fixtures.ts`; docs API_DOCUMENTATION, ATTENDANCE_FLOW, DATABASE_SCHEMA, ROLE_PERMISSION_MATRIX, TESTING, KNOWN_LIMITATIONS 82, 92, 94–95.
+- **Tests run:**
+  - `test/excuses.test.ts`: 4 passed (a full request with question, file, approval now and later, the student's totals; a partial approval and an attended class; who sees and decides; what can be asked for).
+  - Mutation checks, each restored afterwards: lecturers allowed (1 failed); scope not checked (1 failed); the reason text in the record's history (1 failed); the "already asked for" check missing open requests (1 failed). Making the 15-minute job ignore which classes the administrator chose was **not caught**: a second guard (a class is marked applied only if it was chosen) still blocks it, and the test confirms the unchosen class stays absent.
+  - `npm run check` (development servers stopped first) exit 0: design-tokens 3, shared 10, API **459**, mobile 27, web 13, so **512 passed**.
+- **Known limitations:** KNOWN_LIMITATIONS 94 (a later class is excused up to 15 minutes after attendance closes), 95 (no 72-hour hand-over for excuse requests).
+- **Next step:** step 4, announcements.
