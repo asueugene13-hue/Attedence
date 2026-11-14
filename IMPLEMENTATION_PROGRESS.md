@@ -2,8 +2,8 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phase 6 (user experiences): **plan proposed 2026-11-13, waiting for the product owner's approval**; no Phase 6 work has started. Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
-**Last updated:** 2026-11-13
+**Current phase:** Phase 6 (user experiences): plan approved by the product owner 2026-11-14 with the recommended decisions; step 1 (designs on the canvas) done, **waiting for the product owner to review the designs**. Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Last updated:** 2026-11-14
 
 ### Phase 1 steps
 
@@ -29,7 +29,7 @@ Read this first in every session, and update it after every implementation step.
 | 3 Timetable and class monitoring | Timetables, conflict checks, publishing, session generation, class lifecycle, detection engine, issue reports, lecturer responses, notification delivery, escalation and reviews | Scenarios 13–18 and 23 pass in a simulated teaching day | Done; approved by the product owner 2026-11-09 (CI run 42695433225) |
 | 4 Classroom verification | Beacon registry and health, BLE scanning, GPS, trusted devices, integrity checks, verification engine, exception workflows | Field test in two real classrooms with recorded signal measurements | Not started |
 | 5 Attendance | Dynamic QR, attendance sessions, check-in, live roster, history, calculation, fraud flags | Scenarios 1–12, 22 and 25 pass; load test of 500 simultaneous check-ins | Done; approved by the product owner 2026-11-13 (CI run 43449937698; camera build still to be tried on a phone) |
-| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Plan proposed 2026-11-13; awaiting approval |
+| 6 User experiences | Student and lecturer dashboards, digital student ID, notification centre, announcements, disputes, excuse requests | Scenarios 19–21 pass; screens match the design canvas | Plan approved 2026-11-14; step 1 in progress |
 | 7 Reports and administration | Admin dashboards, analytics, CSV/Excel/PDF exports, system monitoring, audit views | Every report respects role scope; exports are logged | Not started |
 | 8 Production readiness | Security testing, load testing, device testing, backup and restore drill, deployment, user acceptance testing | Knutsford staff sign off on UAT; a restore drill succeeds | Not started |
 
@@ -97,6 +97,7 @@ Read this first in every session, and update it after every implementation step.
 | 2026-11-09 | Rule 8 | Modules never write another module's tables or check its rules (they call its service); read-only joins for display are allowed. CLAUDE.md updated. | Product owner (option 1) |
 | 2026-11-08 | D-16 (part) | Development and CI file storage: SeaweedFS (S3-compatible, already in Docker). Production storage host still open; switching needs settings only. | Product owner |
 | 2026-11-13 | Phase 5 approval | Phase 5 approved as complete after the exit check ("proceed"); the camera build is to be tried on a phone when one is at hand | Product owner |
+| 2026-11-14 | Phase 6 plan | Plan approved with the recommended decisions: D-21 disputes (14 days; the class's lecturer decides, administrators after 72 h); D-22 excuse requests decided by administrators in scope only (lecturers see only "excused"; 14 days after the last covered class); rep updates at most 3 per section per day; digital ID online only, any signed-in staff member may check one, every check logged; placeholder colours kept until D-15 | Product owner |
 
 ## Session log
 
@@ -1830,7 +1831,7 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - The product owner approved Phase 5 as complete. The phone was not at hand, so the camera build is still to be tried on a phone; that is a check of the build, not new work.
 - Next: the Phase 6 plan, for approval before any Phase 6 work starts.
 
-## Phase 6: user experiences (plan proposed 2026-11-13, awaiting approval)
+## Phase 6: user experiences (plan approved 2026-11-14)
 
 **Goal:** the everyday screens for students and lecturers: a student home and a lecturer dashboard built only from real numbers, a digital student ID, disputes and excuse requests (the last two ways a record changes, ATTENDANCE_FLOW §7), course announcements, and the notification centre finished on both apps.
 
@@ -1851,7 +1852,7 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 | 7 | **Screens.** Phone and web screens from step 1. A new app build only if a document picker is needed for attachments. | Phone test |
 | 8 | **Exit check.** Scenarios 19–21 as automated tests, browser journeys for the new web screens, the phone screens compared with the canvas. | No |
 
-### Decisions with this plan (recommended defaults; change any of them)
+### Decisions with this plan (approved by the product owner 2026-11-14 as recommended)
 
 - **D-21 disputes:** a student may dispute within 14 days of the class (a setting, the same as the lecturer's correction window). The class's lecturer decides; if undecided after 72 hours it is passed to the administrators in scope, as for undecided check-ins. Never decided automatically.
 - **D-22 excuse requests:** decided by an **administrator** in the student's faculty or department scope, not by lecturers, because medical and bereavement documents are private. Lecturers see only that the class was excused. This narrows the role matrix row "Review disputes and excuse requests" for lecturers to disputes only. A request may be made up to 14 days after the last class it covers (a setting).
@@ -1859,3 +1860,13 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Digital ID:** shown only while the phone is online (an offline QR could be copied); any signed-in staff member can check one; every check is logged.
 - **How EXCUSED counts:** removed from the total, as ATTENDANCE_FLOW §9 already says (part of D-09; replace with Knutsford's rule when it is known).
 - **D-15 brand colours:** the placeholder navy stays until Knutsford supplies its colours and crest.
+
+### 2026-11-14 — Phase 6, step 1: designs on the canvas (waiting for the product owner's review)
+
+- **Built:** 11 new boards on the design canvas (https://claude.ai/artifact/QA6eYPCN51FNpWASQbgLUV), in two new rows under "Phase 6", in the existing style and tokens:
+  - Phone: student home (requests, announcements, attendance per course, "no minimum set yet"); digital student ID (rotating code, offline behaviour); staff ID-check result (genuine, not active, expired); dispute form; excuse request form (privacy note); my requests (reply to a question, withdraw, outcomes); announcements (official and course-rep labels, report); lecturer Today (waiting items, classes, sections).
+  - Web: lecturer dashboard; reviews (dispute decision with evidence and history; excuse request, administrator view); write an announcement with delivery and read counts.
+  - Two notes on the canvas: the approved Phase 6 decisions, and "real numbers only".
+- **Sample data only:** names, courses and rooms are layout samples as on the existing boards; Student IDs are made-up 99xxxxxx numbers.
+- **Files:** canvas only; no code. **Database changes:** none. **Tests:** none (design step).
+- **Next step:** the product owner reviews the boards and approves them or asks for changes; then step 2 (disputes).
