@@ -2136,3 +2136,29 @@ The product owner asked for the rest of Phase 6 in one go, then commit, push, "d
 
   The audit search and export tests still pass (30).
 - **Fixed on the way:** `/metrics` was first registered under `/api/v1` (the test found it with a 404); it is now excluded from the prefix like the health probes.
+
+### 2026-11-14 — Step 7.5: screens, and the Phase 7 exit check
+
+- **Built (web dashboard):**
+  - **Reports page** (`/reports`, in the menu for anyone with `reports.course`, `analytics.read` or `reports.registrar`):
+    - attendance analytics and class operations, by any grouping, for the active or a chosen semester;
+    - the lecturer's own class groups (summary and register files); any class group in the administrator's area;
+    - the Registrar's students and enrolments;
+    - "Your files" (refreshes while a file is being made; Download asks for a 5-minute link) and, for audit-log readers, the export log.
+    - Every file is offered as CSV, Excel or PDF and made by the background job.
+  - **Administrator dashboard on Home** (Super Admin and administrators): today's classes, the last 7 days' attendance, and a tile for each queue that links to it. Tiles the role cannot act on are not shown.
+  - **Audit log:** each action in plain words (`describeAction`; an unknown code is shown from its parts, never hidden), an Area filter, From and To dates, and "Download these entries" (the audit-log export).
+  - **System health:** a Background jobs panel (last day by status, each schedule with Overdue or Running, queues, recent failures).
+  - The Reviews page opens on the excuses tab with `?tab=excuses` (the dashboard tile links there).
+- **Browser journey** `e2e/09-reports.spec.ts`: the Super Admin sees the dashboard; Reports says there is no active semester, then shows the chosen one; asks for a CSV, sees it become Ready, downloads it through the link, and checks the file's columns and footer; finds the request and the download in the audit log in plain words; sees the jobs on System health.
+  - Journey 01 updated for the new Reports menu item and the renamed audit filter ("Action code starts with").
+- **Unit tests (web):** the Reports menu item for each report permission and for no one else; audit names, including unknown codes; area filters. The fallback was broken on purpose and a test failed; restored.
+- **Phase 7 exit criteria:**
+  - *Every report respects role scope:* `analytics.test.ts` (another faculty's administrator, lecturers and students refused or shown only their area), `exports.test.ts` (another lecturer's class group, a student, the Registrar outside its reports, the role re-checked when the file is made), `dashboards.test.ts` (another department sees nothing), `risk-flags-scope.test.ts`, `system-monitoring.test.ts` (audit export refused for a faculty-limited administrator).
+  - *Exports are logged:* each request, file made, failure, download and expiry is in the audit log (`exports.test.ts`, and the browser journey reads them back on the audit screen).
+- **Docs:** API_DOCUMENTATION (analytics, exports, admin dashboard, jobs, metrics, audit search rows now describe what was built), KNOWN_LIMITATIONS 101–107, ROLE_PERMISSION_MATRIX (audit-log readers, export log, admin dashboard), TESTING results.
+- **Test results:**
+  - `npm run e2e -w @attendsure/web`: **9 passed**.
+  - Web unit tests: **17 passed**.
+  - Full `npm run check`, first run: formatting, lint, types and build passed; tests **1 failed, 488 passed** of the API's 489. The failure: the 500-check-in load test (scenario 25) confirmed all 500 check-ins, but its live roster connection received none of the updates. Run alone it passed (500 of 500, 14.7 s); the whole API suite run again passed (**489 of 489**). Cause not confirmed; it appeared only with all test files running at once on this computer. The test now records any connection drop and its reason in its failure message, so a repeat says why. Other packages in that run: shared 10, design tokens 3, web 17, mobile 32, all passed.
+- **Database changes:** none.

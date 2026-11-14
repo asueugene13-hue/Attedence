@@ -95,6 +95,9 @@ describe('scenario 25: 500 check-ins at once', () => {
     };
     expect(joined.ok).toBe(true);
     const seen = new Set<number>();
+    // If the connection drops, say why in the failure (the dashboard rejoins on reconnect; this test does not).
+    const drops: string[] = [];
+    live.on('disconnect', (reason) => drops.push(reason));
     const studentsSeen = new Set<string>();
     live.on('attendance', (e: { seq: number; type: string; data: { studentId?: string } }) => {
       if (e.type !== 'record.updated') return;
@@ -174,7 +177,13 @@ describe('scenario 25: 500 check-ins at once', () => {
     expect(roster.counts.PRESENT).toBe(STUDENTS);
 
     // The live roster heard about every student, each event numbered once with no gaps.
-    await expect.poll(() => studentsSeen.size, { timeout: 10_000, interval: 100 }).toBe(STUDENTS);
+    await expect
+      .poll(() => studentsSeen.size, {
+        timeout: 10_000,
+        interval: 100,
+        message: `live roster events; connection drops: ${JSON.stringify(drops)}`,
+      })
+      .toBe(STUDENTS);
     const seqs = [...seen].sort((a, b) => a - b);
     expect(seqs.length).toBeGreaterThanOrEqual(STUDENTS);
     expect(seqs.at(-1)! - seqs[0]! + 1).toBe(seqs.length);

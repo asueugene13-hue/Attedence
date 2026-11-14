@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ReasonDialog } from '@/components/reason-dialog';
 import { ApiError, apiFetch, describeError } from './api';
+import { AUDIT_AREAS, describeAction } from './audit-actions';
 import { visibleNavItems } from './navigation';
 
 beforeAll(() => {
@@ -174,6 +175,31 @@ describe('sidebar', () => {
       'Timetables',
       'System health',
     ]);
+  });
+
+  it('shows Reports to anyone with a report permission, and to no one else', () => {
+    for (const permission of ['reports.course', 'analytics.read', 'reports.registrar']) {
+      expect(visibleNavItems([permission]).map((i) => i.label)).toEqual(['Home', 'Notifications', 'Reports']);
+    }
+    expect(visibleNavItems(['attendance.read_own']).map((i) => i.label)).not.toContain('Reports');
+  });
+});
+
+describe('audit log names', () => {
+  it('shows known actions in plain words', () => {
+    expect(describeAction('attendance.corrected')).toBe('Attendance record corrected');
+    expect(describeAction('reports.export_downloaded')).toBe('Report file downloaded');
+  });
+
+  it('never hides an unknown action: it is shown from its parts', () => {
+    expect(describeAction('disputes.reply_added')).toBe('Disputes: reply added');
+    expect(describeAction('newarea.thing.done')).toBe('newarea: thing done');
+    expect(describeAction('lonely')).toBe('lonely');
+  });
+
+  it('offers each area as a filter on its code prefix', () => {
+    expect(AUDIT_AREAS).toContainEqual({ prefix: 'reports.', label: 'Reports' });
+    expect(AUDIT_AREAS.every((a) => a.prefix.endsWith('.'))).toBe(true);
   });
 });
 

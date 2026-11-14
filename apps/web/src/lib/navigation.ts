@@ -29,6 +29,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Reschedule requests',
     permission: ['class_sessions.reschedule', 'class_sessions.request_reschedule'],
   },
+  {
+    href: '/reports',
+    label: 'Reports',
+    permission: ['reports.course', 'analytics.read', 'reports.registrar'],
+  },
   { href: '/timetables', label: 'Timetables', permission: 'timetables.manage' },
   { href: '/students', label: 'Students', permission: 'students.read_full' },
   { href: '/imports', label: 'Bulk import', permission: ['students.import', 'enrollments.manage'] },

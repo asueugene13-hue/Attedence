@@ -58,6 +58,8 @@ Rules:
 
 | Date | Phase | Command | Result |
 | --- | --- | --- | --- |
+| 2026-11-14 | 7 (step 5) | `npm run check` | Format, lint, types, build passed. Tests: shared 10, design tokens 3, web 17, mobile 32 passed; API **488 passed, 1 failed** (scenario 25 load test: all 500 check-ins confirmed, but the live roster saw no updates). Rerun alone: passed; whole API suite rerun: **489 passed**. Intermittent, cause not confirmed; the test now reports connection drops. |
+| 2026-11-14 | 7 (step 5) | `npm run e2e -w @attendsure/web` | **9 passed** (journey 09: admin dashboard, analytics, a CSV made by the job and downloaded, audit log in plain words, background jobs) |
 | 2026-11-08 | 1 (step 9) | `npm run check` | design-tokens 3, shared 10, API 111, web 8, mobile 9: **141 passed, 0 failed** |
 | 2026-11-08 | 1 (step 9) | `npm run e2e -w @attendsure/web` | **1 passed** (first Super Admin journey in Chromium) |
 | 2026-11-09 | 2 (step 7b) | `npm run e2e -w @attendsure/web` | **4 passed**: Super Admin first sign-in; Super Admin sets up structure, calendar, places, a lecturer, a course, offering, section and lecturer assignment through the screens and creates the Registrar; Registrar journey (as below); Super Admin appoints and ends a course rep |

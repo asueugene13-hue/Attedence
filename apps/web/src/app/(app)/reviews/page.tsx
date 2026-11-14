@@ -104,7 +104,9 @@ function Reviews() {
   const auth = useAuth();
   const params = useSearchParams();
   const isAdmin = auth.me?.activeRole === 'SUPER_ADMIN' || auth.me?.activeRole === 'UNIVERSITY_ADMIN';
-  const [kind, setKind] = useState<Kind>(params.get('excuse') && isAdmin ? 'excuse' : 'dispute');
+  const [kind, setKind] = useState<Kind>(
+    (params.get('excuse') || params.get('tab') === 'excuses') && isAdmin ? 'excuse' : 'dispute',
+  );
   const [state, setState] = useState('OPEN');
   const [selected, setSelected] = useState<string | null>(params.get('dispute') ?? params.get('excuse'));
   const base = kind === 'dispute' ? '/disputes' : '/excuse-requests';

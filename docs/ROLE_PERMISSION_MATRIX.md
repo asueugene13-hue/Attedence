@@ -42,7 +42,7 @@ Course Representatives keep every Student permission. Their column shows only wh
 | Verification policies and thresholds | Y | C | — | — | — | — |
 | Class-monitoring thresholds | Y | C | — | — | — | — |
 | View system health | Y | C | — | — | — | — |
-| View audit logs | Y | S | — | — | — | — |
+| View and export audit logs (university-wide administrators only; see KNOWN_LIMITATIONS 101) | Y | S | — | — | — | — |
 | Review security alerts and risk flags | Y | S | — | S read (own sessions) | — | — |
 | **Academic structure** | | | | | | |
 | Faculties, departments, programmes, levels | Y | C | read | — | — | — |
@@ -99,6 +99,8 @@ Course Representatives keep every Student permission. Their column shows only wh
 | Faculty, department, programme, lecturer analytics | Y | S | — | — | — | — |
 | Student record and enrolment reports | Y | — | Y | — | — | — |
 | Export files containing personal data (always logged) | Y | S | Y | S | — | — |
+| See every report file anyone asked for (the export log) | Y | S | — | — | — | — |
+| Administrator dashboard: today, last 7 days, what waits (each item only with its own permission) | Y | S | — | — | — | — |
 
 ### What a Course Representative can never do
 

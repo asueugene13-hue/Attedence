@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { AdminDashboard } from '@/components/admin-dashboard';
 import { LecturerDashboard } from '@/components/lecturer-dashboard';
 import { Alert, PageHeader } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
@@ -27,6 +28,7 @@ export default function HomePage() {
       ) : null}
 
       {me.activeRole === 'LECTURER' ? <LecturerDashboard /> : null}
+      {me.activeRole === 'SUPER_ADMIN' || me.activeRole === 'UNIVERSITY_ADMIN' ? <AdminDashboard /> : null}
 
       {me.activeRole !== 'LECTURER' && tools.length > 0 ? (
         <section className="card" aria-labelledby="tools-heading">
@@ -44,7 +46,8 @@ export default function HomePage() {
       ) : null}
 
       <p className="muted">
-        AttendSure is being built in phases. Reports and administration dashboards come next.
+        AttendSure is being prepared for production: security testing, load testing, backups and the
+        university’s acceptance testing.
       </p>
     </div>
   );

@@ -66,6 +66,7 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
     'Disputes and excuses',
     'Announcements',
     'Reschedule requests',
+    'Reports',
     'Timetables',
     'Students',
     'Bulk import',
@@ -117,7 +118,7 @@ test('first Super Admin journey through the dashboard', async ({ page }) => {
 
   // 8. The audit log shows it, with the reason.
   await nav.getByRole('link', { name: 'Audit log' }).click();
-  await page.getByLabel('Action starts with').fill('users.');
+  await page.getByLabel('Action code starts with').fill('users.');
   await page.getByRole('button', { name: 'Search' }).click();
   const row = page.getByRole('row').filter({ hasText: 'users.suspended' });
   await expect(row).toBeVisible();

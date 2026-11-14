@@ -121,3 +121,13 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 98. **Lecturers decide disputes on the web dashboard.** The phone shows how many are waiting and says so; a phone screen for deciding them was not part of the approved designs.
 99. **Announcements go to students only,** worked out when sent: a student who enrols later does not see earlier ones. Staff-wide messages are not part of Phase 6.
 100. **A report on a faculty-wide or university-wide announcement goes to the administrators who cover that faculty (or the whole university)**, not to department administrators.
+
+## Reports and administration (Phase 7)
+
+101. **Only institution-wide roles read and export the audit log.** A department or faculty administrator cannot, because audit entries are not tagged with a department. The Super Admin and university-wide administrators can.
+102. **An audit-log file holds at most the newest 20,000 entries.** The file says so in its subtitle when it is cut short; narrow the dates to get the rest.
+103. **Analytics are worked out from the records each time they are asked for,** one semester at a time. That keeps them exact, but a very large semester may take a few seconds. Load testing in Phase 8 measures it.
+104. **Analytics count only classes that were held and whose attendance was closed,** the same rule as each student's own percentage. A class still under review, or still running, appears once it is decided or closed.
+105. **A report file shows the records as they were when it was made.** It is not updated afterwards; make it again for newer figures.
+106. **Report files are deleted from AttendSure after 7 days** (`reports.exportRetentionDays`), and the export log keeps who made and downloaded each one. A copy someone has already saved on their own computer is outside AttendSure's control; files naming people say so in their footer (Act 843).
+107. **The `/metrics` page is for a monitoring server that is not set up yet.** It stays switched off until `METRICS_TOKEN` is set, and charts and alerts on it come with hosting (D-16). Until then, System health shows background jobs and alerts.
