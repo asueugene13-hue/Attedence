@@ -1885,4 +1885,5 @@ Steps 1–3 and 5 need no hardware and can start as soon as the plan is approved
 - **Files:** `apps/web/src/components/ui.tsx`, `apps/web/src/app/globals.css`, `apps/web/public/brand/*`, `apps/web/src/app/icon.png`, `apple-icon.png`; `apps/mobile/src/components/ui.tsx`, `knutsford-wordmark.ts`, `src/assets.d.ts`, `app.config.ts`, `assets/brand/*`; `docs/brand/`; KNOWN_LIMITATIONS 90–91.
 - **Database changes:** none.
 - **Tests run:** `npm run format:check`, `npm run lint`, `npm run typecheck`: all clean. Mobile tests 27 passed; web tests 13 passed. The API was not changed. The sign-in page and the signed-in sidebar were checked in a browser (screenshots), signing in as the demo lecturer.
+- **CI:** GitHub run 43550122780 on `7315ff9`: **success**.
 - **Not yet done:** the design canvas still shows the placeholder crest; the phone sign-in screen has not been seen on a phone.
