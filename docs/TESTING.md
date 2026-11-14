@@ -58,6 +58,7 @@ Rules:
 
 | Date | Phase | Command | Result |
 | --- | --- | --- | --- |
+| 2026-11-14 | 8 (step 4) | Load test against the containers (`apps/api/load`) | Burst: **500/500** in 5.0 s; one minute: **500/500**, p95 58 ms; one minute with an API instance stopped: **500/500**, no gateway errors (after the proxy and app fixes). Details in DEPLOYMENT.md §8 |
 | 2026-11-14 | 8 (step 3) | `npm run check` | All passed: API **490**, web 18, mobile 32, shared 10, design tokens 3 (format, lint, types and build too) |
 | 2026-11-14 | 8 (step 3) | `npm run e2e -w @attendsure/web` | **9 passed** with the tightened security policy; journey 03 now proves the student photo loads |
 | 2026-11-14 | 7 (step 5) | `npm run check` | Format, lint, types, build passed. Tests: shared 10, design tokens 3, web 17, mobile 32 passed; API **488 passed, 1 failed** (scenario 25 load test: all 500 check-ins confirmed, but the live roster saw no updates). Rerun alone: passed; whole API suite rerun: **489 passed**. Intermittent, cause not confirmed; the test now reports connection drops. |

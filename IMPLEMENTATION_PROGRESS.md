@@ -2205,3 +2205,23 @@ Results in SECURITY.md §9. In short:
 - **Mistake on the way, fixed:** my bulk edit adding `method="post"` doubled the attribute on 4 multi-line forms; the type check caught it before any test ran.
 - **Tests:** full `npm run check` passed: format, lint, types, build; API 490, web 18, mobile 32, shared 10, design tokens 3, all passed. `npm run e2e -w @attendsure/web`: 9 passed (after the policy change, and again after the photo check).
 - **Database changes:** none.
+
+### 2026-11-14 — Step 8.4: load testing against the containers
+
+- **Built:** `apps/api/load/` (README there).
+  - `seed.mjs` makes obviously fake data in the **rehearsal only**: it refuses without `LOAD_TEST=rehearsal-only` and the rehearsal's bucket (checked), and refuses a run number already used (checked).
+  - `drive.mjs` sends signed check-ins through the HTTPS proxy as phones do, with the live roster connected and an administrator using the dashboard, analytics and a report file at the same time; then every phone retries with the same key.
+  - The plan named k6. A Node script was used instead because a check-in needs each phone's Ed25519 signature and the shared signing format from `@attendsure/shared`, which the existing tests already use. It produces the same measurements.
+- **Results** (DEPLOYMENT.md §8; one laptop running everything):
+  - burst, 500 at the same moment: **500 of 500** verified, in 5.0 s (95% within 4.8 s);
+  - 500 within one minute with codes rotating: **500 of 500**, 95% within 58 ms;
+  - one minute with api-1 stopped at 25 s: **500 of 500** at the first try, no gateway errors (final settings).
+  - Every run: retries got the same answer and nothing was stored twice, the live roster saw every check-in (except a connection on the stopped instance, which the dashboard re-opens by itself), the admin screens kept answering, and the report file was made.
+- **Found by the failure test, and fixed:**
+  - The proxy took up to 10 s to notice a stopped instance (40 of 500 got `502`). It now checks every 2 s and sets an instance aside after one failure.
+  - **The phone app** retried a check-in only when fully offline. It now also resends after `502`/`503`/`504`, same Idempotency-Key, freshly signed (`apps/mobile/src/lib/attendance.ts`; test added; checked by removing the rule: the test failed). Reaches phones with the next app build.
+  - Proxy body buffering for resends was tried and removed: two resent check-ins arrived altered (signature mismatch). Recorded in the Caddyfile.
+- **Mistakes on the way, fixed:** academic years may not overlap, so the second setup failed partway; load runs now share one load-test year and refuse a used run number. My first summary counted the script's own disconnect as a drop.
+- **Tests:** mobile 33 passed (one new); the load runs above; lint and formatting clean.
+- **Database changes:** none (load-test data exists only in the rehearsal database).
+- **Next step:** 8.5 backup and restore drill.

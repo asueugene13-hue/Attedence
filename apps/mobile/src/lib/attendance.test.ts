@@ -37,6 +37,38 @@ describe('submitting a check-in', () => {
     expect(waiting).toEqual([true, true, false]);
   });
 
+  it('retries with the same key when the proxy says an API server did not answer (502, 503, 504)', async () => {
+    for (const status of [502, 503, 504]) {
+      const keys: string[] = [];
+      const result = await submitCheckIn(
+        async (key) => {
+          keys.push(key);
+          if (keys.length < 2) throw new ApiError(status, 'HTTP_ERROR', 'Bad gateway');
+          return RESULT;
+        },
+        'key-g',
+        () => undefined,
+        async () => undefined,
+      );
+      expect(result).toEqual(RESULT);
+      expect(keys).toEqual(['key-g', 'key-g']);
+    }
+    // A server error from AttendSure itself (500) is an answer, not a lost request: not retried.
+    let calls = 0;
+    await expect(
+      submitCheckIn(
+        async () => {
+          calls++;
+          throw new ApiError(500, 'INTERNAL_ERROR', 'Something went wrong');
+        },
+        'k',
+        () => undefined,
+        async () => undefined,
+      ),
+    ).rejects.toMatchObject({ status: 500 });
+    expect(calls).toBe(1);
+  });
+
   it('gives up after two minutes offline, and never retries a refusal', async () => {
     let clock = 0;
     await expect(

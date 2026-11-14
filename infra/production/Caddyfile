@@ -16,7 +16,8 @@
 		reverse_proxy api-1:3000 api-2:3000 {
 			lb_policy cookie attendsure_live
 			health_uri /health/ready
-			health_interval 10s
+			health_interval 2s
+			fail_duration 30s
 		}
 	}
 
@@ -25,9 +26,18 @@
 	handle /api/* {
 		reverse_proxy api-1:3000 api-2:3000 {
 			lb_policy round_robin
+			# If an instance cannot be reached, try the other one for up to 5 s. Request bodies are NOT
+			# buffered for resending: in the load test a resent check-in reached the API altered (its phone
+			# signature no longer matched). A request that cannot be resent gets a clean 502 instead, and
+			# the phone sends it again itself with the same Idempotency-Key, so it counts once.
 			lb_try_duration 5s
+			lb_try_interval 250ms
+			# Checked every 2 s, and one failed request sets an instance aside for 30 s, so a stopped
+			# instance is noticed at once (the load test stopped one during check-ins: DEPLOYMENT.md §8).
 			health_uri /health/ready
-			health_interval 10s
+			health_interval 2s
+			fail_duration 30s
+			max_fails 1
 		}
 	}
 

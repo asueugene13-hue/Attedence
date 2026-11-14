@@ -115,3 +115,21 @@ Settings go in `infra/production/secrets/app.env` (ignored by git). On a real ho
 | 2026-11-14 | Through https://localhost:8443 in a real browser (Chromium) | First Super Admin activated, two-step sign-in set up, refresh cookie `Secure` and `HttpOnly`; an audit-log file asked for, **made by the worker**, downloaded from the file store; System health: all 8 schedules running, none overdue |
 | 2026-11-14 | Routing | `/api/*` shared between api-1 and api-2 (6 and 5 of 11 requests); `/health/*` and `/metrics` not served outside (404); a second `create-super-admin` refused |
 | 2026-11-14 | One API instance stopped | 20 of 20 requests still answered by the other instance (no gateway errors) |
+
+## 8. Load test results (Phase 8 step 4)
+
+How: `apps/api/load/` (README there). 500 fake students, each with a signed, trusted phone, check in through the HTTPS proxy to the two API instances, while the lecturer's live roster is connected and an administrator uses the dashboard (every 2 s), analytics (every 10 s) and asks for a report file. Then every phone retries with the same key. Everything ran on one Windows laptop (all containers and the load driver together), so a real host should do at least as well.
+
+| Date | Shape | Check-ins | Time per check-in (half / 95% / slowest) | Everything else |
+| --- | --- | --- | --- | --- |
+| 2026-11-14 | Burst: all 500 at the same moment | **500 of 500** verified and present, done in **5.0 s** | 2.9 s / 4.8 s / 4.9 s | Retries: 500 same answers, nothing stored twice. Live roster saw all 500. Dashboard, roster, analytics answered; report file made |
+| 2026-11-14 | One minute: 500 spread at random over 60 s, codes rotating | **500 of 500** verified and present | 34 ms / 58 ms / 89 ms | Dashboard, roster and analytics under 110 ms; live roster saw all 500; report file made |
+| 2026-11-14 | One minute, **api-1 stopped at 25 s and started at 45 s** (final proxy settings) | **500 of 500** verified and present at the first try; no gateway errors | 34 ms / 71 ms / 271 ms | Admin screens kept answering (slowest 1.1 s); the live roster on api-1 was cut and must reconnect (the dashboard does this by itself and reloads) |
+
+**What the failure test found, and what changed:**
+
+1. First try (earlier proxy settings): **40 of 500** check-ins got `502` while api-1 stopped. Nobody lost attendance (after the phones' retry all 500 were present), but the proxy needed up to 10 s to notice, and it could not resend the requests it had started.
+   - The proxy now checks each instance every 2 s and sets one aside after a single failed request (`max_fails 1`, `fail_duration 30s`).
+   - The **phone app** now sends a check-in again after a `502`, `503` or `504` (before, only when completely offline), with the same Idempotency-Key and a fresh signature, so it counts once. This reaches phones with the next app build.
+2. Second try: buffering request bodies so the proxy could resend them was tried and **removed**. Two resent check-ins reached the API altered (their phone signature no longer matched, so they were refused). A clean `502` that the phone resends itself is safer than a resend that may change the request.
+3. Final settings: 0 gateway errors with an instance stopped mid-way.

@@ -51,11 +51,14 @@ export const isAttendanceCode = (text: string) =>
 /** How long the phone keeps trying after losing the connection (ATTENDANCE_FLOW §8). */
 export const OFFLINE_RETRY_MS = 120_000;
 const RETRY_EVERY_MS = 5_000;
+/** The proxy's "the API did not answer": the check-in may not have arrived, so it is sent again. */
+const GATEWAY_ERRORS = new Set([502, 503, 504]);
 
 /**
  * Sends a check-in, keeping the same idempotency key on every try, so a request that did reach the
- * server is never counted twice. On a lost connection it keeps trying for up to two minutes, telling
- * the screen it is waiting; any answer from the server (even a refusal) ends it.
+ * server is never counted twice. On a lost connection, or when the proxy says the API did not answer
+ * (502, 503, 504: for example while one API server restarts), it keeps trying for up to two minutes,
+ * telling the screen it is waiting. Any answer from AttendSure itself (even a refusal) ends it.
  */
 export async function submitCheckIn(
   send: (key: string) => Promise<CheckInResult>,
@@ -71,8 +74,9 @@ export async function submitCheckIn(
       onWaiting(false);
       return result;
     } catch (error) {
-      const offline = error instanceof ApiError && error.code === 'NETWORK_ERROR';
-      if (!offline || now() - started >= OFFLINE_RETRY_MS) throw error;
+      const retryable =
+        error instanceof ApiError && (error.code === 'NETWORK_ERROR' || GATEWAY_ERRORS.has(error.status));
+      if (!retryable || now() - started >= OFFLINE_RETRY_MS) throw error;
       onWaiting(true);
       await wait(RETRY_EVERY_MS);
     }
