@@ -2,7 +2,7 @@
 
 Read this first in every session, and update it after every implementation step.
 
-**Current phase:** Phases 7 (reports and administration) and 8 (production readiness), started together 2026-11-14 with the product owner's approval ("build phase 7 and 8 together … take your time"); see "Phases 7 and 8" at the end. Phase 6 (user experiences) is complete, approved 2026-11-14 (the phone screens still to be seen on a phone). Phase 5 (attendance) is complete, approved by the product owner 2026-11-13 (the camera build is still to be tried on a phone when one is at hand). Phase 4 waits only for its field test (step 6). Earlier: Phase 3, timetable and class monitoring: plan approved 2026-11-09; complete and approved by the product owner 2026-11-09. Phase 4 (classroom verification): plan approved 2026-11-09; steps 1–5 done (step 5: beacon health and degraded mode); step 6 (the field test in two real classrooms) next. Phase 2 is complete (approved 2026-11-09). Phase 1 is complete and green in CI; its native Android build still needs JDK 17 and the Android SDK.
+**Current phase:** Phase 7 (reports and administration) is **complete**, waiting for the product owner's approval. Phase 8 (production readiness): steps 8.1–8.7 done on 2026-11-14; it closes when Knutsford staff sign off UAT and the restore drill is repeated on the real host, both of which need the university (see "Step 8.7" at the end). Phases 7 and 8 were started together 2026-11-14 with the product owner's approval. Still open from earlier phases: the phone test of the camera and Phase 6 screens (docs/PHONE_TEST_CHECKLIST.md), and Phase 4's field test in two real classrooms. Phases 1–3, 5 and 6 are complete and approved; Phase 4 waits only for its field test.
 **Last updated:** 2026-11-14
 
 ### Phase 1 steps
@@ -2258,3 +2258,38 @@ Results in SECURITY.md §9. In short:
 - **No invented Knutsford data:** names, contacts, dates and the university's choices are blanks or open decisions.
 - **Database changes:** none.
 - **Next step:** 8.7 Phase 8 exit check.
+
+### 2026-11-14 — Step 8.7: Phase 8 exit check
+
+**Exit criteria:** (1) Knutsford staff sign off on UAT; (2) a restore drill succeeds.
+
+- **(2) Restore drill: met on the rehearsal** (step 8.5, 17 s, every table identical). It must be repeated on the real host's staging before go-live (GO_LIVE_CHECKLIST §2).
+- **(1) UAT sign-off: cannot be done here.** It needs the staging host (D-16), the decisions in GO_LIVE_CHECKLIST §1 and Knutsford staff. The plan and sheet are ready (UAT_PLAN.md, UAT_SIGNOFF.md).
+
+**Verified here:**
+
+| Step | What | Evidence |
+| --- | --- | --- |
+| 8.1 | The worker runs every job | `worker-jobs.test.ts`; the rehearsal's System health showed all 8 schedules running from the worker |
+| 8.2 | Containers and production layout | Rehearsal over HTTPS in a real browser; one instance stopped with no failed requests; CI builds the images |
+| 8.3 | Security testing | Route sweep with pinned public routes, secret scan in CI, dependency audit, two ZAP scans; the password-in-address bug and the policy headers fixed |
+| 8.4 | Load | 500/500 in a 5 s burst, within a minute, and with an instance stopped; proxy and phone-app fixes |
+| 8.5 | Backup and restore | Drill passed; refusals proven |
+| 8.6 | Readiness documents | Runbook, phone checklist, UAT plan and sign-off, go-live checklist |
+| all | Final `npm run check` (2026-11-14) | Format, lint, types and build passed. Tests: API 490, mobile 33, web 18, shared 10, design tokens 3, all passed |
+| all | `npm run e2e -w @attendsure/web` | 9 passed (last run after step 8.3; later steps did not change the dashboard) |
+| all | GitHub CI | Passed for steps 8.2, 8.3 and 8.4 (all jobs: check, images, secrets) |
+
+**Needs the university (who and what):**
+
+| Who | What |
+| --- | --- |
+| University IT and the data protection lead | D-16 hosting, data location and Data Protection Commission registration; then staging and production per RUNBOOK.md §2 |
+| Academic leadership / Registry | D-09 attendance rules, D-14 staff ID format, D-18 retention periods, D-20 combined classes, D-07 single sign-on |
+| Estates / IT with the product owner | D-08 beacons; the Phase 4 field test in two classrooms |
+| IT | D-17 email (and SMS) service |
+| Product owner | The phone test checklist with a new app build (camera, Phase 6 screens, the 8.4 resend) |
+| Knutsford staff (UAT_PLAN.md §1) | UAT on staging, then the sign-off sheet |
+| IT on the real host | Repeat the load test and the restore drill there; fill in RUNBOOK.md §7 |
+
+**Phase 8 status:** everything that can be built and verified without the university is done. Phase 8 closes when UAT is signed off and the drill is repeated on the real host.
