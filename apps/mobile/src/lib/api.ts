@@ -11,6 +11,8 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly fieldErrors: { field: string | null; message: string }[] = [],
+    /** The API's request reference, for finding this request in the server logs. */
+    readonly requestId?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -63,7 +65,7 @@ export async function apiFetch<T>(path: string, request: ApiRequest = {}): Promi
   }
   if (response.ok) return data as T;
 
-  const problem = (data ?? {}) as { code?: string; detail?: string; errors?: unknown };
+  const problem = (data ?? {}) as { code?: string; detail?: string; errors?: unknown; requestId?: string };
   const fieldErrors = Array.isArray(problem.errors)
     ? (problem.errors as { field?: string | null; message?: string }[]).map((e) => ({
         field: e.field ?? null,
@@ -75,9 +77,14 @@ export async function apiFetch<T>(path: string, request: ApiRequest = {}): Promi
     problem.code ?? 'ERROR',
     problem.detail ?? 'Something went wrong. Please try again.',
     fieldErrors,
+    problem.requestId,
   );
 }
 
+/** The message to show. A server failure (5xx) also gives its reference, so support can find it in the logs. */
 export function describeError(error: unknown): string {
-  return error instanceof ApiError ? error.message : 'Something went wrong. Please try again.';
+  if (!(error instanceof ApiError)) return 'Something went wrong. Please try again.';
+  return error.status >= 500 && error.requestId
+    ? `${error.message} (reference ${error.requestId})`
+    : error.message;
 }

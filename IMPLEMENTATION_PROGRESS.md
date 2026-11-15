@@ -2300,3 +2300,16 @@ Results in SECURITY.md §9. In short:
 - **App build:** a new Android development build was started at the product owner's request (the phone is still not at hand), with the 8.4 change (a check-in is sent again after a 502, 503 or 504). Build page: https://expo.dev/accounts/clent_eugene/projects/attendsure/builds/51865aa8-f289-4ded-86b4-61af066a0490
 - **Build finished.** APK (install on an Android phone): https://expo.dev/artifacts/eas/3UgJLCpnaWbnkGdX-HytN0yY8YiQpRCZBIPOhLy5xPk.apk
 - Not yet installed on a phone (none at hand). Next: the phone test checklist (docs/PHONE_TEST_CHECKLIST.md) when a phone is available.
+
+### 2026-11-15 — Hardening while waiting for the phone and the university (1 of 3)
+
+Items from KNOWN_LIMITATIONS that need neither the phone nor the university.
+
+- **Error references on the phone.** The dashboard already showed "(reference …)" on server errors; the phone app now does too, so a tester or student can quote it and IT can find the request in the logs. RUNBOOK.md corrected: it had said the screens do not show it. Test `apps/mobile/src/lib/api.test.ts` (2); checked by not passing the reference through: it failed.
+- **Smaller API image: 1 GB → 609 MB** (limitation 110).
+  - Cause: `@prisma/client` lists the Prisma command-line tool as an optional peer, so `npm ci --omit=dev` kept it and everything it pulls in (Prisma Studio, its dev server, React, TypeScript). `--omit=peer` changed nothing; `npm uninstall` re-resolved the whole repository (1.1 GB).
+  - Fix: `apps/api/scripts/prune-production.mjs`, run in the image build, follows the lockfile from the API's real dependencies and deletes what is never reached (packages 500 MB → 200 MB; versions unchanged).
+  - **Checked on the rehearsal from empty:** the browser drive (activation, two-step sign-in, a report file made by the worker and downloaded); a 500-student burst (500/500 verified); Excel and PDF reports made; no errors in any log. The same burst on an unpruned build and on the new image, back to back: 14.1 s and 14.4 s, identical results.
+- **Seen once, not repeated:** in the first burst on the new image, 499 of 500 retries returned the first answer's attempt. The database held exactly one attempt and one record per student, and every stored answer matched its attempt, so nothing was counted twice. Three later bursts: 500 of 500. The load driver now prints any differing answer in full, so a repeat can be explained.
+- **Database changes:** none.
+- **Next:** item 3, a content security policy without inline scripts (limitation 111), if Next.js 16 supports it cleanly.

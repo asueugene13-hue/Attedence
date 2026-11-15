@@ -43,7 +43,11 @@ COPY packages/design-tokens/package.json packages/design-tokens/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY apps/mobile/package.json apps/mobile/
+COPY apps/api/scripts/prune-production.mjs /tmp/prune-production.mjs
+# npm keeps the Prisma command-line tool (an optional peer of @prisma/client) and everything it pulls
+# in; the prune script removes what the API never reaches (about 500 MB down to 200 MB).
 RUN npm ci --omit=dev -w @attendsure/api -w @attendsure/shared --no-audit --no-fund \
+  && node /tmp/prune-production.mjs /app \
   && mkdir -p apps/api/node_modules packages/shared/node_modules
 
 # ── 4. Runtime: compiled code and production dependencies, run as an unprivileged user ──────────

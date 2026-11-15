@@ -215,6 +215,16 @@ const retries = await Promise.all(run.students.map((s) => checkIn(s, qr, idempot
 const sameAttempt = retries.filter(
   (r, i) => r.status === 200 && r.body.attemptId === answers[i].body?.attemptId,
 ).length;
+// Any retry whose answer differs from the first answer, shown in full (there should be none).
+const differentAnswers = retries
+  .map((r, i) => ({ student: run.students[i].number, first: answers[i], retry: r }))
+  .filter((x) => !(x.retry.status === 200 && x.retry.body.attemptId === x.first.body?.attemptId))
+  .slice(0, 3)
+  .map((x) => ({
+    student: x.student,
+    first: { status: x.first.status, resent: x.first.resent, body: x.first.body },
+    retry: { status: x.retry.status, body: x.retry.body },
+  }));
 
 // 5. Let the live roster catch up, then stop the background load and look at the results.
 const liveDeadline = Date.now() + 15_000;
@@ -258,7 +268,7 @@ console.warn(
         outcomes,
         sentAgainAfterGatewayError: answers.filter((a) => a.resent > 0).length,
       },
-      retries: { ...stats(retries), sameAttempt },
+      retries: { ...stats(retries), sameAttempt, differentAnswers },
       liveRoster: { studentsSeen: seen.size, drops },
       rosterCounts: roster.body?.counts ?? roster.status,
       lecturerCode: stats(qrCalls),

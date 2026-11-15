@@ -15,7 +15,7 @@
 | Redis | Queues, rate limits, live-roster messages, the one-time numbers that stop replayed requests | Everything stops (the readiness check fails) |
 | Object storage | Photos, attachments, report files | Uploads, photos and downloads fail; attendance still works |
 
-**Health checks:** `/health/live` (the process runs) and `/health/ready` (the database and Redis answer), inside the network only. **Metrics:** `/metrics` with the `METRICS_TOKEN`, inside the network only (SECURITY.md §9). **Logs:** each container writes one JSON line per event to standard output; every request line carries a `requestId`, and every error reply from the API includes the same `requestId` (the screens do not show it yet), so a failed request can be traced in the logs by its time and the person's account.
+**Health checks:** `/health/live` (the process runs) and `/health/ready` (the database and Redis answer), inside the network only. **Metrics:** `/metrics` with the `METRICS_TOKEN`, inside the network only (SECURITY.md §9). **Logs:** each container writes one JSON line per event to standard output; every request line carries a `requestId`, and every error reply from the API includes the same `requestId`. When the server fails (a 5xx error), the dashboard and the phone app show it as "(reference …)" at the end of the message: ask the person for it and search the logs for it.
 
 ## 2. First deployment
 

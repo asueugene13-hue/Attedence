@@ -151,3 +151,5 @@ Scripts in `infra/production/backup/` (bash; they need `pg_dump`, `pg_restore`, 
 4. A monthly drill into staging, recorded in §6: restore, compare with the backup, start AttendSure on it, time it.
 
 **To recover after losing the database:** restore the latest backup into a new, empty database (`restore.sh`), run the release job (it applies any newer migrations), point `DATABASE_URL` at it, start the API instances and the worker, then check System health and a few known records. Anything written after that backup is lost, unless WAL archiving lets the host recover to a later moment.
+
+**2026-11-15, the smaller API image (609 MB instead of 1 GB):** the same burst run back to back on the old and the new image took 14.1 s and 14.4 s, both 500 of 500 verified with every retry answered the same. The pruning changes nothing at run time. Both took longer than the 5 s measured on 2026-11-14 because the laptop itself was slower that day (the same setup step took 10 s instead of 4 s): on a shared laptop the figures vary, which is why the test must be repeated on the real host.
