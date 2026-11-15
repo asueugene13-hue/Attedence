@@ -2313,3 +2313,15 @@ Items from KNOWN_LIMITATIONS that need neither the phone nor the university.
 - **Seen once, not repeated:** in the first burst on the new image, 499 of 500 retries returned the first answer's attempt. The database held exactly one attempt and one record per student, and every stored answer matched its attempt, so nothing was counted twice. Three later bursts: 500 of 500. The load driver now prints any differing answer in full, so a repeat can be explained.
 - **Database changes:** none.
 - **Next:** item 3, a content security policy without inline scripts (limitation 111), if Next.js 16 supports it cleanly.
+
+### 2026-11-15 — Hardening (2 and 3 of 3): a script policy without inline scripts
+
+- **Built:** `apps/web/src/proxy.ts` (Next.js 16's request proxy) makes a fresh nonce for every page and sends a Content Security Policy built with it (`src/lib/csp.ts`): `script-src 'self' 'nonce-…' 'strict-dynamic'`, no `'unsafe-inline'` for scripts. Next.js puts the nonce on its own scripts. The root layout now renders each page per request (`connection()`), as nonces require. The fixed policy in `next.config.ts` is removed; the other security headers stay. The dashboard image now also gives `FILES_ORIGIN` to the running server (the policy is built per request).
+- **Kept:** inline styles (`style-src 'unsafe-inline'`), because React writes `style="…"` attributes; they cannot run code.
+- **Tests:**
+  - web unit tests 20 (2 new: the policy's script rule and fresh nonces);
+  - browser test `e2e/10-security.spec.ts` (2): every script on the page carries the page's nonce, the nonce changes, and a script injected into the page does not run while the page keeps working. With `'unsafe-inline'` put back, both failed.
+  - `npm run e2e -w @attendsure/web`: **11 passed**.
+- **Found on the way:** journey 07 clicked "Sign in" and opened another page without waiting for sign-in to finish. Per-request pages made that race visible (the lecturer ended up signed out). The journey now waits for the Home page, as the others do. Journey 08 failed only because it builds on 07.
+- **On the rehearsal:** all 14 scripts on the sign-in page carry the nonce; a real browser shows no policy violations and the page works; the ZAP rescan no longer reports `script-src unsafe-inline` (0 failures, 59 passed).
+- **Database changes:** none.

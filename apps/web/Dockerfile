@@ -31,7 +31,10 @@ COPY apps/web apps/web
 RUN npm run build -w @attendsure/shared -w @attendsure/design-tokens && npm run build -w @attendsure/web
 
 FROM ${NODE_IMAGE} AS runtime
-ENV NODE_ENV=production \
+ARG FILES_ORIGIN
+# Read when each page is served, for its Content Security Policy (src/proxy.ts).
+ENV FILES_ORIGIN=${FILES_ORIGIN} \
+    NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3001 \
     HOSTNAME=0.0.0.0

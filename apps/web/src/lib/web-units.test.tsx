@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ReasonDialog } from '@/components/reason-dialog';
 import { ApiError, apiFetch, describeError } from './api';
 import { AUDIT_AREAS, describeAction } from './audit-actions';
+import { contentSecurityPolicy, newNonce } from './csp';
 import { visibleNavItems } from './navigation';
 
 beforeAll(() => {
@@ -198,6 +199,25 @@ describe('forms', () => {
     );
     expect(forms.length).toBeGreaterThanOrEqual(18);
     expect(forms.filter((x) => !x.tag.includes('method="post"')).map((x) => x.f)).toEqual([]);
+  });
+});
+
+describe('content security policy', () => {
+  it('lets only scripts with the nonce run, and allows eval only in development', () => {
+    const production = contentSecurityPolicy('abc123', {
+      dev: false,
+      filesOrigin: 'https://files.example.test',
+    });
+    const scriptSrc = production.split('; ').find((d) => d.startsWith('script-src'))!;
+    expect(scriptSrc).toBe("script-src 'self' 'nonce-abc123' 'strict-dynamic'");
+    expect(production).toContain("img-src 'self' data: blob: https://files.example.test");
+    expect(production).toContain("frame-ancestors 'none'");
+    expect(contentSecurityPolicy('n', { dev: true, filesOrigin: 'http://x' })).toContain("'unsafe-eval'");
+  });
+
+  it('makes a different nonce each time', () => {
+    const nonces = new Set(Array.from({ length: 50 }, () => newNonce()));
+    expect(nonces.size).toBe(50);
   });
 });
 

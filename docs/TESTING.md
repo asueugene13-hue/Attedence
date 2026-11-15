@@ -58,6 +58,7 @@ Rules:
 
 | Date | Phase | Command | Result |
 | --- | --- | --- | --- |
+| 2026-11-15 | 8 (hardening) | `npm run e2e -w @attendsure/web` with the nonce policy | **11 passed** (9 journeys + 2 security: scripts carry the nonce; an injected script does not run). ZAP rescan: 0 failures, 59 passed, no script-src warning |
 | 2026-11-15 | 8 (hardening) | Rehearsal on the 609 MB API image | Browser drive passed; bursts 500/500 (14.4 s; unpruned image 14.1 s back to back); Excel and PDF reports made; mobile tests 35 passed |
 | 2026-11-14 | 8 (step 5) | `bash infra/production/backup/drill-rehearsal.sh` | **Passed in 17 s**: 78 tables / 43,540 rows identical after restore into a new server; append-only rules intact; API ready on the copy. Refusals proven (non-empty target, tampered file, wrong passphrase, changed row) |
 | 2026-11-14 | 8 (step 4) | Load test against the containers (`apps/api/load`) | Burst: **500/500** in 5.0 s; one minute: **500/500**, p95 58 ms; one minute with an API instance stopped: **500/500**, no gateway errors (after the proxy and app fixes). Details in DEPLOYMENT.md §8 |

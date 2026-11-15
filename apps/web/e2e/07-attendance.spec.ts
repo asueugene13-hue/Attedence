@@ -130,6 +130,8 @@ test('a lecturer runs attendance: opens it, shows the code, sees a check-in live
   await page.getByLabel('Email').fill(LECTURER);
   await page.getByLabel('Password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
+  // Wait for sign-in to finish (as a person would) before opening another page.
+  await expect(page.getByRole('heading', { name: /^Welcome, / })).toBeVisible();
   await page.goto(`/classes/${classId}`);
   await page.getByRole('button', { name: 'Start class and open attendance' }).click();
   const open = page.getByRole('dialog', { name: 'Start class and open attendance' });
