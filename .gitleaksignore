@@ -17,3 +17,5 @@ fd3704f0d0eb258a0ad64353499c7b48cf941a0d:.github/workflows/ci.yml:generic-api-ke
 fd3704f0d0eb258a0ad64353499c7b48cf941a0d:.env.example:generic-api-key:31
 # An example Idempotency-Key (a made-up UUID) in the API documentation.
 d2c2a0e2648e7dc824c7e68712a52707fbeac04c:docs/API_DOCUMENTATION.md:generic-api-key:176
+# Beacon test key in the encryption key change test: the same counting pattern, used only in tests.
+1b28a6dd3805ede37e4a0f6f9ad31670791fac02:apps/api/test/encryption-rotation.test.ts:generic-api-key:65
