@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="1024" height="1024">
+  <title>AttendSure app icon</title>
+  <!-- Master for the phone app icon (approved design, 2026-11-19): a white shield with a navy check mark and a
+       gold dot on navy. Full square: iOS and Android apply their own rounded mask. Generated PNGs come from
+       scripts/make-app-icon.mjs. The Knutsford crest stays the university's logo inside the app. -->
+  <rect width="180" height="180" fill="#142F5C"/>
+  <g id="mark">
+    <path d="M89.5 43.5 L51.4 56.4 Q49 57.2 49 59.8 L49 92 C49 116.5 65.5 134 89.5 142.5 C113.5 134 130 116.5 130 92 L130 59.8 Q130 57.2 127.6 56.4 Z" fill="#F3F6FB"/>
+    <polyline points="70,94.5 83.5,107.5 106.5,83" fill="none" stroke="#142F5C" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="114.2" cy="73.2" r="5.5" fill="#E2B044"/>
+  </g>
+</svg>

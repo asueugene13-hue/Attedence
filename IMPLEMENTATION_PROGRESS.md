@@ -2340,3 +2340,13 @@ Items from KNOWN_LIMITATIONS that need neither the phone nor the university.
 - **Database changes:** none (the stored format changes value by value; old values stay readable).
 - **Full check (2026-11-19):** passed. API 494 (4 new), mobile 35, web 20, shared 10, design tokens 3; format, lint, types and build. (The first try could not reach the development database: Docker had been restarted. It passed once the development services were started again.)
 - **CI secret scan (2026-11-19):** the first push failed the `secrets` job on the new test's fake beacon key (`00112233…`); reviewed and added to `.gitleaksignore` with its reason. The tests and image builds passed.
+
+### 2026-11-19 — New app icon (product owner's design)
+
+- **Decision (product owner):** the phone app icon is the supplied design: a white shield with a navy check mark and a gold dot, on navy. It replaces the crest **as the app icon only**; the Knutsford crest and wordmark stay the university's logo inside the app (sign-in and headers).
+- **Built:**
+  - `apps/mobile/assets/brand/app-icon.svg`, a vector master redrawn from the supplied picture. Colours were sampled from it: navy `#142F5C`, shield `#F3F6FB`, gold `#E2B044`. Shapes were measured on its 180 px version.
+  - `scripts/make-app-icon.mjs` renders `icon.png` (1024 px, full square; the phone rounds it) and the Android adaptive foreground (shield only, inside the area every launcher mask keeps). The Android icon background is now navy. A copy of the master is in `docs/brand/`.
+- **Checked by eye** against the supplied picture at the same size, and inside Android's circle mask; the check mark was thickened slightly to match.
+- **Tests:** mobile 35 passed; lint and types clean. A new app build is needed for the icon to appear on phones.
+- **Database changes:** none.
