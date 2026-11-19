@@ -2350,3 +2350,4 @@ Items from KNOWN_LIMITATIONS that need neither the phone nor the university.
 - **Checked by eye** against the supplied picture at the same size, and inside Android's circle mask; the check mark was thickened slightly to match.
 - **Tests:** mobile 35 passed; lint and types clean. A new app build is needed for the icon to appear on phones.
 - **Database changes:** none.
+- **App build with the new icon finished.** APK: https://expo.dev/artifacts/eas/QRkKfWpMLpgCWYDWb3o-_bV0sdpoZq6_Ehg2-6pD3RM.apk
