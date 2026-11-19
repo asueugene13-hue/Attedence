@@ -1,5 +1,6 @@
 import { type RouteProp, useRoute } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
+import { useKeepAwake } from 'expo-keep-awake';
 import { useMemo } from 'react';
 import { Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -15,6 +16,15 @@ interface CurrentCode {
   expiresAt: string;
   serverTime: string;
   closesAt: string;
+}
+
+/**
+ * Keeps the phone's screen on while it is shown (KNOWN_LIMITATIONS 84). Rendered only while a code is on
+ * screen, so the phone goes back to its normal timeout when attendance closes or the lecturer leaves.
+ */
+function KeepScreenOn() {
+  useKeepAwake('attendsure-attendance-code');
+  return null;
 }
 
 /** The attendance code on the lecturer's phone, refreshed just as it changes (secret stays on the server). */
@@ -70,6 +80,7 @@ export function AttendanceCodeScreen() {
         backgroundColor: '#fff',
       }}
     >
+      <KeepScreenOn />
       <Text style={{ fontSize: 20, fontWeight: '600', color: '#111', textAlign: 'center' }}>
         Scan with the AttendSure app
       </Text>

@@ -136,8 +136,9 @@ describe('registering beacons', () => {
     await uidBeacon(rooms.closed).expect(400);
     const lecturer = (await signInAs(app, prisma, 'lecturer@example.test', ['LECTURER'])).auth;
     await uidBeacon(rooms.a).expect(201);
-    // Lecturers can see beacons (health) but not register them; Registrars see nothing.
-    expect((await http.get('/api/v1/beacons').set(lecturer).expect(200)).body.data).toHaveLength(1);
+    // Lecturers may read beacons but not register them, and see only the room of their own running class
+    // (none here; beacon-health.test.ts "who sees a beacon"). Registrars see nothing.
+    expect((await http.get('/api/v1/beacons').set(lecturer).expect(200)).body.data).toEqual([]);
     await create(
       {
         classroomId: rooms.a,

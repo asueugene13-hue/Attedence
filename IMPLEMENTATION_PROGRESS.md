@@ -3,7 +3,7 @@
 Read this first in every session, and update it after every implementation step.
 
 **Current phase:** Phase 7 (reports and administration) is **complete and approved** by the product owner (2026-11-14). Phase 8 (production readiness): steps 8.1–8.7 done on 2026-11-14; it closes when Knutsford staff sign off UAT and the restore drill is repeated on the real host, both of which need the university (see "Step 8.7" at the end). Phases 7 and 8 were started together 2026-11-14 with the product owner's approval. Still open from earlier phases: the phone test of the camera and Phase 6 screens (docs/PHONE_TEST_CHECKLIST.md), and Phase 4's field test in two real classrooms. Phases 1–3, 5 and 6 are complete and approved; Phase 4 waits only for its field test.
-**Last updated:** 2026-11-14
+**Last updated:** 2026-11-19
 
 ### Phase 1 steps
 
@@ -2351,3 +2351,29 @@ Items from KNOWN_LIMITATIONS that need neither the phone nor the university.
 - **Tests:** mobile 35 passed; lint and types clean. A new app build is needed for the icon to appear on phones.
 - **Database changes:** none.
 - **App build with the new icon finished.** APK: https://expo.dev/artifacts/eas/QRkKfWpMLpgCWYDWb3o-_bV0sdpoZq6_Ehg2-6pD3RM.apk
+
+### 2026-11-19 — Hardening while waiting for the phone: three known limitations closed (84, 66, 97)
+
+The product owner asked to continue building. No phase is waiting for approval and the phone was disconnected, so this step closes known limitations that need neither the phone nor the university.
+
+- **Built:**
+  - **The lecturer's screen stays on while it shows the attendance code (limitation 84).** `AttendanceCodeScreen` keeps the screen awake only while a code is shown; when attendance closes, the code cannot be shown, or the lecturer leaves, the phone goes back to its own timeout. It uses `expo-keep-awake` 58.0.3, which was already in the app build through Expo (checked with Expo's module list), now declared as the app's own dependency. **No new app build is needed.**
+  - **Lecturers see beacons only during their own class (limitation 66; the role matrix says "S, during own class").** `GET /beacons`, `GET /beacons/:id` and `GET /beacons/:id/health` give a lecturer only the beacons of the room where their own class is running (started and still ACTIVE); any other beacon answers `404 NOT_FOUND`, so its existence is not revealed. Administrators and the Super Admin see every room, as before (rooms are not divided by faculty). The beacons module asks the class-sessions module through its service (`ClassSessionsService.roomsTeachingNow`, rule 8). No screen showed lecturers this data; the server allowed it.
+  - **Excuse form dates are picked from a calendar (limitation 97).** New `components/date-field.tsx`: a month calendar in plain React Native (no native module, so no new app build), Monday first, every day a 44-point button with its full name for screen readers. "To" cannot be before "From" or more than 31 days after it (the server's `EXCUSE_MAX_DAYS`); moving "From" past "To" moves "To" with it. Day and month names are spelled out in code, because the phone's JavaScript engine and Node word dates differently (found by the test: "Tuesday, 20 August").
+- **Files:**
+  - API: `beacons/beacons.service.ts` (`listFor`, `getFor`, `readableRooms`), `beacons.controller.ts`, `beacons.module.ts`; `class-sessions/class-sessions.service.ts`; `verification/beacon-health.controller.ts`, `beacon-health.service.ts`.
+  - Phone: `screens/AttendanceCodeScreen.tsx`, `screens/ExcuseFormScreen.tsx`, new `components/date-field.tsx`; `package.json` and `package-lock.json`.
+  - Tests: new `apps/mobile/src/attendance-code.test.tsx` (2) and `apps/mobile/src/date-field.test.tsx` (3); `apps/api/test/beacon-health.test.ts` (+1, "who sees a beacon"); `apps/api/test/beacons.test.ts` (a lecturer with no class now sees no beacons).
+  - Docs: KNOWN_LIMITATIONS 66, 84, 97; API_DOCUMENTATION (beacon routes); PHONE_TEST_CHECKLIST 3.4, 4.1, 5.1 (5.1 also corrected for the new icon).
+- **Database changes:** none.
+- **Proof the new tests bite (each restored after):**
+  - Keep-awake removed from the code screen: 1 failed.
+  - Lecturer limit switched off: 1 failed.
+  - Lecturer limit ignoring whether the class is running: 1 failed.
+  - "To" not moved with "From": 1 failed.
+  - No 31-day limit on "To": 1 failed.
+- **Tests run:**
+  - The new and changed files on their own: phone 5 passed; API beacon tests 19 passed.
+  - `npm run check` (development servers stopped first): the first run stopped at formatting (one test file); after formatting, exit 0. Design tokens 3, shared 10, API **495**, mobile **40**, web 20, so **568 passed**.
+- **Known limitations:** the calendar and the screen staying on have not been seen on a real phone yet (PHONE_TEST_CHECKLIST 3.4 and 4.1). Platform integrity (the rest of limitation 66) still waits for the Play and Apple accounts.
+- **Next step:** reconnect the phone and run the phone test checklist; these changes reach the installed app as soon as it loads the new code from this computer.

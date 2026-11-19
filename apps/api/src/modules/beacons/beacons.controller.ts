@@ -28,14 +28,15 @@ export class BeaconsController {
   /** `?classroomId=&status=`. Rotating keys are never returned. */
   @Get('beacons')
   @RequirePermissions('beacon_health.read')
-  list(@Query() query: unknown) {
-    return this.beacons.list(parseInput(BeaconQuerySchema, query));
+  list(@CurrentAuth() auth: AccessClaims, @Query() query: unknown) {
+    return this.beacons.listFor(auth, parseInput(BeaconQuerySchema, query));
   }
 
+  /** Lecturers see only the beacons of the room where their own class is running. */
   @Get('beacons/:id')
   @RequirePermissions('beacon_health.read')
-  get(@Param('id') param: string) {
-    return this.beacons.get(id(param));
+  get(@CurrentAuth() auth: AccessClaims, @Param('id') param: string) {
+    return this.beacons.getFor(auth, id(param));
   }
 
   @Post('beacons')

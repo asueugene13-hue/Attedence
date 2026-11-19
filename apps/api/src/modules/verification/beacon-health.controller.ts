@@ -1,6 +1,8 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { BeaconHealthQuerySchema, IdSchema } from '@attendsure/shared';
 import { parseInput } from '../../common/validation/parse-input.js';
+import { CurrentAuth } from '../auth/access-token.guard.js';
+import type { AccessClaims } from '../auth/token.service.js';
 import { RequirePermissions } from '../authorization/access.decorators.js';
 import { BeaconHealthService } from './beacon-health.service.js';
 
@@ -12,7 +14,11 @@ export class BeaconHealthController {
   /** `?hours=24`: status, when it was last heard, and its 5-minute summaries (newest first). */
   @Get('beacons/:id/health')
   @RequirePermissions('beacon_health.read')
-  get(@Param('id') id: string, @Query() query: unknown) {
-    return this.health.health(parseInput(IdSchema, id), parseInput(BeaconHealthQuerySchema, query).hours);
+  get(@CurrentAuth() auth: AccessClaims, @Param('id') id: string, @Query() query: unknown) {
+    return this.health.health(
+      auth,
+      parseInput(IdSchema, id),
+      parseInput(BeaconHealthQuerySchema, query).hours,
+    );
   }
 }

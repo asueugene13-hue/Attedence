@@ -386,3 +386,58 @@ describe('health summaries', () => {
     await http.get(`/api/v1/beacons/${ids.beacon}/health`).set(student.auth).expect(403);
   });
 });
+
+describe('who sees a beacon', () => {
+  /** A signed-in session for an existing user (the class's lecturer, created above without a password). */
+  async function authFor(userId: string, role: 'LECTURER') {
+    const { SessionService } = await import('../src/modules/auth/session.service.js');
+    const { TokenService } = await import('../src/modules/auth/token.service.js');
+    const { session } = await app.get(SessionService).create({
+      userId,
+      client: 'WEB',
+      role,
+      mfaVerified: true,
+      context: { requestId: undefined, ip: undefined, userAgent: undefined },
+    });
+    const { token } = await app.get(TokenService).signAccess({ userId, sessionId: session.id, role });
+    return { Authorization: `Bearer ${token}` };
+  }
+  const idsOf = (body: { data: { id: string }[] }) => body.data.map((b) => b.id).sort();
+
+  it('shows a lecturer only the beacons of the room where their own class is running, and only while it runs', async () => {
+    const lecturer = await authFor(lecturerUserId, 'LECTURER');
+    // During their class in Room 1: Room 1's beacon, never Room 2's.
+    expect(idsOf((await http.get('/api/v1/beacons').set(lecturer).expect(200)).body)).toEqual([ids.beacon]);
+    const otherRoom = await http
+      .get(`/api/v1/beacons?classroomId=${ids.otherRoom}`)
+      .set(lecturer)
+      .expect(200);
+    expect(otherRoom.body.data).toEqual([]);
+    await http.get(`/api/v1/beacons/${ids.beacon}`).set(lecturer).expect(200);
+    await http.get(`/api/v1/beacons/${ids.beacon}/health?hours=1`).set(lecturer).expect(200);
+    await http.get(`/api/v1/beacons/${ids.otherBeacon}`).set(lecturer).expect(404);
+    await http.get(`/api/v1/beacons/${ids.otherBeacon}/health`).set(lecturer).expect(404);
+
+    // Another lecturer, with no class running anywhere: nothing.
+    const other = await signInAs(app, prisma, 'lecturer.two@example.test', ['LECTURER']);
+    const dept = await prisma.department.findFirstOrThrow();
+    await prisma.lecturerProfile.create({
+      data: { userId: other.user.id, staffNumber: 'TL2', departmentId: dept.id },
+    });
+    expect((await http.get('/api/v1/beacons').set(other.auth).expect(200)).body.data).toEqual([]);
+    await http.get(`/api/v1/beacons/${ids.beacon}/health`).set(other.auth).expect(404);
+
+    // Administrators see every room.
+    expect(idsOf((await http.get('/api/v1/beacons').set(admin).expect(200)).body)).toEqual(
+      [ids.beacon, ids.otherBeacon].sort(),
+    );
+
+    // Once the class has ended, the lecturer sees nothing either.
+    await prisma.classSession.update({
+      where: { id: ids.session },
+      data: { status: 'COMPLETED', actualEnd: new Date('2030-08-20T11:30:00Z') },
+    });
+    expect((await http.get('/api/v1/beacons').set(lecturer).expect(200)).body.data).toEqual([]);
+    await http.get(`/api/v1/beacons/${ids.beacon}`).set(lecturer).expect(404);
+  });
+});

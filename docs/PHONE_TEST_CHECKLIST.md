@@ -48,7 +48,7 @@ Open attendance on the web dashboard as the demo lecturer (or on the lecturer's 
 | 3.1 | My attendance → a course | Percentage, classes held, and why any class does not count |
 | 3.2 | "Dispute this record" on an absence; add a reason and a photo | Sent; shows in My requests as waiting |
 | 3.3 | Lecturer approves it on the web | The student gets a notification; the record changes, with the reason |
-| 3.4 | Excuse request for two dates, untick one class, attach a PDF | Sent; after approval only the ticked classes are excused |
+| 3.4 | Excuse request for two dates (picked from the calendar), untick one class, attach a PDF | The calendar opens under each date; days before "From" or over 31 days after it cannot be picked. Sent; after approval only the ticked classes are excused |
 | 3.5 | Student ID card | Name, number, programme, photo, and a code that changes every 30 s |
 | 3.6 | Announcements | The lecturer's and the course rep's messages, labelled; unread count goes down when opened |
 
@@ -56,7 +56,7 @@ Open attendance on the web dashboard as the demo lecturer (or on the lecturer's 
 
 | # | Do this | Expect |
 | --- | --- | --- |
-| 4.1 | Lecturer: Today → open attendance, show the QR | QR changes every 15 s; roster counts update |
+| 4.1 | Lecturer: Today → open attendance, show the QR; leave the phone untouched for longer than its screen timeout | QR changes every 15 s; roster counts update; the screen stays on while the QR shows, and turns off normally after leaving that page |
 | 4.2 | Lecturer: check in a student by hand (assisted) | Needs a reason; shows on the roster as assisted |
 | 4.3 | Staff: Check ID → scan a student's ID card code | "Genuine", with the student's photo and status; an old screenshot says "expired" |
 | 4.4 | Course rep: send an update | Sent and labelled as from the course rep; a second one the same day is limited |
@@ -66,7 +66,7 @@ Open attendance on the web dashboard as the demo lecturer (or on the lecturer's 
 
 | # | Check | Expect |
 | --- | --- | --- |
-| 5.1 | App icon and the sign-in screen | The Knutsford crest, and the wordmark separate from it |
+| 5.1 | App icon and the sign-in screen | Icon: white shield with a navy check and a gold dot, on navy. Sign-in: the Knutsford crest, and the wordmark separate from it |
 | 5.2 | Large text (Android display settings, biggest font) | Nothing cut off or overlapping |
 | 5.3 | Dark mode | Readable everywhere |
 | 5.4 | A small or old phone, if available | Usable; note anything slow |

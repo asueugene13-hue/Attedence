@@ -143,6 +143,18 @@ export class ClassSessionsService {
     });
   }
 
+  /**
+   * The rooms where this lecturer's own class is running at a moment (started and still ACTIVE). Used to
+   * limit what a lecturer sees of beacons to "during own class" (ROLE_PERMISSION_MATRIX.md).
+   */
+  async roomsTeachingNow(lecturerId: string, at: Date): Promise<Set<string>> {
+    const rows = await this.prisma.classSession.findMany({
+      where: { lecturerId, status: 'ACTIVE', actualStart: { lte: at } },
+      select: { classroomId: true },
+    });
+    return new Set(rows.map((r) => r.classroomId));
+  }
+
   async summaries(ids: string[]) {
     const rows = await this.prisma.classSession.findMany({
       where: { id: { in: [...new Set(ids)] } },

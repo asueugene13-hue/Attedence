@@ -1,13 +1,14 @@
-import { EXCUSE_CATEGORIES } from '@attendsure/shared';
+import { EXCUSE_CATEGORIES, EXCUSE_MAX_DAYS } from '@attendsure/shared';
 import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { ChoiceChips } from '../components/choice-chips';
+import { DateField } from '../components/date-field';
 import { BodyText, Button, Card, Notice, Screen, TextField } from '../components/ui';
 import { describeError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { localDay } from '../lib/classes';
+import { addDays, localDay } from '../lib/classes';
 import {
   classWhen,
   EXCUSE_CATEGORY_LABELS,
@@ -25,7 +26,8 @@ interface Covered {
   course: { code: string; title: string } | null;
   recordStatus: string | null;
 }
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** The last day one request can reach from its first day (the server's limit, EXCUSE_MAX_DAYS). */
+const lastDayFrom = (day: string) => addDays(day, EXCUSE_MAX_DAYS - 1);
 
 /**
  * Ask to be excused from the classes in some dates (as on the design canvas). The server lists the
@@ -48,10 +50,6 @@ export function ExcuseFormScreen() {
   const [error, setError] = useState<string | null>(null);
 
   async function find() {
-    if (!DATE.test(startDate) || !DATE.test(endDate)) {
-      setError('Write the dates as year-month-day, for example 2030-08-20.');
-      return;
-    }
     setBusy('find');
     setError(null);
     try {
@@ -114,32 +112,26 @@ export function ExcuseFormScreen() {
         value={category}
         onChange={setCategory}
       />
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <TextField
-            label="From"
-            value={startDate}
-            onChangeText={(v) => {
-              setStartDate(v);
-              setClasses(null);
-            }}
-            placeholder="2030-08-20"
-            autoCapitalize="none"
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <TextField
-            label="To"
-            value={endDate}
-            onChangeText={(v) => {
-              setEndDate(v);
-              setClasses(null);
-            }}
-            placeholder="2030-08-21"
-            autoCapitalize="none"
-          />
-        </View>
-      </View>
+      <DateField
+        label="From"
+        value={startDate}
+        onChange={(day) => {
+          setStartDate(day);
+          // Keep "To" on or after "From", and within one request's limit.
+          if (endDate < day || endDate > lastDayFrom(day)) setEndDate(day);
+          setClasses(null);
+        }}
+      />
+      <DateField
+        label="To"
+        value={endDate}
+        min={startDate}
+        max={lastDayFrom(startDate)}
+        onChange={(day) => {
+          setEndDate(day);
+          setClasses(null);
+        }}
+      />
       <Button
         label="Find my classes in these dates"
         variant="secondary"

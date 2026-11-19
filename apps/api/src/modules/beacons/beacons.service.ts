@@ -17,6 +17,8 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { AcademicAccessService } from '../academic/academic-access.service.js';
 import { AuditService } from '../audit-logs/audit.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
+import { ClassSessionsService } from '../class-sessions/class-sessions.service.js';
+import { LecturersService } from '../courses/lecturers.service.js';
 import { PlacesService } from '../places/places.service.js';
 import { type BeaconCalibration, calibrate } from './calibration.js';
 import {
@@ -47,8 +49,45 @@ export class BeaconsService {
     private readonly places: PlacesService,
     private readonly encryption: EncryptionService,
     private readonly clock: Clock,
+    private readonly lecturers: LecturersService,
+    private readonly classSessions: ClassSessionsService,
   ) {}
 
+  /**
+   * The rooms whose beacons this caller may read, or null for every room. A lecturer sees only the rooms of
+   * their own class while it is running (ROLE_PERMISSION_MATRIX.md, "View beacon health": S during own
+   * class); the Super Admin and administrators see every room, as rooms are not divided by faculty.
+   */
+  private async readableRooms(actor: AccessClaims): Promise<Set<string> | null> {
+    if (actor.role !== 'LECTURER') return null;
+    const lecturerId = await this.lecturers.idForUser(actor.userId);
+    if (!lecturerId) return new Set();
+    return this.classSessions.roomsTeachingNow(lecturerId, this.clock.now());
+  }
+
+  /** The register as this caller may see it (route `GET /beacons`). */
+  async listFor(actor: AccessClaims, query: z.output<typeof BeaconQuerySchema>) {
+    const rooms = await this.readableRooms(actor);
+    if (!rooms) return this.list(query);
+    const allowed = query.classroomId ? [query.classroomId].filter((r) => rooms.has(r)) : [...rooms];
+    if (allowed.length === 0) return { data: [] };
+    const rows = await this.prisma.beacon.findMany({
+      where: { classroomId: { in: allowed }, ...(query.status ? { status: query.status } : {}) },
+      orderBy: [{ classroomId: 'asc' }, { label: 'asc' }],
+    });
+    return { data: await this.views(rows) };
+  }
+
+  /** One beacon, if this caller may see it; otherwise "no such beacon", so its existence is not revealed. */
+  async getFor(actor: AccessClaims, id: string) {
+    const rooms = await this.readableRooms(actor);
+    const beacon = await this.find(id);
+    if (rooms && !rooms.has(beacon.classroomId)) throw notFound('beacon');
+    const [view] = await this.views([beacon]);
+    return view!;
+  }
+
+  /** The whole register, with no caller limit (for counts in other modules, such as the dashboard). */
   async list(query: z.output<typeof BeaconQuerySchema>) {
     const rows = await this.prisma.beacon.findMany({
       where: {

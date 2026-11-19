@@ -2,6 +2,7 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { Clock } from '../../infrastructure/clock/clock.js';
 import { JobRegistry } from '../../infrastructure/jobs/job-registry.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import type { AccessClaims } from '../auth/token.service.js';
 import { BeaconsService } from '../beacons/beacons.service.js';
 import { ClassEventService } from '../class-sessions/class-event.service.js';
 import { ClassSessionsService } from '../class-sessions/class-sessions.service.js';
@@ -312,8 +313,9 @@ export class BeaconHealthService implements OnModuleInit {
   }
 
   /** A beacon's status, when it was last heard, and its summaries for the last `hours`. */
-  async health(beaconId: string, hours: number) {
-    const beacon = await this.beacons.get(beaconId);
+  /** A beacon's health, if the caller may see that beacon (lecturers: only during their own class there). */
+  async health(actor: AccessClaims, beaconId: string, hours: number) {
+    const beacon = await this.beacons.getFor(actor, beaconId);
     const since = new Date(this.clock.now().getTime() - hours * 3_600_000);
     const [snapshots, last] = await Promise.all([
       this.prisma.beaconHealthSnapshot.findMany({
