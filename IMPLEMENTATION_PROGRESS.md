@@ -2290,7 +2290,7 @@ Results in SECURITY.md §9. In short:
 | IT | D-17 email (and SMS) service |
 | Product owner | The phone test checklist with a new app build (camera, Phase 6 screens, the 8.4 resend) |
 | Knutsford staff (UAT_PLAN.md §1) | UAT on staging, then the sign-off sheet |
-| IT on the real host | Repeat the load test and the restore drill there; fill in RUNBOOK.md §7 |
+| IT on the real host | Repeat the load test and the restore drill there; fill in RUNBOOK.md §8 |
 
 **Phase 8 status:** everything that can be built and verified without the university is done. Phase 8 closes when UAT is signed off and the drill is repeated on the real host.
 
@@ -2325,3 +2325,17 @@ Items from KNOWN_LIMITATIONS that need neither the phone nor the university.
 - **Found on the way:** journey 07 clicked "Sign in" and opened another page without waiting for sign-in to finish. Per-request pages made that race visible (the lecturer ended up signed out). The journey now waits for the Home page, as the others do. Journey 08 failed only because it builds on 07.
 - **On the rehearsal:** all 14 scripts on the sign-in page carry the nonce; a real browser shows no policy violations and the page works; the ZAP rescan no longer reports `script-src unsafe-inline` (0 failures, 59 passed).
 - **Database changes:** none.
+
+### 2026-11-15 to 2026-11-19 — Hardening: dependency advisories reviewed; changing the encryption key
+
+- **Dependency advisories (limitation 112), reviewed, not changed.** `npm audit fix` removed 1 of 32 advisories while changing about 20 Expo build packages; every other "fix" npm offers is a downgrade to an older major version (Expo 52, ESLint 9, Jest 29). The advisories (`glob`, `minimatch`, `deepmerge`) are in build and test tools only, triggered by crafted file patterns that here come only from AttendSure's own configuration. The lockfile was restored. KNOWN_LIMITATIONS 112 and GO_LIVE_CHECKLIST updated: check `npm audit` before each release.
+  - **Found on the way:** four development API watchers left running from earlier sessions held a native file open, so the reinstall failed halfway (EPERM). Only AttendSure's Node processes were stopped, then everything was reinstalled cleanly.
+- **Changing the encryption key** (the runbook said "ask the developers"):
+  - **Format v2:** each encrypted value carries a short fingerprint of its key. Values in the original format (v1) are still read, trying each known key.
+  - **New optional setting** `ENCRYPTION_KEYS_PREVIOUS`: old keys, used only for reading. The configuration refuses one that equals the current key, and in production the example keys.
+  - **New command** `rotate-encryption-key --reason "…"` (`npm run admin:rotate-encryption-key -w @attendsure/api`). Each owning module re-encrypts its own column: auth for two-step secrets, attendance for classroom-code secrets, beacons for rotation keys (rule 8). A value changed meanwhile is never overwritten. The command writes one audit entry with counts only, is safe to repeat, and says when the old key can be removed.
+  - Procedure in RUNBOOK.md §7 (the contacts section is now §8); `.env.example` and SECURITY.md §5 updated; the audit screen names the new entry in plain words.
+  - **Tests:** `test/encryption-rotation.test.ts` (4). On real data: a system on key A; then key B with A as previous (still readable, all re-encrypted, audit entry without secrets, a second run changes nothing); then B alone (every secret readable, the classroom code still served). Also: a value under B cannot be read with A alone, a changed character is refused, and v1 values are read with a current or previous key. Checked by ignoring previous keys, and by treating nothing as needing re-encryption: both made tests fail. The existing encryption unit tests still pass (their fake configuration gained the new field).
+  - **Rehearsed end to end (2026-11-19)** on the production copy, whose 5 stored secrets were written by the old key in the original format. Key changed, old key listed: still readable. Command run (refused without a reason): 5 re-encrypted; second run 0. Old key removed: all 5 readable with the new key alone. Two audit entries; services healthy, no errors.
+- **Database changes:** none (the stored format changes value by value; old values stay readable).
+- **Full check (2026-11-19):** passed. API 494 (4 new), mobile 35, web 20, shared 10, design tokens 3; format, lint, types and build. (The first try could not reach the development database: Docker had been restarted. It passed once the development services were started again.)

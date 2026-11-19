@@ -16,7 +16,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node dist/database/seed.js",
     "db:drift": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code",
-    "admin:create-super-admin": "node dist/cli/create-super-admin.js"
+    "admin:create-super-admin": "node dist/cli/create-super-admin.js",
+    "admin:rotate-encryption-key": "node dist/cli/rotate-encryption-key.js"
   },
   "devDependencies": {
     "@nestjs/cli": "12.0.12",

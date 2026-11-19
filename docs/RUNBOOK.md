@@ -56,7 +56,8 @@
 | Photos or downloads fail | Storage service status; `S3_PUBLIC_ENDPOINT` | Attendance is unaffected; fix the storage service |
 | Database lost or damaged | | Follow DEPLOYMENT.md §9 "To recover": restore the latest backup into a new database, run the release job, point `DATABASE_URL` at it, start the API and worker |
 | One person's account misused | Audit log, filtered to that person | Suspend the account (Accounts, with a reason): it signs them out everywhere. Ask them to reset their password; re-issue two-step sign-in if needed |
-| Suspected leak of `JWT_ACCESS_SECRET` | | Replace it in the secret manager and restart the API instances: everyone must sign in again. Treat `ENCRYPTION_KEY` as needing a planned procedure (not built yet): ask the developers before changing it |
+| Suspected leak of `JWT_ACCESS_SECRET` | | Replace it in the secret manager and restart the API instances and the worker: everyone must sign in again |
+| Suspected leak of `ENCRYPTION_KEY` | | Change it as in §8, without delay |
 
 Every incident: note when it started, what was seen, what was done and when it ended; tell the university's data protection lead if personal data may have been exposed (Act 843).
 
@@ -64,7 +65,20 @@ Every incident: note when it started, what was seen, what was done and when it e
 
 `infra/production/backup/backup.sh` daily (encrypted, with a checksum), copied off-site, plus the host's continuous WAL archiving if it offers it; files rely on the storage service's versioning (DEPLOYMENT.md §9). Restores go into an empty database only (`restore.sh` refuses anything else), and the comparison script checks the result.
 
-## 7. Who to call
+## 7. Changing the encryption key
+
+`ENCRYPTION_KEY` protects the secrets AttendSure stores: two-step sign-in secrets, classroom-code secrets and beacon rotation keys. Change it if it may have leaked, when someone who knew it leaves, or on the university's schedule. Nobody is signed out and nothing is lost.
+
+1. Make a new key: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+2. In the secret manager: the **new** key becomes `ENCRYPTION_KEY`; the **old** key goes into `ENCRYPTION_KEYS_PREVIOUS` (comma-separated if there are several).
+3. Restart the API instances and the worker (§3). Everything still works: values made with the old key are read with it, and new values use the new key. Student ID codes on screen at that moment stop working; the app shows a new one within 30 seconds.
+4. Re-encrypt everything with the new key, giving the reason (it goes in the audit log):
+   `dc run --rm --no-deps api-1 node dist/cli/rotate-encryption-key.js --reason "<why>"`
+   It lists each kind of secret with how many were re-encrypted. Running it again is safe.
+5. When it says **"Every stored secret uses the current key"**, remove the old key from `ENCRYPTION_KEYS_PREVIOUS` and restart again. (If it says some values changed while it ran, run step 4 again first.)
+6. Keep the old key with the backups made before the change: those backups still need it (§6, DEPLOYMENT.md §9). Record the change in the audit log entry "Encryption key changed".
+
+## 8. Who to call
 
 | For | Name and contact (to be filled in by the university) |
 | --- | --- |

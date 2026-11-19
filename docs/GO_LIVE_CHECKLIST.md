@@ -30,7 +30,7 @@ These are still open (IMPLEMENTATION_PROGRESS.md, decision list). AttendSure is 
 | ☐ | Load test repeated on the real host (apps/api/load/README.md) with the expected largest class; results in DEPLOYMENT.md §8 |
 | ☐ | Restore drill passed on the real host's staging, timed (DEPLOYMENT.md §6) |
 | ☐ | CI green on the release commit: tests, image builds, secret scan |
-| ☐ | The moderate dependency advisories in phone-build tools fixed with the release app build (KNOWN_LIMITATIONS 112) |
+| ☐ | `npm audit` checked on the release commit: nothing high or critical; the moderate advisories in build tools reviewed again (KNOWN_LIMITATIONS 112) |
 
 ## 3. Production set up
 
@@ -45,7 +45,7 @@ These are still open (IMPLEMENTATION_PROGRESS.md, decision list). AttendSure is 
 | ☐ | Monitoring: uptime check on the site; alerts when System health has overdue schedules or problems; metrics collected if wanted (`METRICS_TOKEN`) |
 | ☐ | Email sending from a university address works (activation email received by a test account) |
 | ☐ | Mobile app built for production with the real API address, signed with the university's keys, and published (Google Play, App Store, or the university's own distribution) |
-| ☐ | Runbook contacts filled in (RUNBOOK.md §7) |
+| ☐ | Runbook contacts filled in (RUNBOOK.md §8) |
 
 ## 4. Real data loaded
 

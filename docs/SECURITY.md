@@ -72,6 +72,7 @@ Fraud detection raises flags for people to review. It never changes attendance o
 - Production secrets live in the host's secret manager (D-16).
 - TLS is required everywhere. Database and Redis connections use TLS outside local development.
 - Application-level encryption (AES-256-GCM) protects per-session QR secrets, rotating beacon keys and TOTP secrets, with the key held outside the database.
+- The key can be changed without signing anyone out or losing data (RUNBOOK.md §7, built 2026-11-15). Each value records a short fingerprint of the key that encrypted it. Old keys listed in `ENCRYPTION_KEYS_PREVIOUS` are used only for reading. `rotate-encryption-key` re-encrypts every stored secret with the new key (each module its own table) and writes an audit entry with the counts, never the secrets or keys. Rehearsed on 2026-11-19: 5 secrets written by the old key, in the original format, re-encrypted; all readable with the new key alone.
 - Backups are encrypted.
 
 ## 6. Privacy and Ghana's Data Protection Act, 2012 (Act 843)

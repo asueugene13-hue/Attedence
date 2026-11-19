@@ -64,7 +64,7 @@ describe('opaque tokens', () => {
 });
 
 describe('EncryptionService', () => {
-  const config = { encryptionKey: Buffer.alloc(32, 9) } as AppConfig;
+  const config = { encryptionKey: Buffer.alloc(32, 9), previousEncryptionKeys: [] } as unknown as AppConfig;
   const encryption = new EncryptionService(config);
 
   it('round-trips and never produces the same ciphertext twice', () => {
@@ -80,7 +80,10 @@ describe('EncryptionService', () => {
     const parts = sealed.split('.');
     parts[3] = Buffer.from('tampered').toString('base64url');
     expect(() => encryption.decrypt(parts.join('.'))).toThrow();
-    const other = new EncryptionService({ encryptionKey: Buffer.alloc(32, 1) } as AppConfig);
+    const other = new EncryptionService({
+      encryptionKey: Buffer.alloc(32, 1),
+      previousEncryptionKeys: [],
+    } as unknown as AppConfig);
     expect(() => other.decrypt(sealed)).toThrow();
   });
 });

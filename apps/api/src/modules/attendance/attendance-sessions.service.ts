@@ -37,6 +37,11 @@ const MINUTE = 60_000;
 const ADMIN_ROLES = ['SUPER_ADMIN', 'UNIVERSITY_ADMIN'];
 const SWEEP_EVERY_MS = MINUTE;
 
+import {
+  REENCRYPT_PAGE,
+  type ReencryptResult,
+  reencryptColumn,
+} from '../../infrastructure/crypto/reencrypt.js';
 const conflict = (code: string, message: string) => new ConflictException({ code, message });
 const notFound = () => new NotFoundException({ code: 'NOT_FOUND', message: 'No such attendance session.' });
 
@@ -566,6 +571,29 @@ export class AttendanceSessionsService implements OnModuleInit {
     const sections = await this.courses.sectionSummaries(cls.sectionIds);
     for (const s of sections.values()) await this.access.assertDepartment(actor, s.department);
     return true;
+  }
+
+  /** Re-encrypts every stored classroom-code secret with the current key (`rotate-encryption-key`, RUNBOOK.md §7). */
+  async reencryptSecrets(): Promise<ReencryptResult> {
+    return reencryptColumn(
+      this.encryption,
+      async (afterId) =>
+        (
+          await this.prisma.attendanceSession.findMany({
+            where: afterId ? { id: { gt: afterId } } : {},
+            select: { id: true, qrSecretEnc: true },
+            orderBy: { id: 'asc' },
+            take: REENCRYPT_PAGE,
+          })
+        ).map((r) => ({ id: r.id, value: r.qrSecretEnc })),
+      async (id, before, after) =>
+        (
+          await this.prisma.attendanceSession.updateMany({
+            where: { id, qrSecretEnc: before },
+            data: { qrSecretEnc: after },
+          })
+        ).count === 1,
+    );
   }
 }
 

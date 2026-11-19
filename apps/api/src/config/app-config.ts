@@ -36,6 +36,21 @@ const EnvSchema = z
     JWT_ACCESS_SECRET: z.string().min(32, 'must be at least 32 characters'),
     /** Encrypts secrets stored in the database, such as TOTP keys (AES-256-GCM). */
     ENCRYPTION_KEY: base64Key32,
+    /**
+     * Earlier encryption keys, comma-separated, kept only while changing the key: values encrypted with them
+     * can still be read until `rotate-encryption-key` has re-encrypted everything with ENCRYPTION_KEY
+     * (docs/RUNBOOK.md §7). Empty normally.
+     */
+    ENCRYPTION_KEYS_PREVIOUS: z
+      .string()
+      .optional()
+      .transform((v) =>
+        (v ?? '')
+          .split(',')
+          .map((k) => k.trim())
+          .filter(Boolean),
+      )
+      .pipe(z.array(base64Key32).max(5, 'keep at most 5 previous keys')),
     /** The web dashboard's address: used in email links and as the only origin allowed to use the refresh cookie. */
     WEB_APP_URL: z.url({ protocol: /^https?$/ }),
 
@@ -68,11 +83,25 @@ const EnvSchema = z
     S3_BUCKET: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/, 'must be a valid bucket name'),
   })
   .superRefine((env, ctx) => {
+    if (
+      env.ENCRYPTION_KEYS_PREVIOUS.some((k) =>
+        Buffer.from(k, 'base64').equals(Buffer.from(env.ENCRYPTION_KEY, 'base64')),
+      )
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ENCRYPTION_KEYS_PREVIOUS'],
+        message: 'must not contain the current ENCRYPTION_KEY',
+      });
+    }
     if (env.NODE_ENV !== 'production') return;
     const keyText = Buffer.from(env.ENCRYPTION_KEY, 'base64').toString('latin1');
     for (const [name, value] of [
       ['JWT_ACCESS_SECRET', env.JWT_ACCESS_SECRET],
       ['ENCRYPTION_KEY', keyText],
+      ...env.ENCRYPTION_KEYS_PREVIOUS.map(
+        (k) => ['ENCRYPTION_KEYS_PREVIOUS', Buffer.from(k, 'base64').toString('latin1')] as const,
+      ),
       ['S3_SECRET_KEY', env.S3_SECRET_KEY],
     ] as const) {
       if (value.includes(LOCAL_ONLY_MARKER)) {
@@ -127,6 +156,8 @@ export class AppConfig {
   readonly institutionTimezone: string;
   readonly jwtAccessSecret: Uint8Array;
   readonly encryptionKey: Buffer;
+  /** Earlier keys, only for reading values encrypted before the key was changed. */
+  readonly previousEncryptionKeys: readonly Buffer[];
   readonly webAppUrl: string;
   readonly webAppOrigin: string;
   readonly smtp: SmtpConfig;
@@ -147,6 +178,7 @@ export class AppConfig {
     this.institutionTimezone = env.INSTITUTION_TIMEZONE;
     this.jwtAccessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
     this.encryptionKey = Buffer.from(env.ENCRYPTION_KEY, 'base64');
+    this.previousEncryptionKeys = env.ENCRYPTION_KEYS_PREVIOUS.map((k) => Buffer.from(k, 'base64'));
     this.webAppUrl = env.WEB_APP_URL.replace(/\/$/, '');
     this.webAppOrigin = new URL(env.WEB_APP_URL).origin;
     this.smtp = {

@@ -7,6 +7,11 @@ import { hashToken } from '../../infrastructure/crypto/tokens.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
 import { RedisService } from '../../infrastructure/redis/redis.service.js';
 import { MFA_TOKEN_TTL_SECONDS } from './token.service.js';
+import {
+  REENCRYPT_PAGE,
+  type ReencryptResult,
+  reencryptColumn,
+} from '../../infrastructure/crypto/reencrypt.js';
 
 export const RECOVERY_CODE_COUNT = 10;
 /** Wrong codes allowed per sign-in attempt. A 6-digit code has a million options; 5 guesses is 0.0005%. */
@@ -95,5 +100,27 @@ export class MfaService {
   async isChallengeExhausted(challengeId: string): Promise<boolean> {
     const attempts = Number((await this.redis.client.get(`mfa:attempts:${challengeId}`)) ?? 0);
     return attempts >= MAX_MFA_ATTEMPTS;
+  }
+  /** Re-encrypts every stored two-step sign-in secret with the current key (`rotate-encryption-key`, RUNBOOK.md §7). */
+  async reencryptSecrets(): Promise<ReencryptResult> {
+    return reencryptColumn(
+      this.encryption,
+      async (afterId) =>
+        (
+          await this.prisma.user.findMany({
+            where: { mfaSecretEnc: { not: null }, ...(afterId ? { id: { gt: afterId } } : {}) },
+            select: { id: true, mfaSecretEnc: true },
+            orderBy: { id: 'asc' },
+            take: REENCRYPT_PAGE,
+          })
+        ).map((r) => ({ id: r.id, value: r.mfaSecretEnc! })),
+      async (id, before, after) =>
+        (
+          await this.prisma.user.updateMany({
+            where: { id, mfaSecretEnc: before },
+            data: { mfaSecretEnc: after },
+          })
+        ).count === 1,
+    );
   }
 }

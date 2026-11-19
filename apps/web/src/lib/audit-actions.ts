@@ -62,6 +62,7 @@ const NAMES: Record<string, string> = {
   'reports.export_downloaded': 'Report file downloaded',
   'reports.export_failed': 'Report file not made',
   'reports.export_expired': 'Report file deleted (retention)',
+  'security.encryption_key_rotated': 'Encryption key changed (stored secrets re-encrypted)',
 };
 
 const AREAS: Record<string, string> = {
@@ -83,6 +84,7 @@ const AREAS: Record<string, string> = {
   reports: 'Reports',
   devices: 'Phones',
   beacons: 'Beacons',
+  security: 'Security',
 };
 
 export function describeAction(action: string): string {

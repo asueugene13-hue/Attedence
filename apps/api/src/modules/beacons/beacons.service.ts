@@ -19,6 +19,11 @@ import { AuditService } from '../audit-logs/audit.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { PlacesService } from '../places/places.service.js';
 import { type BeaconCalibration, calibrate } from './calibration.js';
+import {
+  REENCRYPT_PAGE,
+  type ReencryptResult,
+  reencryptColumn,
+} from '../../infrastructure/crypto/reencrypt.js';
 
 const notFound = (what: string) => new NotFoundException({ code: 'NOT_FOUND', message: `No such ${what}.` });
 const DUPLICATE = {
@@ -500,5 +505,27 @@ export class BeaconsService {
       appliedAt: s.appliedAt,
       appliedById: s.appliedById,
     };
+  }
+  /** Re-encrypts every stored beacon rotation key with the current key (`rotate-encryption-key`, RUNBOOK.md §7). */
+  async reencryptSecrets(): Promise<ReencryptResult> {
+    return reencryptColumn(
+      this.encryption,
+      async (afterId) =>
+        (
+          await this.prisma.beacon.findMany({
+            where: { rotationKeyEnc: { not: null }, ...(afterId ? { id: { gt: afterId } } : {}) },
+            select: { id: true, rotationKeyEnc: true },
+            orderBy: { id: 'asc' },
+            take: REENCRYPT_PAGE,
+          })
+        ).map((r) => ({ id: r.id, value: r.rotationKeyEnc! })),
+      async (id, before, after) =>
+        (
+          await this.prisma.beacon.updateMany({
+            where: { id, rotationKeyEnc: before },
+            data: { rotationKeyEnc: after },
+          })
+        ).count === 1,
+    );
   }
 }
