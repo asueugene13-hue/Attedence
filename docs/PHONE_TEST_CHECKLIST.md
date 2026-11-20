@@ -57,10 +57,12 @@ Open attendance on the web dashboard as the demo lecturer (or on the lecturer's 
 | # | Do this | Expect |
 | --- | --- | --- |
 | 4.1 | Lecturer: Today → open attendance, show the QR; leave the phone untouched for longer than its screen timeout | QR changes every 15 s; roster counts update; the screen stays on while the QR shows, and turns off normally after leaving that page |
-| 4.2 | Lecturer: check in a student by hand (assisted) | Needs a reason; shows on the roster as assisted |
+| 4.2 | Lecturer: class page → "Check a student in by hand" → pick a student, a reason chip and write why | Refused without a chip or a reason; then the student shows as assisted on the roster |
+| 4.2a | Lecturer: a waiting check-in → Reject | Asks why; refused under 5 characters; then the student shows as rejected |
 | 4.3 | Staff: Check ID → scan a student's ID card code | "Genuine", with the student's photo and status; an old screenshot says "expired" |
 | 4.4 | Course rep: send an update | Sent and labelled as from the course rep; a second one the same day is limited |
 | 4.5 | Lecturer: class alerts (late start, review) | The notification opens the right class |
+| 4.6 | Anyone: Alerts → Email settings | Lists only messages for your role; "Class cancelled" is locked on; a switch you change stays changed after leaving and coming back |
 
 ## 5. Look and feel
 
