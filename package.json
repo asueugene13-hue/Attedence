@@ -43,6 +43,7 @@
   },
   "overrides": {
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "effect": "3.22.4"
   }
 }

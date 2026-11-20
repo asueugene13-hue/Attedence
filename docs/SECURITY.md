@@ -132,6 +132,7 @@ PostgreSQL is the only source of truth.
 | Routes open to any signed-in user | Each of the ~63 was read: every one passes the caller to its service or uses only the caller's own ID ("me" routes). Each route that takes an ID has a test file that calls it and checks a refusal for someone else (a file-level check, not proof for every case) | No gap found |
 | Secrets in git | gitleaks 8.24.0 over the whole history (100 commits). 8 findings, all deliberate fake values (the test password, the example and CI keys, a beacon test key, an example request ID), listed with reasons in `.gitleaksignore`. A planted fake token was caught. CI now runs this scan on every push | Passed |
 | Dependencies | `npm audit`: 32 advisories, 1 low and 31 moderate, none high or critical. All are in development tools (ESLint, test tools) or the phone app's Expo **build** tools; none in the API, the dashboard or code shipped to phones. The available fix changes about 20 Expo build packages, so it waits for the next phone build where it can be tested (KNOWN_LIMITATIONS 112). CI fails on high or critical | Recorded |
+| Dependencies (2026-11-19) | A new high advisory in `effect`, under the Prisma command-line tool (development and migrations only), failed CI. Fixed by overriding it to the patched 3.22.4 (KNOWN_LIMITATIONS 112). The audit now reports 31 moderate, none high or critical | Fixed |
 | Web scan | OWASP ZAP 2.16.1 baseline against the production rehearsal over HTTPS: 0 failures, 58 checks passed | See below |
 
 **ZAP findings and what was done:**
