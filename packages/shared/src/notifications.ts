@@ -37,6 +37,11 @@ export const NOTIFICATION_CATEGORIES = {
   },
   CLASS_REINSTATED: { label: 'Class back on', mandatory: true, defaultChannels: ['IN_APP', 'EMAIL', 'PUSH'] },
   VENUE_CHANGED: { label: 'Room changed', mandatory: true, defaultChannels: ['IN_APP', 'EMAIL', 'PUSH'] },
+  CLASS_CHANGED: {
+    label: 'Class end time or lecturer changed',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
   CLASS_AUTO_ENDED: { label: 'Class ended automatically', mandatory: false, defaultChannels: ['IN_APP'] },
   REVIEW_OPENED: { label: 'A class needs review', mandatory: false, defaultChannels: ['IN_APP', 'PUSH'] },
   REVIEW_DECIDED: { label: 'Review decided', mandatory: false, defaultChannels: ['IN_APP'] },
@@ -128,7 +133,13 @@ export const NOTIFICATION_CATEGORIES = {
 export type NotificationCategory = keyof typeof NOTIFICATION_CATEGORIES;
 export const NOTIFICATION_CATEGORY_KEYS = Object.keys(NOTIFICATION_CATEGORIES) as NotificationCategory[];
 
-const CLASS_CHANGES = ['CLASS_CANCELLED', 'CLASS_RESCHEDULED', 'CLASS_REINSTATED', 'VENUE_CHANGED'] as const;
+const CLASS_CHANGES = [
+  'CLASS_CANCELLED',
+  'CLASS_RESCHEDULED',
+  'CLASS_REINSTATED',
+  'VENUE_CHANGED',
+  'CLASS_CHANGED',
+] as const;
 const REPORT_FILES = ['REPORT_READY', 'REPORT_FAILED'] as const;
 const STUDENT_CATEGORIES: readonly NotificationCategory[] = [
   'CLASS_UNCONFIRMED',

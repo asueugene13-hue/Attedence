@@ -262,6 +262,40 @@ describe('a new timetable version', () => {
     );
   });
 
+  it('tells the class, the new lecturer and the old one when the end time and lecturer change', async () => {
+    await firstVersion();
+    const otherUser = await createUser(prisma, { email: 'lecturer2@example.test', roles: ['LECTURER'] });
+    const other = await prisma.lecturerProfile.create({
+      data: {
+        userId: otherUser.id,
+        staffNumber: 'TL2',
+        departmentId: (await prisma.department.findFirstOrThrow()).id,
+      },
+    });
+    await prisma.lecturerAssignment.create({
+      data: { lecturerId: other.id, sectionId: ids.sectionA, isPrimary: false, assignedById: adminId },
+    });
+    clock.set('2030-11-20T12:00:00Z'); // only the 26 November and 3 and 10 December classes are still to come
+    const v2 = (await post('/timetables', { semesterId: ids.semester, name: 'v2 (test)' }).expect(201)).body;
+    await http
+      .patch(`/api/v1/timetable-entries/${v2.entries[0].id}`)
+      .set(admin)
+      .set('If-Match', '0')
+      .send(weekly({ lecturerId: other.id, endTime: '12:00' }))
+      .expect(200);
+    await publishAndWait(v2.id);
+
+    const changed = () => prisma.notification.findMany({ where: { category: 'CLASS_CHANGED' } });
+    for (let i = 0; i < 200 && (await changed()).length < 9; i++) await new Promise((r) => setTimeout(r, 50));
+    const sent = await changed();
+    const per = (userId: string) => sent.filter((n) => n.userId === userId).length;
+    expect([per(ids.studentUser), per(otherUser.id), per(ids.lecturerUser)]).toEqual([3, 3, 3]);
+    expect(sent[0]!.body).toContain('It now ends at 12:00.');
+    expect(sent[0]!.body).toContain('It is now taught by');
+    expect(sent[0]!.body).not.toContain('room');
+    expect(await prisma.notification.count({ where: { category: 'VENUE_CHANGED' } })).toBe(0);
+  }, 30_000);
+
   it('cancels future sessions of a removed entry as the publisher’s act, but never resurrects a cancelled class', async () => {
     const { entry } = await firstVersion();
     // The lecturer had already cancelled one class (simulated; the cancel action arrives in step 4).

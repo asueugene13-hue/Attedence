@@ -192,6 +192,45 @@ export class ClassAlertService implements OnModuleInit {
         });
         break;
       }
+      case 'UPDATED': {
+        // A new timetable version changed more than the room (end time, lecturer, sections).
+        const before = (payload.before ?? {}) as Record<string, unknown>;
+        const after = (payload.after ?? {}) as Record<string, unknown>;
+        const changes: string[] = [];
+        const roomMoved = before.classroomId !== after.classroomId;
+        if (roomMoved)
+          changes.push(`It is now in ${(await this.roomName(after.classroomId)) ?? 'a new room'}.`);
+        if (before.scheduledEnd !== after.scheduledEnd && typeof after.scheduledEnd === 'string') {
+          changes.push(`It now ends at ${this.timeOfDay(new Date(after.scheduledEnd))}.`);
+        }
+        const lecturerIds = [before.lecturerId, after.lecturerId].filter(
+          (x): x is string => typeof x === 'string',
+        );
+        const lecturerChanged = before.lecturerId !== after.lecturerId;
+        const lecturers = lecturerChanged ? await this.lecturers.facts(lecturerIds) : new Map();
+        if (lecturerChanged) {
+          const name = lecturers.get(after.lecturerId as string)?.fullName;
+          changes.push(name ? `It is now taught by ${name}.` : 'It has a new lecturer.');
+        }
+        if (JSON.stringify(before.sectionIds) !== JSON.stringify(after.sectionIds)) {
+          changes.push('The groups taking it have changed.');
+        }
+        if (changes.length === 0) break;
+        const previousLecturer = lecturerChanged
+          ? lecturers.get(before.lecturerId as string)?.userId
+          : undefined;
+        await send(
+          [...new Set([...classPeople, ...who.lecturer, ...(previousLecturer ? [previousLecturer] : [])])],
+          {
+            // A room move is announced like any room change, which cannot be switched off.
+            category: roomMoved ? 'VENUE_CHANGED' : 'CLASS_CHANGED',
+            priority: roomMoved ? 'HIGH' : 'NORMAL',
+            title: `${label}: class changed`,
+            body: `The class at ${when} has changed in the new timetable. ${changes.join(' ')}`,
+          },
+        );
+        break;
+      }
       case 'ATTENDANCE_OPENED': {
         const until = typeof payload.closesAt === 'string' ? this.when(new Date(payload.closesAt)) : null;
         await send(classPeople, {
@@ -306,6 +345,14 @@ export class ClassAlertService implements OnModuleInit {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(at);
+  }
+
+  private timeOfDay(at: Date) {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: this.config.institutionTimezone,
       hour: '2-digit',
       minute: '2-digit',
     }).format(at);
