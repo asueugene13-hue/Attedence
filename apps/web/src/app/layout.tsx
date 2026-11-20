@@ -1,3 +1,4 @@
+import '@fontsource-variable/inter';
 import '@attendsure/design-tokens/tokens.css';
 import './globals.css';
 import type { Metadata } from 'next';

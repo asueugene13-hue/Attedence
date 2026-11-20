@@ -58,7 +58,7 @@ export const colors = {
 export type ColorToken = keyof (typeof colors)['light'];
 
 export const typography = {
-  fontFamily: "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif",
+  fontFamily: "'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif",
   /** [size px, line-height px, weight] — mobile first; web sizes where the canvas gives one. */
   display: [28, 36, 600],
   screenHeading: [24, 32, 600],
