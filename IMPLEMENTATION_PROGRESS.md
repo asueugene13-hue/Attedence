@@ -2500,3 +2500,20 @@ The product owner asked to build all phases and leave phone testing for later. E
 - **Found:** the student also saw two lecturer-only kinds ("Your class needs an update", "Class ended automatically"). They came from saved switches left on the demo account by earlier tests: the list also showed any kind with a saved switch. A saved switch for a kind the person can never receive does nothing, so that rule was removed. The list now shows the kinds the person's roles receive, plus any kind they have actually received (the safety net). On the phone the two kinds were gone after the change.
 - **Test:** class-monitoring "choose channels" now adds such a saved switch and expects it hidden. With the old rule put back it fails; restored, it passes. Shared tests 13 passed; typecheck and lint clean.
 - **Still waiting on the phone:** 4.2 and 4.2a (lecturer hand check-in and reject) need the demo lecturer's password (or the product owner's OK to reset it locally) and the OK to create one fake class happening now.
+
+### 2026-11-20 — Phone test: lecturer hand check-in (checklist 4.2) and a fix it found
+
+- **Set-up, approved by the product owner:**
+  - The demo lecturer's password was reset locally: the reset email went to Mailpit on this laptop, and nothing left the computer.
+  - One fake class was created in the development database for DEMO101 A in DEMO-A1, starting 5 minutes earlier and lasting an hour (`09945bf6-31da-436a-8557-2501f8eee7e4`), the same way the browser test does.
+- **On the phone (lecturer):**
+  - Today showed the class. "Start class and open attendance" started it, with attendance open until 07:20.
+  - "Check a student in by hand" listed the 8 students not checked in (fake 9910xxxx numbers).
+  - For Demo Student 1, with a reason typed but no chip chosen, "Check in" was refused. A chip was then chosen ("Phone dead, lost or broken"), and the counts went to present 1 and not checked in 7.
+  - The database shows the record PRESENT, source ASSISTED, method PHONE_UNAVAILABLE, with the reason. **4.2 passed** after the fix below.
+- **Found:** the refusal message appeared at the top of the attendance card, which was scrolled out of sight, so pressing "Check in" seemed to do nothing. The message now appears inside the form, just above its button. The phone showed it there after the change.
+  - Test: `lecturer-roster.test.tsx` checks the order (Reason, message, Check in). It fails with the old layout, and all 3 tests pass with the fix. Typecheck and lint are clean.
+- **Not done: 4.2a (reject).** It needs a check-in waiting for a decision, made from a second student's account. Resetting Demo Student 2's password for that was blocked by the permission check, because only the lecturer reset had been approved. It waits for the product owner's decision.
+- **Phone handling notes:**
+  - Pressing back when the keyboard is already hidden closes the app (it happened twice; reopened with the deep link). The keyboard can also cover buttons, and one tap opened the Samsung keyboard's settings, where nothing was changed.
+  - A Google "save password?" prompt appeared after the lecturer signed in. It was dismissed without saving, and the account address it showed was not recorded.

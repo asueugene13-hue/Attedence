@@ -79,6 +79,18 @@ test('checks a student in by hand with a method and a reason', async () => {
   await fireEvent.changeText(screen.getByLabelText('Reason'), 'Phone battery died (test)');
   await fireEvent.press(screen.getByText('Check in'));
   expect(await screen.findByText('Choose why the student is checked in by hand.')).toBeTruthy();
+  // The message sits inside the form, just above its button, not at the top of the card, which can be
+  // scrolled out of sight (found in the 2026-11-20 phone test).
+  const order = screen
+    .getAllByText(/./)
+    .map((t) => [t.props.children].flat().join(''))
+    .filter((t) => /^(Attendance|Reason|Choose why|Check in)$|^Choose why/.test(t));
+  expect(order).toEqual([
+    'Attendance',
+    'Reason',
+    'Choose why the student is checked in by hand.',
+    'Check in',
+  ]);
   await fireEvent.press(screen.getByLabelText('Phone dead, lost or broken'));
   await fireEvent.press(screen.getByText('Check in'));
   expect(mockCall).toHaveBeenCalledWith('/attendance-sessions/a1/assisted-check-ins', {

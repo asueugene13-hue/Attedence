@@ -139,6 +139,8 @@ export function LecturerAttendance({ classId, classStatus }: { classId: string; 
           onChangeText={setNote}
           maxLength={500}
         />
+        {/* Shown here, next to the form: the top of the card may be scrolled out of sight (phone test). */}
+        {problem ? <Notice tone="error">{problem}</Notice> : null}
         <Button
           label={form.kind === 'reject' ? 'Reject check-in' : 'Check in'}
           busy={busy === line.studentId}
@@ -150,7 +152,7 @@ export function LecturerAttendance({ classId, classStatus }: { classId: string; 
   return (
     <Card>
       <Text style={{ color: palette.textPrimary, fontWeight: '600' }}>Attendance</Text>
-      {problem ? <Notice tone="error">{problem}</Notice> : null}
+      {problem && !form ? <Notice tone="error">{problem}</Notice> : null}
       {attendance.isError ? <Notice tone="error">{describeError(attendance.error)}</Notice> : null}
       {!a ? (
         STARTABLE.includes(classStatus) ? (
