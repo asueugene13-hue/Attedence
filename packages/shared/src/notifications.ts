@@ -42,6 +42,11 @@ export const NOTIFICATION_CATEGORIES = {
     mandatory: false,
     defaultChannels: ['IN_APP', 'EMAIL'],
   },
+  CLASS_NOT_REINSTATED: {
+    label: 'Cancelled class could not come back',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
   CLASS_AUTO_ENDED: { label: 'Class ended automatically', mandatory: false, defaultChannels: ['IN_APP'] },
   REVIEW_OPENED: { label: 'A class needs review', mandatory: false, defaultChannels: ['IN_APP', 'PUSH'] },
   REVIEW_DECIDED: { label: 'Review decided', mandatory: false, defaultChannels: ['IN_APP'] },
@@ -192,11 +197,12 @@ export const NOTIFICATION_AUDIENCE: Record<RoleKey, readonly NotificationCategor
     'EXCUSE_REPLIED',
     'ANNOUNCEMENT_REPORTED',
     'RESCHEDULE_REQUESTED',
+    'CLASS_NOT_REINSTATED',
     'PHONE_APPROVAL_REQUESTED',
     ...REPORT_FILES,
   ],
-  REGISTRAR: ['PHONE_APPROVAL_REQUESTED', ...REPORT_FILES],
-  SUPER_ADMIN: ['PHONE_APPROVAL_REQUESTED', ...REPORT_FILES],
+  REGISTRAR: ['PHONE_APPROVAL_REQUESTED', 'CLASS_NOT_REINSTATED', ...REPORT_FILES],
+  SUPER_ADMIN: ['PHONE_APPROVAL_REQUESTED', 'CLASS_NOT_REINSTATED', ...REPORT_FILES],
 };
 
 /** The kinds of message a person holding these roles can receive, in catalogue order. */

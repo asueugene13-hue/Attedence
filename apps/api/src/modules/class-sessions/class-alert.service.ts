@@ -57,6 +57,14 @@ export class ClassAlertService implements OnModuleInit {
         await this.rescheduleAlert(data.requestId, data.kind);
       },
     });
+    this.jobs.define<{ sessionId: string; actorId: string; timetableId: string }>({
+      queue: 'system',
+      name: 'not-reinstated-alert',
+      attempts: 5,
+      handle: async (data) => {
+        await this.notReinstatedAlert(data.sessionId, data.actorId, data.timetableId);
+      },
+    });
   }
 
   async alertFor(eventId: string): Promise<void> {
@@ -269,6 +277,30 @@ export class ClassAlertService implements OnModuleInit {
       default:
         break;
     }
+  }
+
+  /**
+   * A class a timetable or calendar change cancelled could not come back when the change was undone,
+   * because its room or lecturer was booked meanwhile (limitation 41). The person who made the change
+   * and the class's administrators are told, so someone can reschedule it by hand.
+   */
+  async notReinstatedAlert(sessionId: string, actorId: string, timetableId: string): Promise<void> {
+    const session = await this.prisma.classSession.findUnique({
+      where: { id: sessionId },
+      include: { sections: true },
+    });
+    if (!session || session.status !== 'CANCELLED') return;
+    const who = await this.audience(session);
+    const label = await this.label(session);
+    await this.notifications.notify({
+      userIds: [...new Set([actorId, ...who.admins])],
+      category: 'CLASS_NOT_REINSTATED',
+      title: `${label}: class could not come back`,
+      body: `The class at ${this.when(session.scheduledStart)} was cancelled by a timetable or calendar change that has now been undone, but its room or lecturer has been booked since. It stays cancelled; reschedule it if it should still take place.`,
+      data: { path: `/classes/${session.id}`, sessionId: session.id },
+      related: { type: 'class_session', id: session.id },
+      dedupeKey: `not-reinstated:${session.id}:${timetableId}`,
+    });
   }
 
   /** Administrators are told about new requests; the lecturer about the decision. */

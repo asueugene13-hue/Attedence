@@ -275,7 +275,7 @@ describe('a new timetable version', () => {
     await prisma.lecturerAssignment.create({
       data: { lecturerId: other.id, sectionId: ids.sectionA, isPrimary: false, assignedById: adminId },
     });
-    clock.set('2030-11-20T12:00:00Z'); // only the 26 November and 3 and 10 December classes are still to come
+    clock.set('2030-11-20T12:00:00Z'); // only the last few classes of the semester are still to come
     const v2 = (await post('/timetables', { semesterId: ids.semester, name: 'v2 (test)' }).expect(201)).body;
     await http
       .patch(`/api/v1/timetable-entries/${v2.entries[0].id}`)
@@ -286,10 +286,14 @@ describe('a new timetable version', () => {
     await publishAndWait(v2.id);
 
     const changed = () => prisma.notification.findMany({ where: { category: 'CLASS_CHANGED' } });
-    for (let i = 0; i < 200 && (await changed()).length < 9; i++) await new Promise((r) => setTimeout(r, 50));
+    const left = await prisma.classSession.count({ where: { scheduledStart: { gt: clock.now() } } });
+    expect(left).toBeGreaterThan(0);
+    for (let i = 0; i < 200 && (await changed()).length < 3 * left; i++)
+      await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 300)); // and no more arrive
     const sent = await changed();
     const per = (userId: string) => sent.filter((n) => n.userId === userId).length;
-    expect([per(ids.studentUser), per(otherUser.id), per(ids.lecturerUser)]).toEqual([3, 3, 3]);
+    expect([per(ids.studentUser), per(otherUser.id), per(ids.lecturerUser)]).toEqual([left, left, left]);
     expect(sent[0]!.body).toContain('It now ends at 12:00.');
     expect(sent[0]!.body).toContain('It is now taught by');
     expect(sent[0]!.body).not.toContain('room');
@@ -519,6 +523,14 @@ describe('holidays added or removed after publishing', () => {
     );
     expect((await atHoliday(entry.id)).status).toBe('CANCELLED'); // the lecturer's cancellation stands
     expect((await closed()).status).toBe('CANCELLED'); // the room is taken now
+    // The person who removed the closure and the class's administrator are told it could not come back.
+    const superId = (await prisma.user.findUniqueOrThrow({ where: { email: 'super@example.test' } })).id;
+    const told = () => prisma.notification.findMany({ where: { category: 'CLASS_NOT_REINSTATED' } });
+    await waitUntil(async () => (await told()).length === 2);
+    const sent = await told();
+    expect(sent.map((n) => n.userId).sort()).toEqual([superId, adminId].sort());
+    expect(sent[0]!.relatedEntityId).toBe((await closed()).id);
+    expect(sent[0]!.body).toContain('reschedule it');
   });
 });
 

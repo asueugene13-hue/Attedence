@@ -260,6 +260,11 @@ export class SessionGenerationService implements OnModuleInit {
     if (taken > 0) {
       await tx.classSession.update({ where: { id: session.id }, data: repoint });
       summary.notReinstated += 1;
+      await this.outbox.add(tx, 'system', 'not-reinstated-alert', {
+        sessionId: session.id,
+        actorId,
+        timetableId,
+      });
       return;
     }
     await tx.classSession.update({
