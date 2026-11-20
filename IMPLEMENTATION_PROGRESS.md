@@ -2443,3 +2443,20 @@ The product owner asked to continue building. No phase is waiting for approval a
   - `reschedules.test.ts` 11 passed.
   - With the development servers running for the phone: class-lifecycle, class-sessions and timetables passed. In class-monitoring, 3 tests stopped at the default 10-second setup limit while the servers competed for the processor; the whole file then passed (29 of 29) with longer limits. "Counts a waiting reschedule request as lecturer activity" also passed twice on its own under the normal limits.
   - Lint clean. The full suite runs in CI.
+
+### 2026-11-20 — Hardening: approvers are told about new phone requests (limitation 55)
+
+- **Built:**
+  - When a student asks to make a new phone their attendance phone, `DevicesService` notifies everyone who may approve it. These are the holders of `devices.approve` (checked against the role's current permissions, so a switched-on Registrar or Administrator grant counts) with university-wide scope, which the approve route requires.
+  - New notification category `PHONE_APPROVAL_REQUESTED`, "A student's new phone to approve" (in the app and by email; can be turned off). It links to the Phones screen and carries the student's reason, but not their name.
+  - New `ScopeService.institutionWideHolders(role)`.
+  - The notification is sent after the request is saved, as other notifications are.
+- **Files:**
+  - API: `devices/devices.service.ts` and `devices.module.ts` (now imports notifications); `authorization/scope.service.ts`.
+  - Shared: `notifications.ts`.
+  - Tests: `test/devices.test.ts` (+1: the Super Admin and a switched-on Registrar are told; a university-wide administrator without the grant and a lecturer are not).
+  - Docs: KNOWN_LIMITATIONS 55; API_DOCUMENTATION (request-trust row).
+- **Database changes:** none (notification categories are text).
+- **Proof the test bites:** the approval-permission check removed, 1 failed (restored after).
+- **Tests run (development servers running for the phone):** devices 15 passed; shared 10 passed; class-monitoring's preference and notification tests 5 passed. Typecheck and lint clean. The full suite runs in CI.
+- **Noticed, not changed:** the notification settings page lists every category to everyone, so students also see staff categories such as "Attendance correction to approve". That was already so; limiting the list by role is a small follow-up.

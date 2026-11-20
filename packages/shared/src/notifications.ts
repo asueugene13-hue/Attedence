@@ -75,6 +75,11 @@ export const NOTIFICATION_CATEGORIES = {
     mandatory: false,
     defaultChannels: ['IN_APP', 'EMAIL'],
   },
+  PHONE_APPROVAL_REQUESTED: {
+    label: 'A student’s new phone to approve',
+    mandatory: false,
+    defaultChannels: ['IN_APP', 'EMAIL'],
+  },
   DISPUTE_REPLIED: {
     label: 'Reply to your question on a dispute',
     mandatory: false,

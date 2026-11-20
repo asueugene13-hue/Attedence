@@ -251,6 +251,39 @@ describe('registering phones (D-10)', () => {
     ).toBe(1);
   });
 
+  it('tells everyone who may approve when a student asks for a new phone, and nobody else', async () => {
+    const superAdminId = (await prisma.user.findUniqueOrThrow({ where: { email: 'super@example.test' } })).id;
+    // A university-wide Registrar, after the university switches on the Registrar's approval grant.
+    const registrar = await signInAs(app, prisma, 'registrar@example.test', ['REGISTRAR']);
+    const [role, permission] = await Promise.all([
+      prisma.role.findUniqueOrThrow({ where: { key: 'REGISTRAR' } }),
+      prisma.permission.findUniqueOrThrow({ where: { key: 'devices.approve' } }),
+    ]);
+    await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
+    // Not approvers: a university-wide administrator without the grant, and a lecturer.
+    const uniAdmin = await signInAs(app, prisma, 'uni.admin@example.test', ['UNIVERSITY_ADMIN']);
+    const lecturerUser = await prisma.user.findFirstOrThrow({
+      where: { roles: { some: { role: { key: 'LECTURER' } } } },
+    });
+
+    await register(studentOne.auth, newPhone()).expect(200);
+    const second = (await register(studentOne.auth, newPhone()).expect(200)).body;
+    await http
+      .post(`/api/v1/me/devices/${second.id}/request-trust`)
+      .set(studentOne.auth)
+      .send({ reason: 'My old phone broke (test)' })
+      .expect(200);
+
+    const sent = await prisma.notification.findMany({ where: { category: 'PHONE_APPROVAL_REQUESTED' } });
+    expect(sent.map((n) => n.userId).sort()).toEqual([superAdminId, registrar.user.id].sort());
+    expect(sent[0]).toMatchObject({
+      title: 'A student asks to use a new phone',
+      body: 'A student asks to make a new phone their attendance phone. Their reason: My old phone broke (test)',
+      relatedEntityId: second.id,
+    });
+    expect(sent.some((n) => [uniAdmin.user.id, lecturerUser.id].includes(n.userId))).toBe(false);
+  });
+
   it('only approvers see and decide phones', async () => {
     const phone = (await register(studentOne.auth, newPhone()).expect(200)).body;
     await http.get('/api/v1/devices').set(studentOne.auth).expect(403);

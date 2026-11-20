@@ -11,6 +11,12 @@ import { AuditService } from '../audit-logs/audit.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { RiskFlagsService } from '../risk-flags/risk-flags.service.js';
 import { StudentsService } from '../students/students.service.js';
+import { PermissionService } from '../authorization/permission.service.js';
+import { ScopeService } from '../authorization/scope.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+
+/** Roles that may hold `devices.approve` (the Super Admin by default; the others when switched on). */
+const APPROVER_ROLES = ['SUPER_ADMIN', 'UNIVERSITY_ADMIN', 'REGISTRAR'] as const;
 
 const DAY = 86_400_000;
 /** Another student signed in on the same phone this recently counts as switching accounts. */
@@ -41,6 +47,9 @@ export class DevicesService {
     private readonly students: StudentsService,
     private readonly access: AcademicAccessService,
     private readonly clock: Clock,
+    private readonly permissions: PermissionService,
+    private readonly scopes: ScopeService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -165,7 +174,30 @@ export class DevicesService {
       }
       return tx.userDevice.findUniqueOrThrow({ where: { id: deviceId } });
     });
+    await this.notifyApprovers(deviceId, reason, now);
     return this.view(updated);
+  }
+
+  /**
+   * Tells everyone who may approve the phone (KNOWN_LIMITATIONS 55): holders of `devices.approve` with
+   * university-wide scope, as the approve route requires. The Super Admin has it by default; a Registrar
+   * or Administrator only when the university switched that grant on.
+   */
+  private async notifyApprovers(deviceId: string, reason: string, now: Date) {
+    const userIds = new Set<string>();
+    for (const role of APPROVER_ROLES) {
+      if (!(await this.permissions.forRole(role)).has('devices.approve')) continue;
+      for (const id of await this.scopes.institutionWideHolders(role)) userIds.add(id);
+    }
+    await this.notifications.notify({
+      userIds: [...userIds],
+      category: 'PHONE_APPROVAL_REQUESTED',
+      title: 'A student asks to use a new phone',
+      body: `A student asks to make a new phone their attendance phone. Their reason: ${reason}`,
+      data: { path: '/devices' },
+      related: { type: 'device', id: deviceId },
+      dedupeKey: `device-trust:${deviceId}:${now.getTime()}`,
+    });
   }
 
   /** Phones for approvers: by default, every phone waiting for a decision. */
