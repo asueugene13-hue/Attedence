@@ -2381,3 +2381,27 @@ The product owner asked to continue building. No phase is waiting for approval a
   - **CI failed on the dependency audit** (run 44632500832; the other jobs passed). A new high advisory had been published that day against `effect`, which the Prisma command-line tool pins. It was not caused by these changes. Fixed with an `overrides` entry (`effect` 3.22.4) and the matching lockfile entry, confirmed with `npm ci`, `npm audit --audit-level=high` (exit 0, 31 moderate) and Prisma's own commands (validate, migration status, drift: no difference). Details in KNOWN_LIMITATIONS 112 and SECURITY.md §9.
   - **Why the app sat on a spinner on the real phone:** the app's default API address is the emulator's (`10.0.2.2`), and on a real phone requests to it hang without an error. For a phone on a USB cable, Metro is started with `EXPO_PUBLIC_API_URL=http://localhost:3000` (with `adb reverse` for ports 3000 and 8081). With that, the app opened signed in as Demo Student 1, on its trusted attendance phone.
   - **Seen on the real phone (Samsung A56, dark mode):** the excuse form's calendar. Choosing "From" moved "To" along with it, days before "From" could not be picked, and "Find my classes" asked the server for exactly the chosen dates (3 demo classes found). The request was not sent. The screen staying on with the code still needs a lecturer session (PHONE_TEST_CHECKLIST 4.1).
+
+### 2026-11-20 — Hardening: class lists and timetables limited to what each role may see (limitation 53)
+
+- **Found:** limitation 53 said only that the class monitor was not narrowed to an administrator's faculty or department. Checking it showed a wider gap. `GET /class-sessions` and `GET /class-sessions/:id` need `timetables.read`, which **students and lecturers also hold** (for room lists). So any signed-in student could list every class in the university and open any class's event history. Whole timetables (`GET /timetables`, `/timetables/:id`, `/timetable-entries/:id/dates`), drafts included, were open to them in the same way. No screen showed students or lecturers this data; the server allowed it.
+- **Built (the role matrix's "View timetable" row: Super Admin Y, Administrator S, Registrar read, Lecturer O, Student O):**
+  - `ClassSessionsService.listFor` and `getFor`:
+    - administrators and the Registrar see the classes of the faculties and departments their role covers (every class when it covers the whole university);
+    - lecturers see the classes they teach;
+    - students see their active sections' classes;
+    - any other class answers `404 NOT_FOUND`.
+    The department filter is a read-only join through sections, offerings and courses, as class analytics already does (rule 8 allows reading).
+  - `TimetablesService`: whole timetables refuse lecturers and students (`403 PERMISSION_DENIED`, "Your own classes are in My timetable"). They keep `timetables.read`, because lecturers pick rooms when asking to reschedule.
+- **Files:**
+  - API: `class-sessions/class-sessions.service.ts` and `class-sessions.controller.ts`; `timetables/timetables.service.ts` and `timetables.controller.ts`.
+  - Tests: `test/class-sessions.test.ts` (+1: two faculties; university-wide, department and faculty administrators, the Registrar, two lecturers, an enrolled and an unenrolled student) and `test/timetables.test.ts` (+1).
+  - Docs: KNOWN_LIMITATIONS 53; API_DOCUMENTATION (class-session and timetable rows). Also marked out-of-date entries 21, 25, 39 and 62 as resolved; each was done in an earlier step.
+- **Database changes:** none.
+- **Proof the new tests bite (each restored after):**
+  - Class visibility switched off: 1 failed.
+  - Administrator scope ignored: 1 failed.
+  - Timetable rule switched off: 1 failed.
+- **Tests run:**
+  - class-sessions 12 passed and timetables 11 passed, run on their own with `--testTimeout=60000` while the laptop was on battery.
+  - `npm run check` (charging, development servers stopped): exit 0. Design tokens 3, shared 10, API **497**, mobile 40, web 20, so **570 passed**.

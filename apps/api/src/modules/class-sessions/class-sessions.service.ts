@@ -5,6 +5,7 @@ import { wallClockToUtc } from '../../common/time-zone.js';
 import { AppConfig } from '../../config/app-config.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { AcademicAccessService } from '../academic/academic-access.service.js';
 import type { AccessClaims } from '../auth/token.service.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { LecturersService } from '../courses/lecturers.service.js';
@@ -14,6 +15,9 @@ import { StudentsService } from '../students/students.service.js';
 
 const sessionInclude = { sections: { select: { sectionId: true } } } satisfies Prisma.ClassSessionInclude;
 type SessionRow = Prisma.ClassSessionGetPayload<{ include: typeof sessionInclude }>;
+
+/** A filter that matches no class (a caller with no lecturer or student record). */
+const NOTHING: Prisma.ClassSessionWhereInput = { id: { in: [] } };
 
 const nextDay = (day: string) =>
   new Date(new Date(`${day}T00:00:00Z`).getTime() + 86_400_000).toISOString().slice(0, 10);
@@ -29,17 +33,77 @@ export class ClassSessionsService {
     private readonly places: PlacesService,
     private readonly enrollments: EnrollmentsService,
     private readonly students: StudentsService,
+    private readonly access: AcademicAccessService,
   ) {}
 
+  /**
+   * Which classes a caller may see (ROLE_PERMISSION_MATRIX.md, "View timetable"): a lecturer only the
+   * classes they teach and a student only their sections' classes ("own"); the Super Admin,
+   * administrators and the Registrar the classes of the faculties and departments their role covers
+   * (every class when it covers the whole university). null means no limit.
+   */
+  private async visibleTo(actor: AccessClaims): Promise<Prisma.ClassSessionWhereInput | null> {
+    if (actor.role === 'LECTURER') {
+      const lecturerId = await this.lecturers.idForUser(actor.userId);
+      return lecturerId ? { lecturerId } : NOTHING;
+    }
+    if (actor.role === 'STUDENT') {
+      const studentId = await this.students.idForUser(actor.userId);
+      if (!studentId) return NOTHING;
+      return {
+        sections: { some: { sectionId: { in: await this.enrollments.activeSectionIds(studentId) } } },
+      };
+    }
+    const scope = await this.access.scopeOf(actor);
+    if (scope.institutionWide) return null;
+    // A read-only join to filter by department, as class analytics does (rule 8 allows reading).
+    return {
+      sections: {
+        some: {
+          section: {
+            offering: {
+              course: {
+                OR: [
+                  { departmentId: { in: scope.departmentIds } },
+                  { department: { facultyId: { in: scope.facultyIds } } },
+                ],
+              },
+            },
+          },
+        },
+      },
+    };
+  }
+
+  /** The class list as this caller may see it (route `GET /class-sessions`, the class monitor). */
+  async listFor(actor: AccessClaims, query: z.output<typeof ClassSessionQuerySchema>) {
+    const visible = await this.visibleTo(actor);
+    return this.list(query, visible ?? {});
+  }
+
+  /** One class with its history, if this caller may see it; otherwise "no such class session". */
+  async getFor(actor: AccessClaims, id: string) {
+    const visible = await this.visibleTo(actor);
+    if (visible && !(await this.prisma.classSession.count({ where: { AND: [{ id }, visible] } }))) {
+      throw new NotFoundException({ code: 'NOT_FOUND', message: 'No such class session.' });
+    }
+    return this.get(id);
+  }
+
   /** Sessions between two local dates (inclusive), in the university's time zone. */
-  async list(query: z.output<typeof ClassSessionQuerySchema>) {
+  async list(query: z.output<typeof ClassSessionQuerySchema>, visible: Prisma.ClassSessionWhereInput = {}) {
     const rows = await this.prisma.classSession.findMany({
       where: {
-        ...this.range(query.from, query.to),
-        ...(query.lecturerId ? { lecturerId: query.lecturerId } : {}),
-        ...(query.classroomId ? { classroomId: query.classroomId } : {}),
-        ...(query.status ? { status: query.status } : {}),
-        ...(query.sectionId ? { sections: { some: { sectionId: query.sectionId } } } : {}),
+        AND: [
+          {
+            ...this.range(query.from, query.to),
+            ...(query.lecturerId ? { lecturerId: query.lecturerId } : {}),
+            ...(query.classroomId ? { classroomId: query.classroomId } : {}),
+            ...(query.status ? { status: query.status } : {}),
+            ...(query.sectionId ? { sections: { some: { sectionId: query.sectionId } } } : {}),
+          },
+          visible,
+        ],
       },
       orderBy: { scheduledStart: 'asc' },
       include: sessionInclude,

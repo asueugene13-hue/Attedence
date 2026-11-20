@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { toHhmm, toMinutes, type TimetableEntryInput, type TimetableQuerySchema } from '@attendsure/shared';
 import type { z } from 'zod';
 import { auditEntry } from '../../common/audit-entry.js';
@@ -57,7 +63,22 @@ export class TimetablesService {
 
   // ───────── Timetables ─────────
 
-  list(query: z.output<typeof TimetableQuerySchema>) {
+  /**
+   * Whole timetables list every class in the university, drafts included, so they are for the people who
+   * manage or oversee them. Lecturers and students see only their own classes (ROLE_PERMISSION_MATRIX.md,
+   * "View timetable": O), through `GET /me/timetable`. They keep `timetables.read` for the room lists.
+   */
+  private assertWholeTimetableReader(actor: AccessClaims) {
+    if (actor.role === 'LECTURER' || actor.role === 'STUDENT') {
+      throw new ForbiddenException({
+        code: 'PERMISSION_DENIED',
+        message: 'Whole timetables are for administrators. Your own classes are in My timetable.',
+      });
+    }
+  }
+
+  list(actor: AccessClaims, query: z.output<typeof TimetableQuerySchema>) {
+    this.assertWholeTimetableReader(actor);
     return this.prisma.timetable.findMany({
       where: {
         ...(query.semesterId ? { semesterId: query.semesterId } : {}),
@@ -68,7 +89,8 @@ export class TimetablesService {
     });
   }
 
-  async get(id: string) {
+  async get(actor: AccessClaims, id: string) {
+    this.assertWholeTimetableReader(actor);
     const timetable = await this.prisma.timetable.findUnique({
       where: { id },
       include: {
@@ -160,7 +182,7 @@ export class TimetablesService {
           },
         }),
       );
-    return this.get(created.id);
+    return this.get(actor, created.id);
   }
 
   // ───────── Entries ─────────
@@ -358,7 +380,8 @@ export class TimetablesService {
   }
 
   /** The dates an entry will meet on, and the dates skipped (holidays, exceptions) with why. */
-  async entryDates(entryId: string) {
+  async entryDates(actor: AccessClaims, entryId: string) {
+    this.assertWholeTimetableReader(actor);
     const entry = await this.findEntry(entryId);
     const timetable = await this.prisma.timetable.findUniqueOrThrow({ where: { id: entry.timetableId } });
     const semester = (await this.academic.semester(timetable.semesterId))!;
@@ -519,7 +542,7 @@ export class TimetablesService {
         publishedById: actor.userId,
       });
     });
-    return this.get(id);
+    return this.get(actor, id);
   }
 
   /**

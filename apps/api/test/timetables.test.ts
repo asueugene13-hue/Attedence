@@ -194,6 +194,26 @@ describe('drafts', () => {
     const registrar = (await signInAs(app, prisma, 'registrar@example.test', ['REGISTRAR'])).auth;
     await post('/timetables', { semesterId: ids.semester, name: 'Registrar (test)' }, registrar).expect(403);
   });
+
+  it('shows whole timetables to administrators and the Registrar, not to lecturers or students', async () => {
+    const t = await draft();
+    const entry = (await post(`/timetables/${t.id}/entries`, tuesdayEntry()).expect(201)).body;
+    const registrar = (await signInAs(app, prisma, 'registrar@example.test', ['REGISTRAR'])).auth;
+    for (const auth of [admin, registrar]) {
+      await get(`/timetables?semesterId=${ids.semester}`, auth).expect(200);
+      await get(`/timetables/${t.id}`, auth).expect(200);
+      await get(`/timetable-entries/${entry.id}/dates`, auth).expect(200);
+    }
+    // Lecturers and students hold timetables.read (for room lists) but see only their own classes.
+    const lecturer = (await signInAs(app, prisma, 'lecturer.reader@example.test', ['LECTURER'])).auth;
+    const student = (await signInAs(app, prisma, 'student.reader@example.test', ['STUDENT'])).auth;
+    for (const auth of [lecturer, student]) {
+      await get(`/timetables?semesterId=${ids.semester}`, auth).expect(403);
+      await get(`/timetables/${t.id}`, auth).expect(403);
+      await get(`/timetable-entries/${entry.id}/dates`, auth).expect(403);
+      await get('/classrooms', auth).expect(200);
+    }
+  });
 });
 
 describe('entries and recurrence', () => {

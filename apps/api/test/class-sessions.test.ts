@@ -502,3 +502,91 @@ async function signInSession(userId: string, role: 'STUDENT' | 'LECTURER') {
   const { token } = await app.get(TokenService).signAccess({ userId, sessionId: session.id, role });
   return { Authorization: `Bearer ${token}` };
 }
+
+describe('who sees which classes (role matrix "View timetable")', () => {
+  /** A session for an existing user (the fixtures' lecturer and student), as signInAs does for new ones. */
+  async function authFor(userId: string, role: 'LECTURER' | 'STUDENT') {
+    const { SessionService } = await import('../src/modules/auth/session.service.js');
+    const { TokenService } = await import('../src/modules/auth/token.service.js');
+    const { session } = await app.get(SessionService).create({
+      userId,
+      client: 'WEB',
+      role,
+      mfaVerified: true,
+      context: { requestId: undefined, ip: undefined, userAgent: undefined },
+    });
+    const { token } = await app.get(TokenService).signAccess({ userId, sessionId: session.id, role });
+    return { Authorization: `Bearer ${token}` };
+  }
+  const RANGE = '/class-sessions?from=2030-08-01&to=2030-08-31';
+  const idsOf = (body: { data: { id: string }[] }) => body.data.map((s) => s.id).sort();
+
+  it('shows administrators their faculty or department, lecturers and students only their own classes', async () => {
+    // A second faculty, with its own course, section and lecturer.
+    const faculty2 = await prisma.faculty.create({ data: { code: 'TF2', name: 'Second Faculty (test)' } });
+    const dept2 = await prisma.department.create({
+      data: { facultyId: faculty2.id, code: 'TD2', name: 'Second Department (test)' },
+    });
+    const course2 = await prisma.course.create({
+      data: { code: 'TST201', title: 'Second Course', departmentId: dept2.id },
+    });
+    const offering2 = await prisma.courseOffering.create({
+      data: { courseId: course2.id, semesterId: ids.semester, status: 'OPEN' },
+    });
+    const sectionB = await prisma.courseSection.create({ data: { offeringId: offering2.id, code: 'B' } });
+    const lecturer2User = await createUser(prisma, {
+      email: 'lecturer.two@example.test',
+      roles: ['LECTURER'],
+    });
+    const lecturer2 = await prisma.lecturerProfile.create({
+      data: { userId: lecturer2User.id, staffNumber: 'TL2', departmentId: dept2.id },
+    });
+    const classOn = (sectionId: string, lecturerId: string, classroomId: string) =>
+      prisma.classSession.create({
+        data: {
+          kind: 'MAKEUP',
+          lecturerId,
+          classroomId,
+          scheduledStart: new Date('2030-08-20T10:00:00Z'),
+          scheduledEnd: new Date('2030-08-20T11:30:00Z'),
+          sections: { create: [{ sectionId }] },
+        },
+      });
+    const classA = (await classOn(ids.sectionA, ids.lecturer, ids.room1)).id;
+    const classB = (await classOn(sectionB.id, lecturer2.id, ids.room2)).id;
+    const dept1 = (await prisma.department.findFirstOrThrow({ where: { code: 'TD' } })).id;
+
+    // University-wide administrator and the Registrar: every class.
+    expect(idsOf((await get(RANGE).expect(200)).body)).toEqual([classA, classB].sort());
+    const registrar = await signInAs(app, prisma, 'registrar@example.test', ['REGISTRAR']);
+    expect(idsOf((await get(RANGE, registrar.auth).expect(200)).body)).toEqual([classA, classB].sort());
+
+    // An administrator of the first department: only its class; the other is "not found".
+    const deptAdmin = await signInAs(app, prisma, 'dept.admin@example.test', ['UNIVERSITY_ADMIN'], {
+      scope: { type: 'DEPARTMENT', id: dept1 },
+    });
+    expect(idsOf((await get(RANGE, deptAdmin.auth).expect(200)).body)).toEqual([classA]);
+    await get(`/class-sessions/${classA}`, deptAdmin.auth).expect(200);
+    await get(`/class-sessions/${classB}`, deptAdmin.auth).expect(404);
+    // An administrator of the second faculty: only its class.
+    const facultyAdmin = await signInAs(app, prisma, 'faculty.admin@example.test', ['UNIVERSITY_ADMIN'], {
+      scope: { type: 'FACULTY', id: faculty2.id },
+    });
+    expect(idsOf((await get(RANGE, facultyAdmin.auth).expect(200)).body)).toEqual([classB]);
+
+    // Lecturers: the classes they teach, even when asking for another lecturer's.
+    const lecturer = await authFor(ids.lecturerUser, 'LECTURER');
+    expect(idsOf((await get(RANGE, lecturer).expect(200)).body)).toEqual([classA]);
+    expect((await get(`${RANGE}&lecturerId=${lecturer2.id}`, lecturer).expect(200)).body.data).toEqual([]);
+    await get(`/class-sessions/${classA}`, lecturer).expect(200);
+    await get(`/class-sessions/${classB}`, lecturer).expect(404);
+
+    // Students: their own sections' classes.
+    const student = await authFor(ids.studentUser, 'STUDENT');
+    expect(idsOf((await get(RANGE, student).expect(200)).body)).toEqual([classA]);
+    await get(`/class-sessions/${classB}`, student).expect(404);
+    // A student with no enrolment sees nothing.
+    const other = await signInAs(app, prisma, 'student.two@example.test', ['STUDENT']);
+    expect((await get(RANGE, other.auth).expect(200)).body.data).toEqual([]);
+  });
+});

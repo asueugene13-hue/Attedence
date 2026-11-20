@@ -47,8 +47,8 @@ export class TimetablesController {
 
   @Get('timetables')
   @RequirePermissions('timetables.read')
-  list(@Query() query: unknown) {
-    return this.timetables.list(parseInput(TimetableQuerySchema, query));
+  list(@CurrentAuth() auth: AccessClaims, @Query() query: unknown) {
+    return this.timetables.list(auth, parseInput(TimetableQuerySchema, query));
   }
 
   @Post('timetables')
@@ -59,8 +59,8 @@ export class TimetablesController {
 
   @Get('timetables/:id')
   @RequirePermissions('timetables.read')
-  get(@Param('id') param: string) {
-    return this.timetables.get(id(param));
+  get(@CurrentAuth() auth: AccessClaims, @Param('id') param: string) {
+    return this.timetables.get(auth, id(param));
   }
 
   @Get('timetables/:id/conflicts')
@@ -143,8 +143,8 @@ export class TimetablesController {
   /** The dates this entry meets on, and the dates skipped (holidays, exceptions) with why. */
   @Get('timetable-entries/:id/dates')
   @RequirePermissions('timetables.read')
-  dates(@Param('id') param: string) {
-    return this.timetables.entryDates(id(param));
+  dates(@CurrentAuth() auth: AccessClaims, @Param('id') param: string) {
+    return this.timetables.entryDates(auth, id(param));
   }
 
   @Post('timetable-entries/:id/exceptions')

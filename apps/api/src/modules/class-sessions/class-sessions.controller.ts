@@ -27,18 +27,21 @@ export class ClassSessionsController {
     private readonly monitor: ClassMonitorService,
   ) {}
 
-  /** `?from=&to=` (local dates, at most 62 days) and optional section, lecturer, room or status. */
+  /**
+   * `?from=&to=` (local dates, at most 62 days) and optional section, lecturer, room or status. Only the
+   * classes the caller may see: their scope (administrators, Registrar) or their own (lecturers, students).
+   */
   @Get('class-sessions')
   @RequirePermissions('timetables.read')
-  list(@Query() query: unknown) {
-    return this.sessions.list(parseInput(ClassSessionQuerySchema, query));
+  list(@CurrentAuth() auth: AccessClaims, @Query() query: unknown) {
+    return this.sessions.listFor(auth, parseInput(ClassSessionQuerySchema, query));
   }
 
-  /** One session with its full history of events. */
+  /** One session with its full history of events, if the caller may see it (otherwise 404). */
   @Get('class-sessions/:id')
   @RequirePermissions('timetables.read')
-  get(@Param('id') param: string) {
-    return this.sessions.get(parseInput(IdSchema, param));
+  get(@CurrentAuth() auth: AccessClaims, @Param('id') param: string) {
+    return this.sessions.getFor(auth, parseInput(IdSchema, param));
   }
 
   /** The caller's own classes: as a lecturer, the ones they teach; as a student, their sections'. */
