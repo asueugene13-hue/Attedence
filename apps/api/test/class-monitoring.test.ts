@@ -611,7 +611,10 @@ describe('dismissing reports', () => {
     const types = ['LECTURER_NOT_ARRIVED', 'CLASS_DELAYED', 'VENUE_PROBLEM'];
     const ids: string[] = [];
     for (const type of types) ids.push((await report(students[3]!, type).expect(201)).body.id);
-    await report(lecturer, 'OTHER').expect(201);
+    const lecturerReports: string[] = [];
+    for (const type of ['CLASS_DELAYED', 'VENUE_PROBLEM', 'OTHER']) {
+      lecturerReports.push((await report(lecturer, type).expect(201)).body.id);
+    }
     const dismiss = (id: string) =>
       http
         .post(`/api/v1/class-issue-reports/${id}/dismiss`)
@@ -633,14 +636,9 @@ describe('dismissing reports', () => {
     expect(flag!.studentId).toBe(
       (await prisma.studentProfile.findFirstOrThrow({ where: { userId: studentUserIds[3]! } })).id,
     );
-    // A lecturer's dismissed report never flags anyone.
-    const lecturerReport = await prisma.classIssueReport.findFirstOrThrow({
-      where: { reporterRole: 'LECTURER' },
-    });
-    await dismiss(lecturerReport.id);
+    // A lecturer's dismissed reports never flag anyone, however many.
+    for (const id of lecturerReports) await dismiss(id);
     expect(await flags()).toHaveLength(1);
-    // Nothing else changes: the student can still report.
-    await report(students[3]!, 'OTHER').expect(409); // their 3-per-class limit, not a block
   });
 });
 

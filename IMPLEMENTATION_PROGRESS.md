@@ -3,7 +3,7 @@
 Read this first in every session, and update it after every implementation step.
 
 **Current phase:** Phase 7 (reports and administration) is **complete and approved** by the product owner (2026-11-14). Phase 8 (production readiness): steps 8.1–8.7 done on 2026-11-14; it closes when Knutsford staff sign off UAT and the restore drill is repeated on the real host, both of which need the university (see "Step 8.7" at the end). Phases 7 and 8 were started together 2026-11-14 with the product owner's approval. Still open from earlier phases: the phone test of the camera and Phase 6 screens (docs/PHONE_TEST_CHECKLIST.md), and Phase 4's field test in two real classrooms. Phases 1–3, 5 and 6 are complete and approved; Phase 4 waits only for its field test.
-**Last updated:** 2026-11-19
+**Last updated:** 2026-11-20
 
 ### Phase 1 steps
 
@@ -2460,3 +2460,36 @@ The product owner asked to continue building. No phase is waiting for approval a
 - **Proof the test bites:** the approval-permission check removed, 1 failed (restored after).
 - **Tests run (development servers running for the phone):** devices 15 passed; shared 10 passed; class-monitoring's preference and notification tests 5 passed. Typecheck and lint clean. The full suite runs in CI.
 - **Noticed, not changed:** the notification settings page lists every category to everyone, so students also see staff categories such as "Attendance correction to approve". That was already so; limiting the list by role is a small follow-up.
+
+### 2026-11-20 — "Build all the phases; phone testing later": closing the remaining code-only gaps
+
+The product owner asked to build all phases and leave phone testing for later. Every phase's code was already built; what is open needs a phone (docs/PHONE_TEST_CHECKLIST.md) or the university (hosting D-16, UAT sign-off, the restore drill on the real host, Phase 4's classroom field test). So this session closed the known limitations that need neither. The dev API and Metro were stopped for the work; restart them before the next phone test (memory: start Metro with `EXPO_PUBLIC_API_URL=http://localhost:3000`).
+
+| Commit | What | Limitation |
+| --- | --- | --- |
+| 1b754de | Notification settings list only the kinds of message the person's roles receive (every role they hold, plus any kind they have received or changed before, so a gap can never hide a switch). `NOTIFICATION_AUDIENCE` and `categoriesForRoles` in the shared package; `ScopeService.rolesHeld`. | follow-up from 55 |
+| ac215ab | Phone: Email settings screen (Alerts → Email settings), mandatory kinds locked on. | 51 |
+| 083cdab | A new timetable version that changes a class's end time, lecturer or groups now tells the class, its lecturer and the previous lecturer what changed (new category `CLASS_CHANGED`; counts as a room change if the room moved too). `UPDATED` events now raise alerts. | 50 |
+| b096cb0 | A student whose class-problem reports are dismissed 3 times within 30 days (settings `monitoring.dismissedReportsToFlag`, `monitoring.dismissedReportsDays`) gets one LOW risk flag `REPEATED_DISMISSED_REPORTS` for review. It changes nothing by itself; lecturers' reports never flag anyone. | 46 |
+| 726a39d | A class a timetable or calendar change cancelled, which cannot come back because its room or lecturer was booked meanwhile, now sends "class could not come back" (`CLASS_NOT_REINSTATED`) to the person who made the change and the class's administrators. | 41 |
+| c807b2c | The dashboard bundles the Inter font (`@fontsource-variable/inter` 5.3.0, self-hosted). | 23 |
+| a577711 | Phone: lecturers reject a waiting check-in (with a note) and check a student in by hand (method and reason), with the same API rules as the dashboard. | 83 |
+| afd991b | Uploads (photos, import files, attachments) are scanned by ClamAV before they are stored, when `CLAMAV_HOST` is set. Harmful: refused `422 FILE_INFECTED` and raised on System health. Scanner unreachable or unclear: refused `503 VIRUS_SCAN_UNAVAILABLE`, never stored unchecked. AttendSure's own report files are not scanned. Production compose runs `clamav/clamav:1.4.3`. | 31 |
+
+- **Database changes:** one migration, `20261120090000_repeated_dismissed_reports` (adds the `REPEATED_DISMISSED_REPORTS` risk type). Applied to the development database; `db:drift` reports no difference. Notification categories and settings are not database changes.
+- **New settings:** `monitoring.dismissedReportsToFlag` (default 3), `monitoring.dismissedReportsDays` (default 30); environment `CLAMAV_HOST`, `CLAMAV_PORT` (default 3310), both optional.
+- **Checked against the real thing:** a temporary ClamAV 1.4.3 container (removed afterwards) loaded 3.6 million signatures. The API's scanner answered CLEAN for a CSV and a 3 MB file, INFECTED (`Eicar-Test-Signature`) for the EICAR test text, and failed with ECONNREFUSED once ClamAV was stopped (which the upload turns into the 503). A first try reported EICAR as clean; that was the test text losing its backslash on the way into the script, confirmed with ClamAV's own `clamdscan`, not a fault in the scanner.
+- **Proof the tests bite** (each broken on purpose, then restored from git):
+  - "Class changed": failed (0 messages) until `UPDATED` was added to the alerted events.
+  - Role filter on the settings list removed: 1 failed.
+  - Dismissed-reports flag switched off: 1 failed.
+  - "Lecturers never flagged" rule removed: at first **not caught** (the lecturer had only one dismissed report, below the threshold). The test now gives the lecturer three; with the rule removed it fails (2 flags instead of 1).
+  - "Could not come back" alert not queued: 1 failed.
+  - Infected files let through: 1 failed.
+- **Tests run:** full `npm run check` (format, lint, typecheck, production build, every test) with no dev servers running, exit 0. Results: API 506 passed (52 files, including the 500-check-in load test), phone 46, dashboard 20, shared 13, design tokens 3. After the lecturer-rule test change, class-monitoring was run again: 30 passed. Phone component tests cover the new phone screens; they have not been seen on a phone yet.
+- **Found and fixed along the way:**
+  - Stopping the dev-server tasks left their child processes running (Metro twice, the built API). The API shares the job queue and slowed the tests; those three AttendSure processes were stopped by id.
+  - The new phone roster test took over 5 minutes because the data cache's 5-minute clean-up timer kept Jest alive; the test now turns that timer off (7.5 s).
+  - The first version of the "class changed" test counted messages too early (it stopped at 9 of 12); it now waits for one per remaining class.
+- **Phone tests waiting:** checklist 4.2 (hand check-in), 4.2a (reject), 4.6 (email settings).
+- **Known limitations:** 23, 31, 46 and 50 resolved; 41, 51 and 83 updated.
