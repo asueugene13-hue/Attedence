@@ -42,6 +42,15 @@ export class ScopeService {
    * any grant of the Super Admin role (which is never narrowed). For tasks that need university-wide
    * scope, such as approving a student's new phone.
    */
+  /** Every role a person currently holds, whichever one they are signed in with. */
+  async rolesHeld(userId: string): Promise<RoleKey[]> {
+    const grants = await this.prisma.userRole.findMany({
+      where: { userId, revokedAt: null },
+      select: { role: { select: { key: true } } },
+    });
+    return [...new Set(grants.map((g) => g.role.key))];
+  }
+
   async institutionWideHolders(role: RoleKey): Promise<string[]> {
     const grants = await this.prisma.userRole.findMany({
       where: {

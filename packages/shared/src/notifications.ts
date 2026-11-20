@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { RoleKey } from './roles.js';
 
 /**
  * Notifications (Phase 3 step 6). Decided by the product owner 2026-11-09: in-app and email first;
@@ -126,6 +127,72 @@ export const NOTIFICATION_CATEGORIES = {
 
 export type NotificationCategory = keyof typeof NOTIFICATION_CATEGORIES;
 export const NOTIFICATION_CATEGORY_KEYS = Object.keys(NOTIFICATION_CATEGORIES) as NotificationCategory[];
+
+const CLASS_CHANGES = ['CLASS_CANCELLED', 'CLASS_RESCHEDULED', 'CLASS_REINSTATED', 'VENUE_CHANGED'] as const;
+const REPORT_FILES = ['REPORT_READY', 'REPORT_FAILED'] as const;
+const STUDENT_CATEGORIES: readonly NotificationCategory[] = [
+  'CLASS_UNCONFIRMED',
+  'CLASS_DELAYED',
+  'CLASS_UNDER_REVIEW',
+  ...CLASS_CHANGES,
+  'ATTENDANCE_OPEN',
+  'DISPUTE_INFO_REQUESTED',
+  'DISPUTE_DECIDED',
+  'EXCUSE_INFO_REQUESTED',
+  'EXCUSE_DECIDED',
+  'ANNOUNCEMENT',
+  'ANNOUNCEMENT_EMAILED',
+];
+
+/**
+ * Which roles can receive each kind of message, taken from the code that sends it. The settings page
+ * shows a person only the kinds their roles receive, plus any kind they have actually received or set,
+ * so a gap here can never hide a switch someone needs. A test checks every kind has a role.
+ */
+export const NOTIFICATION_AUDIENCE: Record<RoleKey, readonly NotificationCategory[]> = {
+  STUDENT: STUDENT_CATEGORIES,
+  COURSE_REP: STUDENT_CATEGORIES,
+  LECTURER: [
+    'CLASS_PROMPT',
+    'CLASS_UNCONFIRMED',
+    'CLASS_UNDER_REVIEW',
+    'REVIEW_DECIDED',
+    ...CLASS_CHANGES,
+    'CLASS_AUTO_ENDED',
+    'BEACON_FAULT',
+    'ATTENDANCE_DECISIONS_WAITING',
+    'CORRECTION_DECIDED',
+    'DISPUTE_SUBMITTED',
+    'DISPUTE_REPLIED',
+    'ANNOUNCEMENT_REPORTED',
+    'RESCHEDULE_DECIDED',
+    ...REPORT_FILES,
+  ],
+  UNIVERSITY_ADMIN: [
+    'REVIEW_OPENED',
+    'CLASS_CANCELLED',
+    'CLASS_RESCHEDULED',
+    'BEACON_FAULT',
+    'ATTENDANCE_DECISIONS_ESCALATED',
+    'CORRECTION_REQUESTED',
+    'DISPUTE_REPLIED',
+    'DISPUTE_ESCALATED',
+    'EXCUSE_SUBMITTED',
+    'EXCUSE_REPLIED',
+    'ANNOUNCEMENT_REPORTED',
+    'RESCHEDULE_REQUESTED',
+    'PHONE_APPROVAL_REQUESTED',
+    ...REPORT_FILES,
+  ],
+  REGISTRAR: ['PHONE_APPROVAL_REQUESTED', ...REPORT_FILES],
+  SUPER_ADMIN: ['PHONE_APPROVAL_REQUESTED', ...REPORT_FILES],
+};
+
+/** The kinds of message a person holding these roles can receive, in catalogue order. */
+export function categoriesForRoles(roles: readonly RoleKey[]): NotificationCategory[] {
+  const wanted = new Set<NotificationCategory>(roles.flatMap((r) => NOTIFICATION_AUDIENCE[r]));
+  return NOTIFICATION_CATEGORY_KEYS.filter((c) => wanted.has(c));
+}
 
 /** An administrator's "class needs review" alert is also emailed if still unread after this long. */
 export const REVIEW_EMAIL_IF_UNREAD_MINUTES = 15;

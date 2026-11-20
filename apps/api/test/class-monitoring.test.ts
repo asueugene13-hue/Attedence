@@ -736,6 +736,15 @@ describe('notifications', () => {
       .send({ category: 'CLASS_CANCELLED', channel: 'EMAIL', enabled: false })
       .expect(409);
     expect(refused.body.code).toBe('MANDATORY_CATEGORY');
+    // Each person sees only the kinds of message their roles receive.
+    const kinds = (list: { category: string }[]) => list.map((p) => p.category);
+    expect(kinds(prefs)).not.toContain('CORRECTION_REQUESTED');
+    expect(kinds(prefs)).not.toContain('CLASS_PROMPT');
+    const lecturerPrefs = (await http.get('/api/v1/me/notification-preferences').set(lecturer).expect(200))
+      .body.data;
+    expect(kinds(lecturerPrefs)).toContain('CLASS_PROMPT');
+    expect(kinds(lecturerPrefs)).toContain('DISPUTE_SUBMITTED');
+    expect(kinds(lecturerPrefs)).not.toContain('EXCUSE_DECIDED');
     await http
       .put('/api/v1/me/notification-preferences')
       .set(lecturer)

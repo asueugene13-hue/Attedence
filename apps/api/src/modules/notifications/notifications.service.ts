@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException, type OnModuleInit } from '@nestjs/common';
 import {
   NOTIFICATION_CATEGORIES,
+  categoriesForRoles,
   type NotificationCategory,
   type NotificationChannel,
 } from '@attendsure/shared';
@@ -9,6 +10,7 @@ import { Clock } from '../../infrastructure/clock/clock.js';
 import { JobRegistry } from '../../infrastructure/jobs/job-registry.js';
 import { OutboxService } from '../../infrastructure/jobs/outbox.service.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { ScopeService } from '../authorization/scope.service.js';
 import { AccountsService } from '../users/accounts.service.js';
 import { type ChannelSender, EmailSender, PushSender } from './channels.js';
 
@@ -45,6 +47,7 @@ export class NotificationsService implements OnModuleInit {
     private readonly outbox: OutboxService,
     private readonly accounts: AccountsService,
     private readonly clock: Clock,
+    private readonly scopes: ScopeService,
     email: EmailSender,
     push: PushSender,
   ) {
@@ -178,24 +181,43 @@ export class NotificationsService implements OnModuleInit {
     return this.unreadCount(userId);
   }
 
-  /** Every category with whether each outside channel is on for this person. */
+  /**
+   * The kinds of message this person can receive (from every role they hold, not only the one they are
+   * signed in with), plus any kind they have received or changed before, with whether each outside
+   * channel is on.
+   */
   async preferences(userId: string) {
-    const rows = await this.prisma.notificationPreference.findMany({ where: { userId } });
+    const [rows, roles, received] = await Promise.all([
+      this.prisma.notificationPreference.findMany({ where: { userId } }),
+      this.scopes.rolesHeld(userId),
+      this.prisma.notification.findMany({
+        where: { userId },
+        distinct: ['category'],
+        select: { category: true },
+      }),
+    ]);
     const byKey = new Map(rows.map((r) => [`${r.category}|${r.channel}`, r.enabled]));
+    const shown = new Set<string>([
+      ...categoriesForRoles(roles),
+      ...rows.map((r) => r.category),
+      ...received.map((r) => r.category),
+    ]);
     return {
-      data: Object.entries(NOTIFICATION_CATEGORIES).map(([category, rule]) => ({
-        category,
-        label: rule.label,
-        mandatory: rule.mandatory,
-        channels: (['EMAIL', 'PUSH'] as const).map((channel) => ({
-          channel,
-          available: this.senders.get(channel)!.isEnabled(),
-          enabled:
-            rule.mandatory ||
-            (byKey.get(`${category}|${channel}`) ??
-              (rule.defaultChannels as readonly string[]).includes(channel)),
+      data: Object.entries(NOTIFICATION_CATEGORIES)
+        .filter(([category]) => shown.has(category))
+        .map(([category, rule]) => ({
+          category,
+          label: rule.label,
+          mandatory: rule.mandatory,
+          channels: (['EMAIL', 'PUSH'] as const).map((channel) => ({
+            channel,
+            available: this.senders.get(channel)!.isEnabled(),
+            enabled:
+              rule.mandatory ||
+              (byKey.get(`${category}|${channel}`) ??
+                (rule.defaultChannels as readonly string[]).includes(channel)),
+          })),
         })),
-      })),
     };
   }
 
