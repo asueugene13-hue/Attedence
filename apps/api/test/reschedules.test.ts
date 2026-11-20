@@ -22,6 +22,7 @@ let lecturer: Record<string, string>;
 let otherLecturer: Record<string, string>;
 let student: Record<string, string>;
 let sessionId: string;
+let lecturerUserId: string;
 let ids: Record<
   'faculty' | 'otherFaculty' | 'lecturer' | 'otherLecturer' | 'room1' | 'room2' | 'section' | 'otherSection',
   string
@@ -160,6 +161,7 @@ beforeEach(async () => {
     },
   });
   sessionId = session.id;
+  lecturerUserId = lecturerUser.id;
   lecturer = await sessionFor(lecturerUser.id, 'LECTURER');
   otherLecturer = await sessionFor(otherUser.id, 'LECTURER');
   student = await sessionFor(studentUser.id, 'STUDENT');
@@ -354,13 +356,44 @@ describe('approval safety', () => {
     );
   });
 
-  it('refuses when the class was cancelled after the request', async () => {
+  it('is closed when the class is cancelled after the request, with a note, an audit entry and a message', async () => {
     const created = (await ask(lecturer).expect(201)).body;
     await post(`/class-sessions/${sessionId}/cancel`, lecturer, { reasonCode: 'ILLNESS' }).expect(200);
+    const closed = await prisma.rescheduleRequest.findUniqueOrThrow({ where: { id: created.id } });
+    expect(closed).toMatchObject({
+      status: 'REJECTED',
+      decidedById: lecturerUserId,
+      decisionNote: 'Closed automatically: the class was cancelled.',
+    });
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      where: { action: 'reschedule_requests.closed', entityId: created.id },
+    });
+    expect(audit).toMatchObject({ actorUserId: lecturerUserId, reason: closed.decisionNote });
+    expect(await prisma.outboxEvent.count({ where: { type: 'system/reschedule-alert' } })).toBeGreaterThan(0);
     expect((await post(`/reschedule-requests/${created.id}/approve`, admin).expect(409)).body.code).toBe(
-      'TRANSITION_NOT_ALLOWED',
+      'ALREADY_DECIDED',
     );
     expect(await prisma.classSession.count({ where: { kind: 'REPLACEMENT' } })).toBe(0);
+  });
+
+  it('is closed when the class starts, and stays open while the class can still be moved', async () => {
+    const created = (await ask(lecturer).expect(201)).body;
+    const statusOf = async () =>
+      (await prisma.rescheduleRequest.findUniqueOrThrow({ where: { id: created.id } })).status;
+    // A delay leaves the class movable, so the request still waits.
+    clock.set('2030-08-20T09:00:00Z');
+    await post(`/class-sessions/${sessionId}/delay`, lecturer, {
+      minutes: 20,
+      reason: 'Previous class overran (test)',
+    }).expect(200);
+    expect(await statusOf()).toBe('PENDING');
+    // Starting the class closes it.
+    clock.set('2030-08-20T10:20:00Z');
+    await post(`/class-sessions/${sessionId}/start`, lecturer).expect(200);
+    expect(await statusOf()).toBe('REJECTED');
+    expect(
+      (await prisma.rescheduleRequest.findUniqueOrThrow({ where: { id: created.id } })).decisionNote,
+    ).toBe('Closed automatically: the class has started.');
   });
 
   it('lets only one of two approvals into the same room and time through', async () => {

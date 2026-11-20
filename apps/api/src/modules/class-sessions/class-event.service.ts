@@ -27,6 +27,7 @@ import { PermissionService } from '../authorization/permission.service.js';
 import { CoursesService } from '../courses/courses.service.js';
 import { LecturersService } from '../courses/lecturers.service.js';
 import { writeClassEvent } from './class-event-log.js';
+import { closeWaitingReschedules } from './reschedule-closing.js';
 
 /**
  * Extra work done in the same transaction as the status change, before it (a reschedule creates the
@@ -166,6 +167,11 @@ export class ClassEventService {
             'Someone else changed this class a moment ago. Reload it and try again.',
           );
         }
+        await closeWaitingReschedules(
+          tx,
+          { outbox: this.outbox, audit: this.audit },
+          { sessionId: session.id, toStatus: def.to, now, by: actor, context },
+        );
         const decision = session.status === 'UNDER_REVIEW' ? REVIEW_DECISION[action] : undefined;
         if (decision) {
           const closed = await tx.classStatusReview.updateMany({
@@ -249,6 +255,11 @@ export class ClassEventService {
         },
       });
       if (claimed.count !== 1) return false;
+      await closeWaitingReschedules(
+        tx,
+        { outbox: this.outbox, audit: this.audit },
+        { sessionId: session.id, toStatus: def.to, now, by: null },
+      );
       const extra = inTransaction ? await inTransaction(tx, session, now) : {};
       await writeClassEvent(tx, this.outbox, {
         data: {

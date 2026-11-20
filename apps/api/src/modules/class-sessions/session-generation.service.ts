@@ -6,9 +6,11 @@ import { Clock } from '../../infrastructure/clock/clock.js';
 import { JobRegistry } from '../../infrastructure/jobs/job-registry.js';
 import { OutboxService } from '../../infrastructure/jobs/outbox.service.js';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service.js';
+import { AuditService } from '../audit-logs/audit.service.js';
 import { AcademicLookupsService } from '../academic/academic-lookups.service.js';
 import { TimetablesService } from '../timetables/timetables.service.js';
 import { writeClassEvent } from './class-event-log.js';
+import { closeWaitingReschedules } from './reschedule-closing.js';
 
 /** Statuses of a class that has not started yet: the only sessions a timetable change may alter. */
 export const NOT_STARTED: ClassStatus[] = [
@@ -60,6 +62,7 @@ export class SessionGenerationService implements OnModuleInit {
     private readonly academic: AcademicLookupsService,
     private readonly config: AppConfig,
     private readonly clock: Clock,
+    private readonly audit: AuditService,
   ) {}
 
   onModuleInit(): void {
@@ -184,6 +187,11 @@ export class SessionGenerationService implements OnModuleInit {
               payload: { reason: why.reason, note: why.note, timetableId },
             },
           });
+          await closeWaitingReschedules(
+            tx,
+            { outbox: this.outbox, audit: this.audit },
+            { sessionId: s.id, toStatus: 'CANCELLED', now, by: { userId: publishedById } },
+          );
           summary.cancelled += 1;
         }
       },

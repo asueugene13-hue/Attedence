@@ -2422,3 +2422,24 @@ The product owner asked to continue building. No phase is waiting for approval a
 - **Left for the product owner:** "Check this classroom" asks Android for the Bluetooth and location permissions. The phone's owner should answer those prompts.
 - **Not tested on the phone yet:** 3.2–3.4 (sending a dispute or excuse), 3.6 (no announcements in the demo data), and everything needing a class happening now (checking in; the lecturer's code screen).
 - **Privacy note:** one screenshot taken while the product owner was using another app on the phone was deleted at once, with its screen readout, and not kept or read further.
+
+### 2026-11-20 — Hardening: waiting reschedule requests close when their class can no longer move (limitation 40)
+
+- **Before:** a lecturer's waiting request to move a class stayed in the administrators' queue after the class had started, ended or been cancelled. Approving it was refused, and someone had to reject it by hand.
+- **Built:** `class-sessions/reschedule-closing.ts` (`closeWaitingReschedules`) closes such a request in the same transaction as the status change. It is called from all three places that change a class's status:
+  - a person's action (`ClassEventService.act`);
+  - the system's own changes (`applySystem`);
+  - a timetable change cancelling classes (`SessionGenerationService`).
+  The request becomes REJECTED with a note ("Closed automatically: the class was cancelled / has started / has ended."), with `decidedBy` set to whoever changed the class (none for the system). It is audited as `reschedule_requests.closed`, and the lecturer gets the usual "reschedule rejected" message with the note. A class that is delayed, postponed, unconfirmed, under review or suspended can still be moved, so its request keeps waiting. A direct reschedule already closed a waiting request, unchanged.
+- **Files:**
+  - API: new `class-sessions/reschedule-closing.ts`; `class-event.service.ts`; `session-generation.service.ts` (now given the audit service).
+  - Tests: `test/reschedules.test.ts`: the cancelled case now expects the request closed (note, audit entry, message, then `409 ALREADY_DECIDED` on approval), plus a new test (a delay keeps it waiting, starting closes it).
+  - Docs: KNOWN_LIMITATIONS 40; API_DOCUMENTATION (approve row).
+- **Database changes:** none.
+- **Proof the tests bite (each restored after):**
+  - Closing switched off: 2 failed.
+  - Closing on any status change, including a delay: 1 failed.
+- **Tests run:**
+  - `reschedules.test.ts` 11 passed.
+  - With the development servers running for the phone: class-lifecycle, class-sessions and timetables passed. In class-monitoring, 3 tests stopped at the default 10-second setup limit while the servers competed for the processor; the whole file then passed (29 of 29) with longer limits. "Counts a waiting reschedule request as lecturer activity" also passed twice on its own under the normal limits.
+  - Lint clean. The full suite runs in CI.
