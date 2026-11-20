@@ -16,6 +16,7 @@ export type RootStackParamList = {
   RequestDetail: { kind: 'dispute' | 'excuse'; id: string; notice?: string };
   Announcements: undefined;
   AnnouncementCompose: undefined;
+  NotificationSettings: undefined;
   TwoStep: undefined;
   Login: undefined;
 };

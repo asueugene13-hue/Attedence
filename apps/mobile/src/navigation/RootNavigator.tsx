@@ -9,6 +9,7 @@ import { useTheme } from '../lib/theme';
 import { AlertsScreen } from '../screens/AlertsScreen';
 import { AnnouncementComposeScreen } from '../screens/AnnouncementComposeScreen';
 import { AnnouncementsScreen } from '../screens/AnnouncementsScreen';
+import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
 import { CheckIdScreen } from '../screens/CheckIdScreen';
 import { CourseAttendanceScreen } from '../screens/CourseAttendanceScreen';
 import { DisputeFormScreen } from '../screens/DisputeFormScreen';
@@ -177,6 +178,11 @@ export function RootNavigator() {
             name="AnnouncementCompose"
             component={AnnouncementComposeScreen}
             options={{ headerShown: true, title: 'Write an announcement' }}
+          />
+          <Stack.Screen
+            name="NotificationSettings"
+            component={NotificationSettingsScreen}
+            options={{ headerShown: true, title: 'Email settings' }}
           />
           {auth.me.permissions.includes('beacons.manage') ? (
             <Stack.Screen

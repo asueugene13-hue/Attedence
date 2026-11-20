@@ -49,6 +49,11 @@ export function AlertsScreen() {
         <Heading subtitle="Messages about your classes">Alerts</Heading>
         {list.isError ? <Notice tone="error">{describeError(list.error)}</Notice> : null}
         {error ? <Notice tone="error">{error}</Notice> : null}
+        <Button
+          label="Email settings"
+          variant="secondary"
+          onPress={() => navigation.navigate('NotificationSettings')}
+        />
         {list.data?.data.length === 0 ? <BodyText muted>No notifications yet.</BodyText> : null}
         {list.data?.data.some((n) => !n.readAt) ? (
           <Button
