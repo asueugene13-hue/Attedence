@@ -775,6 +775,12 @@ describe('notifications', () => {
     const kinds = (list: { category: string }[]) => list.map((p) => p.category);
     expect(kinds(prefs)).not.toContain('CORRECTION_REQUESTED');
     expect(kinds(prefs)).not.toContain('CLASS_PROMPT');
+    // An old saved switch for a kind the student can never receive does not bring it back (phone test).
+    await prisma.notificationPreference.create({
+      data: { userId: studentUserIds[4]!, category: 'CLASS_PROMPT', channel: 'EMAIL', enabled: false },
+    });
+    const again = (await http.get('/api/v1/me/notification-preferences').set(me).expect(200)).body.data;
+    expect(kinds(again)).not.toContain('CLASS_PROMPT');
     const lecturerPrefs = (await http.get('/api/v1/me/notification-preferences').set(lecturer).expect(200))
       .body.data;
     expect(kinds(lecturerPrefs)).toContain('CLASS_PROMPT');

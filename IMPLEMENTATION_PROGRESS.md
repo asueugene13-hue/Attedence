@@ -2467,7 +2467,7 @@ The product owner asked to build all phases and leave phone testing for later. E
 
 | Commit | What | Limitation |
 | --- | --- | --- |
-| 1b754de | Notification settings list only the kinds of message the person's roles receive (every role they hold, plus any kind they have received or changed before, so a gap can never hide a switch). `NOTIFICATION_AUDIENCE` and `categoriesForRoles` in the shared package; `ScopeService.rolesHeld`. | follow-up from 55 |
+| 1b754de | Notification settings list only the kinds of message the person's roles receive (every role they hold, plus any kind they have actually received, so a gap can never hide a switch). `NOTIFICATION_AUDIENCE` and `categoriesForRoles` in the shared package; `ScopeService.rolesHeld`. | follow-up from 55 |
 | ac215ab | Phone: Email settings screen (Alerts → Email settings), mandatory kinds locked on. | 51 |
 | 083cdab | A new timetable version that changes a class's end time, lecturer or groups now tells the class, its lecturer and the previous lecturer what changed (new category `CLASS_CHANGED`; counts as a room change if the room moved too). `UPDATED` events now raise alerts. | 50 |
 | b096cb0 | A student whose class-problem reports are dismissed 3 times within 30 days (settings `monitoring.dismissedReportsToFlag`, `monitoring.dismissedReportsDays`) gets one LOW risk flag `REPEATED_DISMISSED_REPORTS` for review. It changes nothing by itself; lecturers' reports never flag anyone. | 46 |
@@ -2493,3 +2493,10 @@ The product owner asked to build all phases and leave phone testing for later. E
   - The first version of the "class changed" test counted messages too early (it stopped at 9 of 12); it now waits for one per remaining class.
 - **Phone tests waiting:** checklist 4.2 (hand check-in), 4.2a (reject), 4.6 (email settings).
 - **Known limitations:** 23, 31, 46 and 50 resolved; 41, 51 and 83 updated.
+
+### 2026-11-20 — Phone test: Email settings (checklist 4.6) and a fix it found
+
+- **On the phone (Samsung A56, USB, Demo Student 1, fake data):** Alerts → Email settings opened with the explanation and one switch per kind. "Class delayed" turned on, stayed on after leaving and coming back, and was saved in the database; it was turned off again afterwards. "Class cancelled" is locked on ("Always emailed"); tapping it changes nothing. **4.6 passed.**
+- **Found:** the student also saw two lecturer-only kinds ("Your class needs an update", "Class ended automatically"). They came from saved switches left on the demo account by earlier tests: the list also showed any kind with a saved switch. A saved switch for a kind the person can never receive does nothing, so that rule was removed. The list now shows the kinds the person's roles receive, plus any kind they have actually received (the safety net). On the phone the two kinds were gone after the change.
+- **Test:** class-monitoring "choose channels" now adds such a saved switch and expects it hidden. With the old rule put back it fails; restored, it passes. Shared tests 13 passed; typecheck and lint clean.
+- **Still waiting on the phone:** 4.2 and 4.2a (lecturer hand check-in and reject) need the demo lecturer's password (or the product owner's OK to reset it locally) and the OK to create one fake class happening now.

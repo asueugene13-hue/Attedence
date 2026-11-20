@@ -162,7 +162,7 @@ const STUDENT_CATEGORIES: readonly NotificationCategory[] = [
 
 /**
  * Which roles can receive each kind of message, taken from the code that sends it. The settings page
- * shows a person only the kinds their roles receive, plus any kind they have actually received or set,
+ * shows a person only the kinds their roles receive, plus any kind they have actually received,
  * so a gap here can never hide a switch someone needs. A test checks every kind has a role.
  */
 export const NOTIFICATION_AUDIENCE: Record<RoleKey, readonly NotificationCategory[]> = {

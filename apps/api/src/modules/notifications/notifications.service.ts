@@ -183,7 +183,7 @@ export class NotificationsService implements OnModuleInit {
 
   /**
    * The kinds of message this person can receive (from every role they hold, not only the one they are
-   * signed in with), plus any kind they have received or changed before, with whether each outside
+   * signed in with), plus any kind they have actually received, with whether each outside
    * channel is on.
    */
   async preferences(userId: string) {
@@ -197,11 +197,7 @@ export class NotificationsService implements OnModuleInit {
       }),
     ]);
     const byKey = new Map(rows.map((r) => [`${r.category}|${r.channel}`, r.enabled]));
-    const shown = new Set<string>([
-      ...categoriesForRoles(roles),
-      ...rows.map((r) => r.category),
-      ...received.map((r) => r.category),
-    ]);
+    const shown = new Set<string>([...categoriesForRoles(roles), ...received.map((r) => r.category)]);
     return {
       data: Object.entries(NOTIFICATION_CATEGORIES)
         .filter(([category]) => shown.has(category))
