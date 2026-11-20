@@ -32,6 +32,7 @@ const TYPE_LABELS: Record<(typeof RISK_TYPES)[number], string> = {
   MOCK_LOCATION: 'Fake location app',
   INTEGRITY_FAILED: 'App or phone integrity check failed',
   REPEATED_REJECTIONS: 'Many rejected check-ins',
+  REPEATED_DISMISSED_REPORTS: 'Class-problem reports often dismissed',
   UNEXPECTED_BEACON: 'Beacon heard in an unexpected place',
 };
 
@@ -138,6 +139,8 @@ function RiskFlags() {
 function describeEvidence(f: Flag) {
   const e = f.evidence;
   if (Array.isArray(e.students)) return `${e.students.length} student accounts on one phone.`;
+  if (typeof e.dismissedReports === 'number')
+    return `${e.dismissedReports} class-problem reports dismissed in ${String(e.days)} days.`;
   if (typeof e.requestsIn90Days === 'number') return `${e.requestsIn90Days} new-phone requests in 90 days.`;
   if (typeof e.separationM === 'number')
     return `The same beacon was heard ${(e.separationM / 1000).toFixed(1)} km apart within 5 minutes.`;

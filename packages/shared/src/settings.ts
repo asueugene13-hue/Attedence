@@ -40,6 +40,19 @@ export const SETTINGS = {
     schema: z.number().int().min(1).max(20),
     default: 1,
   },
+  'monitoring.dismissedReportsToFlag': {
+    label: 'Flag a student after this many dismissed reports',
+    description:
+      'A student whose class-problem reports are dismissed this many times within the period below is flagged for an administrator to look at. The flag changes nothing by itself.',
+    schema: z.number().int().min(2).max(50),
+    default: 3,
+  },
+  'monitoring.dismissedReportsDays': {
+    label: 'Period for counting dismissed reports (days)',
+    description: 'Dismissed reports made within this many days count towards the flag above.',
+    schema: z.number().int().min(1).max(365),
+    default: 30,
+  },
   // Attendance (ATTENDANCE_FLOW §1, §9). Interim defaults until Knutsford's regulations are known (D-09).
   'attendance.lateAfterMinutes': {
     label: 'Check-ins count as late after (minutes)',

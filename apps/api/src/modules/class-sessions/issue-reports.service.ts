@@ -9,6 +9,7 @@ import type {
   ClassIssueReport,
   ClassSession,
   ClassStatus,
+  Prisma,
   ReporterRole,
 } from '../../generated/prisma/client.js';
 import { Clock } from '../../infrastructure/clock/clock.js';
@@ -22,6 +23,8 @@ import { CoursesService } from '../courses/courses.service.js';
 import { LecturersService } from '../courses/lecturers.service.js';
 import { CourseRepsService } from '../enrollments/course-reps.service.js';
 import { EnrollmentsService } from '../enrollments/enrollments.service.js';
+import { RiskFlagsService } from '../risk-flags/risk-flags.service.js';
+import { SettingsService } from '../settings/settings.service.js';
 import { StudentsService } from '../students/students.service.js';
 import { writeClassEvent } from './class-event-log.js';
 
@@ -50,6 +53,8 @@ export class IssueReportsService {
     private readonly students: StudentsService,
     private readonly enrollments: EnrollmentsService,
     private readonly reps: CourseRepsService,
+    private readonly riskFlags: RiskFlagsService,
+    private readonly settings: SettingsService,
     private readonly config: AppConfig,
     private readonly clock: Clock,
   ) {}
@@ -163,6 +168,10 @@ export class IssueReportsService {
         message: 'You do not have permission to do this.',
       });
     }
+    const limits = {
+      count: await this.settings.get('monitoring.dismissedReportsToFlag'),
+      days: await this.settings.get('monitoring.dismissedReportsDays'),
+    };
     await this.prisma.$transaction(async (tx) => {
       const done = await tx.classIssueReport.updateMany({
         where: { id: row.id, status: { not: 'DISMISSED' } },
@@ -184,8 +193,40 @@ export class IssueReportsService {
         ),
         tx,
       );
+      if (row.reporterRole !== 'LECTURER') await this.flagIfOftenDismissed(tx, row.reporterUserId, limits);
     });
     return this.view({ ...row, status: 'DISMISSED' }, true);
+  }
+
+  /**
+   * A student whose reports keep being dismissed is flagged for a person to look at (limitation 46).
+   * The flag changes nothing by itself: their reports still count as before.
+   */
+  private async flagIfOftenDismissed(
+    tx: Prisma.TransactionClient,
+    reporterUserId: string,
+    limits: { count: number; days: number },
+  ) {
+    const since = new Date(this.clock.now().getTime() - limits.days * 86_400_000);
+    const dismissed = await tx.classIssueReport.findMany({
+      where: { reporterUserId, status: 'DISMISSED', createdAt: { gte: since } },
+      select: { id: true },
+    });
+    if (dismissed.length < limits.count) return;
+    await this.riskFlags.raise(
+      {
+        type: 'REPEATED_DISMISSED_REPORTS',
+        severity: 'LOW',
+        studentId: await this.students.idForUser(reporterUserId),
+        evidence: {
+          dismissedReports: dismissed.length,
+          days: limits.days,
+          reportIds: dismissed.map((d) => d.id),
+        },
+        dedupeKey: `dismissed-reports:${reporterUserId}`,
+      },
+      tx,
+    );
   }
 
   /** The class's lecturer reports as LECTURER; an enrolled student as STUDENT, or COURSE_REP if they are its rep. */

@@ -77,6 +77,7 @@ export const RISK_TYPES = [
   'MOCK_LOCATION',
   'INTEGRITY_FAILED',
   'REPEATED_REJECTIONS',
+  'REPEATED_DISMISSED_REPORTS',
   'UNEXPECTED_BEACON',
 ] as const;
 export type RiskType = (typeof RISK_TYPES)[number];

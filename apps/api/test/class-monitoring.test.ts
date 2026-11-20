@@ -605,6 +605,43 @@ describe('dismissing reports', () => {
     expect((await monitor.evaluateSession(sessionId)).recommendation).toBe('NONE');
     expect(await status()).toBe('UNCONFIRMED');
   });
+
+  it('flags a student for review once three of their reports are dismissed, and only once', async () => {
+    at('10:10');
+    const types = ['LECTURER_NOT_ARRIVED', 'CLASS_DELAYED', 'VENUE_PROBLEM'];
+    const ids: string[] = [];
+    for (const type of types) ids.push((await report(students[3]!, type).expect(201)).body.id);
+    await report(lecturer, 'OTHER').expect(201);
+    const dismiss = (id: string) =>
+      http
+        .post(`/api/v1/class-issue-reports/${id}/dismiss`)
+        .set(admin)
+        .send({ note: 'Not what happened (test)' })
+        .expect(200);
+    const flags = () => prisma.riskFlag.findMany({ where: { type: 'REPEATED_DISMISSED_REPORTS' } });
+    await dismiss(ids[0]!);
+    await dismiss(ids[1]!);
+    expect(await flags()).toHaveLength(0);
+    await dismiss(ids[2]!);
+    const [flag, ...more] = await flags();
+    expect(more).toHaveLength(0);
+    expect(flag).toMatchObject({
+      status: 'OPEN',
+      severity: 'LOW',
+      evidence: { dismissedReports: 3, days: 30 },
+    });
+    expect(flag!.studentId).toBe(
+      (await prisma.studentProfile.findFirstOrThrow({ where: { userId: studentUserIds[3]! } })).id,
+    );
+    // A lecturer's dismissed report never flags anyone.
+    const lecturerReport = await prisma.classIssueReport.findFirstOrThrow({
+      where: { reporterRole: 'LECTURER' },
+    });
+    await dismiss(lecturerReport.id);
+    expect(await flags()).toHaveLength(1);
+    // Nothing else changes: the student can still report.
+    await report(students[3]!, 'OTHER').expect(409); // their 3-per-class limit, not a block
+  });
 });
 
 describe('auto-end', () => {
