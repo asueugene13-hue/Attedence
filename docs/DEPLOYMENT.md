@@ -42,6 +42,7 @@ Fixtures and test accounts are never loaded into production.
 | PostgreSQL | Version 16 or newer, managed or self-run, with point-in-time recovery, encrypted storage and TLS |
 | Redis | Version 7 with append-only persistence, TLS and authentication |
 | Object storage | S3-compatible, private buckets, encryption at rest. Settings: `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, optional `S3_REGION` and `S3_PUBLIC_ENDPOINT` (the address browsers use for download links). In production the bucket must already exist; the API refuses to start otherwise, and refuses the local example key. |
+| Virus scanning | A ClamAV daemon (`clamav/clamav:1.4.3`, about 1.5 GB of memory) reachable from the API as `CLAMAV_HOST` (port `CLAMAV_PORT`, default 3310). Every uploaded photo, import file and attachment is scanned before it is stored; a harmful file is refused (`422 FILE_INFECTED`) and shown on System health; if the scanner cannot be reached the upload is refused (`503 VIRUS_SCAN_UNAVAILABLE`), never stored unchecked. Without `CLAMAV_HOST` nothing is scanned and the API warns at start-up. |
 | TLS | Certificates for the API and dashboard domains, with automatic renewal |
 | Secrets | A secret manager, not environment files on disk |
 | Monitoring | Structured log collection, metrics (Prometheus format), uptime checks and alerting to on-call staff |
@@ -93,6 +94,7 @@ The images contain no secrets and no `.env` file; every setting comes from the e
 - **worker**: all background jobs (8.1).
 - **web**: the dashboard.
 - **release**: runs before the API starts.
+- **clamav**: scans uploads (the API instances have `CLAMAV_HOST=clamav`). Its virus definitions live in the `clamav-db` volume and update themselves; on the very first start, downloading them takes a few minutes, and uploads are refused until it is ready.
 
 Settings go in `infra/production/secrets/app.env` (ignored by git). On a real host they come from its secret manager instead. The variables are those in `.env.example`, with `NODE_ENV=production` set by the compose file. In production the API refuses to start with the example secrets, a non-https `WEB_APP_URL`, or a missing bucket.
 

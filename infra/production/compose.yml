@@ -4,6 +4,7 @@
 #   api-1/2   two API instances (the same image), so one can restart or fail without stopping check-ins.
 #   worker    background jobs and the outbox relay. Jobs run only here (RUN_JOBS_IN_API is false).
 #   web       the dashboard.
+#   clamav    checks uploaded files for viruses before they are stored (ClamAV; updates its own definitions).
 #   release   applies database migrations and loads the system roles, then exits. Run it before each release.
 #
 # Settings come from secrets/app.env (never committed). For a real server, fill it from the host's
@@ -21,6 +22,7 @@ x-api: &api
     NODE_ENV: production
     RUN_JOBS_IN_API: 'false'
     TRUST_PROXY_HOPS: '1'
+    CLAMAV_HOST: clamav
   restart: unless-stopped
   healthcheck:
     test:
@@ -52,12 +54,16 @@ services:
     depends_on:
       release:
         condition: service_completed_successfully
+      clamav:
+        condition: service_started
 
   api-2:
     <<: *api
     depends_on:
       release:
         condition: service_completed_successfully
+      clamav:
+        condition: service_started
 
   worker:
     image: attendsure-api:${ATTENDSURE_VERSION:-local}
@@ -83,6 +89,14 @@ services:
         FILES_ORIGIN: ${FILES_ORIGIN:-}
     restart: unless-stopped
 
+  # Needs about 1.5 GB of memory. On first start it downloads its virus definitions (a few minutes);
+  # until then uploads are refused with "could not be checked" (503), never stored unchecked.
+  clamav:
+    image: clamav/clamav:1.4.3
+    volumes:
+      - clamav-db:/var/lib/clamav
+    restart: unless-stopped
+
   proxy:
     image: caddy:2.10.2-alpine
     environment:
@@ -105,5 +119,6 @@ services:
         condition: service_started
 
 volumes:
+  clamav-db:
   caddy-data:
   caddy-config:

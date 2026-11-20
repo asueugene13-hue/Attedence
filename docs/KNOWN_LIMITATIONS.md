@@ -51,7 +51,7 @@ AttendSure makes proxy and remote attendance much harder, but no phone-based sys
 28. ~~Sign-in forms still ask for "Email".~~ **Resolved in Phase 2 step 7a:** web and mobile sign-in say "Email or Student ID" and send `identifier`.
 29. ~~Import activation emails are sent by the API process, not a job queue.~~ **Resolved in Phase 3 step 1:** each email is a background job, queued in the same transaction as the import, retried with growing waits, and marked FAILED (re-sendable) only after the last try. A restart no longer loses emails.
 30. **One import is at most 5,000 rows and 5 MB**, saved in a single transaction. Larger intakes are split into several files.
-31. **Uploaded files are not virus-scanned yet.** Only CSV, Excel, JPEG and PNG are accepted, checked from their bytes, and stored privately; a ClamAV scan is planned before production.
+31. ~~Uploaded files are not virus-scanned yet.~~ **Resolved 2026-11-20:** uploads are scanned by ClamAV before they are stored when `CLAMAV_HOST` is set (the production compose file runs it). Development and CI run without it, so there nothing is scanned. ClamAV finds known harmful files; it cannot promise a new one is caught, so the type checks and private storage stay.
 32. **Import files and rows are not yet deleted after 90 days.** The retention job (DATABASE_SCHEMA §7) arrives with the other retention rules (D-18). Cancelled imports already delete their stored file.
 33. **Production file storage is not chosen (D-16).** Development and CI use SeaweedFS; switching host means changing the `S3_*` settings only.
 34. **Moving a student to another section is two steps:** end the enrolment with a reason, then enrol in the new section. Both are recorded.

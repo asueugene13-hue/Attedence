@@ -77,6 +77,9 @@ const EnvSchema = z
     RUN_SCHEDULED_JOBS: z.enum(['true', 'false']).default('true'),
     /** Turns on GET /metrics (Prometheus format) for a scraper that sends this as a Bearer token. Unset: off. */
     METRICS_TOKEN: z.string().min(32, 'must be at least 32 characters').optional(),
+    /** A ClamAV daemon that checks uploaded files before they are stored. Unset: files are not scanned. */
+    CLAMAV_HOST: z.string().min(1).optional(),
+    CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
     /** First retry delay for a failed job; later retries wait longer (exponential). */
     JOB_RETRY_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(5000),
 
@@ -167,6 +170,8 @@ export class AppConfig {
   readonly runScheduledJobs: boolean;
   /** Null when the metrics endpoint is off. */
   readonly metricsToken: string | null;
+  /** Null when uploads are not virus-scanned. */
+  readonly virusScan: { host: string; port: number } | null;
 
   private constructor(env: z.infer<typeof EnvSchema>) {
     this.nodeEnv = env.NODE_ENV;
@@ -193,6 +198,7 @@ export class AppConfig {
     this.jobRetryDelayMs = env.JOB_RETRY_DELAY_MS;
     this.runScheduledJobs = env.RUN_SCHEDULED_JOBS === 'true';
     this.metricsToken = env.METRICS_TOKEN ?? null;
+    this.virusScan = env.CLAMAV_HOST ? { host: env.CLAMAV_HOST, port: env.CLAMAV_PORT } : null;
     this.storage = {
       endpoint: env.S3_ENDPOINT,
       publicEndpoint: env.S3_PUBLIC_ENDPOINT ?? env.S3_ENDPOINT,
