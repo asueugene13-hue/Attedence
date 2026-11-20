@@ -2414,5 +2414,11 @@ The product owner asked to continue building. No phase is waiting for approval a
 - **Found and fixed: a course's page put weeks of future classes above the records that count.** It listed every class newest first, so the classes not held yet (to the end of the semester) came first and the held classes were far down the page. Now the page shows **"So far"** (held, cancelled or due classes, newest first), then **"Coming up"** with the next 3 classes not held yet and "And N more later this semester." The product owner can ask for the old order back.
   - Files: `apps/mobile/src/screens/CourseAttendanceScreen.tsx`; new test `apps/mobile/src/course-attendance.test.tsx` (1: the order, the "Coming up" limit, and the dispute button on an absence).
   - Tests: all phone tests 41 passed; lint and formatting clean. The full check runs in CI.
+- **Rechecked on the phone after the fix:** DEMO101's page shows "So far" (three cancelled classes and one with no attendance taken, newest first), then "Coming up" from Monday 23 November.
+- **Also seen working on the phone:**
+  - **Schedule:** the next 14 days, with times, rooms and status.
+  - **Alerts:** newest first, "New" on the unread one, "Mark all as read". The notifications came from this week's demo data: classes sent for review, and one test reschedule.
+  - **Check in with nothing open:** "No attendance is open for your classes right now", with "Check again".
+- **Left for the product owner:** "Check this classroom" asks Android for the Bluetooth and location permissions. The phone's owner should answer those prompts.
 - **Not tested on the phone yet:** 3.2–3.4 (sending a dispute or excuse), 3.6 (no announcements in the demo data), and everything needing a class happening now (checking in; the lecturer's code screen).
 - **Privacy note:** one screenshot taken while the product owner was using another app on the phone was deleted at once, with its screen readout, and not kept or read further.
